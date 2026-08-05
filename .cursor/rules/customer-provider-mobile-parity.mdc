@@ -1,0 +1,41 @@
+---
+description: Customer & provider web changes must include mobile (Android/iOS) layouts
+globs: lib/screens/customer/**,lib/screens/provider/**,lib/figma_ui/app_shell_layout.dart,lib/theme/mobile_layout.dart,lib/widgets/mobile_stat_row.dart
+alwaysApply: true
+---
+
+# Customer & provider: web + mobile parity
+
+NeighborHelp uses **one Flutter codebase** for web and mobile. Customer and provider are **not separate apps**—mobile is compact/native layouts on the same screens.
+
+## Required on every customer/provider change
+
+When editing customer or provider UI, logic, or flows, **also update the mobile experience** in the same change. Do not ship web-only layout tweaks.
+
+## Mobile targets
+
+- **Android / iOS** (`MobileLayout.isNativePlatform`): bottom nav shell, no marketing footer, auth via `MobileAuthGate` (not guest landing).
+- **Compact width** (`AdaptiveBreakpoints.isCompact` / `!isExpanded`): same layout rules as phones—stack columns, avoid wide tables without a mobile alternative.
+
+## Implementation patterns (reuse, do not duplicate apps)
+
+| Concern | Use |
+|--------|-----|
+| Native vs web | `lib/theme/mobile_layout.dart` — `isNativePlatform`, `hideMarketingFooter`, `useBottomSheets`, `heroVerticalPadding` |
+| Stat rows | `lib/widgets/mobile_stat_row.dart` — `MobileStatCardRow` |
+| Shell | `lib/figma_ui/app_shell_layout.dart` — bottom nav when not expanded |
+| Sidebars / 2-column mockups | `LayoutBuilder`: wide = `Row` + sidebar; narrow/native = vertical `Column` |
+| Wide tables | Card/list rows on compact (see `ProviderJobTableRow`, provider jobs widgets) |
+| Popovers | Bottom sheets on mobile (`MobileLayout.useBottomSheets`) |
+
+## Scope
+
+- **In scope**: `lib/screens/customer/**`, `lib/screens/provider/**`, shared pieces they use (`messages_hub`, profile, notifications/help if touched by those flows).
+- **Out of scope unless asked**: admin, guest marketing (`guest_marketing_root`, `marketing_layout`), `MobileAuthGate` / auth (unless the task is auth).
+
+## Checklist before finishing
+
+1. Wide (≥840px) layout still matches web/mockup intent.
+2. Compact/native: readable, tappable, no horizontal overflow; footers hidden on native where applicable.
+3. Same Firestore behavior on both—no web-only API paths.
+4. Run `flutter analyze` on touched files.

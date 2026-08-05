@@ -1,0 +1,13 @@
+{
+  "_comment": "Do NOT put this file in firestore.rules. In Firebase Console: users → Add document → Document ID = Auth UID for admin@neighborhelp.com",
+  "fullName": "System Administrator",
+  "email": "admin@neighborhelp.com",
+  "role": "Administrator",
+  "accountStatus": "Active",
+  "contactNumber": null,
+  "profilePhotoUrl": null,
+  "address": null,
+  "location": null,
+  "country": null,
+  "marketingOptIn": false
+}

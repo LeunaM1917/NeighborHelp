@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "181576858549",
+    "project_id": "neighborhelp-63771",
+    "storage_bucket": "neighborhelp-63771.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:181576858549:android:f2861176c57c201ca2f7fc",
+        "android_client_info": {
+          "package_name": "com.neighborhelp.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "181576858549-kpdb48emf1j56e09c4ugb1pu3ua7n440.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.neighborhelp.app",
+            "certificate_hash": "0be25f8a1fb8236ba42d0bf6f50ff71e9c3f54ab"
+          }
+        },
+        {
+          "client_id": "181576858549-rckc1842eo9540g76881ftpff865sha5.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDZINwfR0mbMrme9doWkSoNp7-fMnWV1sQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "181576858549-rckc1842eo9540g76881ftpff865sha5.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

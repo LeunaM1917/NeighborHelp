@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <!-- Required by google_sign_in_web / Google Identity Services (must match lib/config/google_oauth.dart). -->
+  <meta name="google-signin-client_id" content="181576858549-rckc1842eo9540g76881ftpff865sha5.apps.googleusercontent.com">
+  <meta name="description" content="NeighborHelp — find and book trusted local service providers in your community.">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="NeighborHelp">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>NeighborHelp</title>
+  <style>
+    html, body { height: 100%; margin: 0; padding: 0; }
+    body { background-color: #ffffff; }
+  </style>
+  <link rel="manifest" href="manifest.json">
+  <!-- Maps JavaScript API only — dedicated Maps Web key (not the Firebase Browser apiKey). -->
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAyVtgM4krujoTikVPVHIw3riokT_ngwps"></script>
+</head>
+<body>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>
