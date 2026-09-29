@@ -1,0 +1,10 @@
+// Copy to maps_loader.js via scripts/sync-secrets.ps1 (do not commit maps_loader.js).
+(function () {
+  var key = 'YOUR_GOOGLE_MAPS_API_KEY';
+  if (!key || key.indexOf('YOUR_') === 0) return;
+  var s = document.createElement('script');
+  s.async = true;
+  s.defer = true;
+  s.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(key);
+  document.head.appendChild(s);
+})();

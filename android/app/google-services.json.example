@@ -28,7 +28,7 @@
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyDZINwfR0mbMrme9doWkSoNp7-fMnWV1sQ"
+          "current_key": "__FIREBASE_ANDROID_API_KEY__"
         }
       ],
       "services": {

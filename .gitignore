@@ -43,3 +43,9 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Local Google / Firebase API keys — never commit.
+/secrets.local.json
+/android/secrets.properties
+/android/app/google-services.json
+/web/maps_loader.js

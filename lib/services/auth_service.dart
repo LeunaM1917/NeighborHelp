@@ -261,7 +261,7 @@ class AuthService {
           throw FirebaseAuthException(
             code: 'invalid-api-key',
             message:
-                'Google rejected the Firebase Web API key (apiKey in lib/firebase_options.dart). '
+                'Google rejected the Firebase Web API key (FIREBASE_WEB_API_KEY in secrets.local.json). '
                 'In Google Cloud → Credentials, open the Browser key with that value. Under API restrictions, '
                 'do not limit the key to Maps only: use “Don’t restrict key” for development, or allow '
                 'Identity Toolkit API and other Firebase client APIs. Maps uses the separate key in web/index.html.',
@@ -500,7 +500,7 @@ class AuthService {
 
   static const _invalidApiKeyHelp =
       'Firebase rejected the Web API key in lib/firebase_options.dart. Fix: (1) Firebase Console → '
-      'Project settings → Your apps → Web app → copy the API key and paste it as web.apiKey. '
+      'Project settings → Your apps → Web app → copy the API key into secrets.local.json as FIREBASE_WEB_API_KEY. '
       '(2) Google Cloud → Credentials → “Browser key (auto created by Firebase)” with that same key: '
       'under API restrictions use “Don’t restrict key” for dev, or allow Identity Toolkit API. '
       'If you use Website restrictions, add http://localhost:YOUR_PORT/* (and 127.0.0.1). '

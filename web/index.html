@@ -37,8 +37,8 @@
     body { background-color: #ffffff; }
   </style>
   <link rel="manifest" href="manifest.json">
-  <!-- Maps JavaScript API only — dedicated Maps Web key (not the Firebase Browser apiKey). -->
-  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAyVtgM4krujoTikVPVHIw3riokT_ngwps"></script>
+  <!-- Maps key is injected via gitignored web/maps_loader.js (scripts/sync-secrets.ps1). -->
+  <script src="maps_loader.js" defer></script>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>
