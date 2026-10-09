@@ -45,3 +45,4 @@ app.*.map.json
 /android/app/release
 secrets.local.json
 android/secrets.properties
+.cursor/mcp.json
