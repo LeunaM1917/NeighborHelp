@@ -9,6 +9,7 @@ import '../theme/adaptive_breakpoints.dart';
 import '../theme/mobile_layout.dart';
 import '../theme/role_theme.dart';
 import 'app_shell_tab.dart';
+import 'app_shell_sidebar.dart';
 import 'figma_colors.dart';
 import 'figma_marketing_assets.dart';
 import '../widgets/app_scroll_chrome.dart';
@@ -38,19 +39,22 @@ class AppShellLayout extends StatelessWidget {
   final String roleBadge;
   final VoidCallback onSignOut;
   final Widget child;
-  /// Notification bell and help icon in the top bar (customer & provider).
+
+  /// Notification bell and help icon in the header (customer & provider).
   final bool showUtilityActions;
+
   /// Active tab scroll (back-to-top FAB + re-tap tab).
   final ScrollController? scrollController;
-  /// Bottom-nav index for Messages — shows unread badge when set.
+
+  /// Navigation index for Messages — shows unread badge when set.
   final int? messagesTabIndex;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final wide = AdaptiveBreakpoints.isExpanded(context);
-    final mobile = MobileLayout.useMobileChrome(context);
     final native = MobileLayout.isNativeApp(context);
+    final wide = !native && AdaptiveBreakpoints.isExpanded(context);
+    final mobile = MobileLayout.useMobileChrome(context);
 
     return ColoredBox(
       color: colorScheme.surfaceContainerLow,
@@ -60,31 +64,52 @@ class AppShellLayout extends StatelessWidget {
         child: Column(
           children: [
             _AppShellTopBar(
-            tabs: tabs,
-            currentIndex: currentIndex,
-            onTabChanged: onTabChanged,
-            roleBadge: roleBadge,
-            appUser: appUser,
-            onSignOut: onSignOut,
-            showNavLinks: wide,
-            showUtilityActions: showUtilityActions,
-            compact: mobile,
-          ),
-          Expanded(
-            child: AppShellScrollChrome(
-              scrollController: scrollController,
-              child: child,
+              currentTitle: wide ? tabs[currentIndex].label : null,
+              onHomeTap: () => onTabChanged(0),
+              roleBadge: roleBadge,
+              appUser: appUser,
+              onSignOut: onSignOut,
+              showUtilityActions: showUtilityActions,
+              compact: mobile,
             ),
-          ),
-          if (!wide)
-            _ShellBottomNav(
-              tabs: tabs,
-              currentIndex: currentIndex,
-              onTabChanged: onTabChanged,
-              useShortLabels: mobile,
-              appUserId: appUser.userId,
-              messagesTabIndex: messagesTabIndex,
+            Expanded(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (wide)
+                    AppShellSidebar(
+                      tabs: tabs,
+                      currentIndex: currentIndex,
+                      onTabChanged: onTabChanged,
+                      roleBadge: roleBadge,
+                      iconBuilder: (index, selected) => _ShellTabIcon(
+                        tab: tabs[index],
+                        selected: selected,
+                        size: 20,
+                        appUserId: appUser.userId,
+                        showUnread: index == messagesTabIndex,
+                      ),
+                    ),
+                  Expanded(
+                    // Keep tab state and scroll positions when the sidebar appears.
+                    key: const ValueKey('app-shell-content'),
+                    child: AppShellScrollChrome(
+                      scrollController: scrollController,
+                      child: child,
+                    ),
+                  ),
+                ],
+              ),
             ),
+            if (!wide)
+              _ShellBottomNav(
+                tabs: tabs,
+                currentIndex: currentIndex,
+                onTabChanged: onTabChanged,
+                useShortLabels: mobile,
+                appUserId: appUser.userId,
+                messagesTabIndex: messagesTabIndex,
+              ),
           ],
         ),
       ),
@@ -94,119 +119,95 @@ class AppShellLayout extends StatelessWidget {
 
 class _AppShellTopBar extends StatelessWidget {
   const _AppShellTopBar({
-    required this.tabs,
-    required this.currentIndex,
-    required this.onTabChanged,
+    required this.currentTitle,
+    required this.onHomeTap,
     required this.roleBadge,
     required this.appUser,
     required this.onSignOut,
-    required this.showNavLinks,
     required this.showUtilityActions,
     required this.compact,
   });
 
-  final List<AppShellTab> tabs;
-  final int currentIndex;
-  final AppShellNavigate onTabChanged;
+  final String? currentTitle;
+  final VoidCallback onHomeTap;
   final String roleBadge;
   final AppUser appUser;
   final VoidCallback onSignOut;
-  final bool showNavLinks;
   final bool showUtilityActions;
   final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final barHeight = compact ? 52.0 : 64.0;
-    final native = MobileLayout.isNativeApp(context);
-    final showRoleBadge = showNavLinks || compact;
+    final colors = Theme.of(context).colorScheme;
 
     return Material(
-      color: colorScheme.surface,
+      color: colors.surface,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: colorScheme.outline)),
+          border: Border(bottom: BorderSide(color: colors.outline)),
         ),
         child: SizedBox(
-          width: double.infinity,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final outerWidth = constraints.maxWidth;
-              final pad = outerWidth >= 1024 ? 32.0 : outerWidth >= 640 ? 24.0 : 16.0;
-              final contentWidth = (outerWidth - 2 * pad).clamp(0.0, 1280.0);
-
-              return Padding(
-                padding: EdgeInsets.symmetric(horizontal: pad),
-                child: Align(
-                  alignment: Alignment.center,
-                  child: SizedBox(
-                    width: contentWidth,
-                    height: barHeight,
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                FigmaBrandRow(
-                                  logoHeight: compact ? (native ? 32 : 30) : 44,
-                                  titleFontSize: compact ? (native ? 14 : 15) : 18,
-                                  logoAssetPath: FigmaMarketingAssets.navLogo,
-                                  onTap: () => onTabChanged(0),
-                                  constrained: compact,
-                                  showTitle: true,
+          height: compact ? 56 : 64,
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 24),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                // Leave room for help, notifications and account on small phones.
+                final showBrandTitle = constraints.maxWidth >= 380;
+                return Row(
+                  children: [
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Flexible(
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 222),
+                              child: FigmaBrandRow(
+                                logoHeight: compact ? 30 : 36,
+                                titleFontSize: compact ? 15 : 18,
+                                logoAssetPath: FigmaMarketingAssets.navLogo,
+                                onTap: onHomeTap,
+                                constrained: true,
+                                showTitle: showBrandTitle,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          _RoleBadge(label: roleBadge),
+                          if (currentTitle != null) ...[
+                            const SizedBox(width: 24),
+                            const SizedBox(
+                              height: 24,
+                              child: VerticalDivider(),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Text(
+                                currentTitle!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.inter(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: colors.onSurfaceVariant,
                                 ),
-                                if (showRoleBadge) ...[
-                                  const SizedBox(width: 12),
-                                  _RoleBadge(label: roleBadge),
-                                ],
-                              ],
+                              ),
                             ),
-                          ),
-                        ),
-                        if (showNavLinks)
-                          SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                for (var i = 0; i < tabs.length; i++) ...[
-                                  if (i > 0) SizedBox(width: compact ? 16 : 28),
-                                  _ShellNavLink(
-                                    label: tabs[i].label,
-                                    active: currentIndex == i,
-                                    onTap: () => onTabChanged(i),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        Expanded(
-                          child: Align(
-                            alignment: Alignment.centerRight,
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (showUtilityActions)
-                                  _ShellUtilityActions(
-                                    appUser: appUser,
-                                    roleBadge: roleBadge,
-                                    compact: compact,
-                                  ),
-                                _UserMenu(appUser: appUser, onSignOut: onSignOut),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
+                          ],
+                        ],
+                      ),
                     ),
-                  ),
-                ),
-              );
-            },
+                    if (showUtilityActions)
+                      _ShellUtilityActions(
+                        appUser: appUser,
+                        roleBadge: roleBadge,
+                        compact: compact,
+                      ),
+                    _UserMenu(appUser: appUser, onSignOut: onSignOut),
+                  ],
+                );
+              },
+            ),
           ),
         ),
       ),
@@ -241,7 +242,9 @@ class _ShellBottomNav extends StatelessWidget {
       color: surface,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          border: Border(top: BorderSide(color: Theme.of(context).colorScheme.outline)),
+          border: Border(
+            top: BorderSide(color: Theme.of(context).colorScheme.outline),
+          ),
         ),
         child: SafeArea(
           top: false,
@@ -251,46 +254,37 @@ class _ShellBottomNav extends StatelessWidget {
               children: [
                 for (var i = 0; i < tabs.length; i++)
                   Expanded(
-                    child: InkWell(
-                      onTap: () => onTabChanged(i),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          if (messagesTabIndex != null && i == messagesTabIndex && appUserId != null)
-                            StreamBuilder<int>(
-                              stream: FirestoreService().unreadMessageCountStream(appUserId!),
-                              builder: (context, snap) {
-                                final unread = snap.data ?? 0;
-                                return Badge(
-                                  isLabelVisible: unread > 0,
-                                  label: Text(unread > 9 ? '9+' : '$unread'),
-                                  backgroundColor: rc.primary,
-                                  child: Icon(
-                                    i == currentIndex ? tabs[i].selectedIcon : tabs[i].icon,
-                                    size: 24,
-                                    color: i == currentIndex ? rc.primary : FigmaColors.gray600,
-                                  ),
-                                );
-                              },
-                            )
-                          else
-                            Icon(
-                              i == currentIndex ? tabs[i].selectedIcon : tabs[i].icon,
-                              size: 24,
-                              color: i == currentIndex ? rc.primary : FigmaColors.gray600,
+                    child: Semantics(
+                      selected: i == currentIndex,
+                      button: true,
+                      child: InkWell(
+                        onTap: () => onTabChanged(i),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            _ShellTabIcon(
+                              tab: tabs[i],
+                              selected: i == currentIndex,
+                              appUserId: appUserId,
+                              showUnread: i == messagesTabIndex,
                             ),
-                          const SizedBox(height: 4),
-                          Text(
-                            tabs[i].navLabel(compact: useShortLabels),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.inter(
-                              fontSize: 10,
-                              fontWeight: i == currentIndex ? FontWeight.w600 : FontWeight.w500,
-                              color: i == currentIndex ? rc.primary : FigmaColors.gray600,
+                            const SizedBox(height: 4),
+                            Text(
+                              tabs[i].navLabel(compact: useShortLabels),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.inter(
+                                fontSize: 10,
+                                fontWeight: i == currentIndex
+                                    ? FontWeight.w600
+                                    : FontWeight.w500,
+                                color: i == currentIndex
+                                    ? rc.primary
+                                    : FigmaColors.gray600,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -303,75 +297,43 @@ class _ShellBottomNav extends StatelessWidget {
   }
 }
 
-class _ShellNavLink extends StatefulWidget {
-  const _ShellNavLink({required this.label, required this.active, required this.onTap});
+/// Keep unread-message badges identical in desktop and mobile navigation.
+class _ShellTabIcon extends StatelessWidget {
+  const _ShellTabIcon({
+    required this.tab,
+    required this.selected,
+    required this.showUnread,
+    this.appUserId,
+    this.size = 24,
+  });
 
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-
-  @override
-  State<_ShellNavLink> createState() => _ShellNavLinkState();
-}
-
-class _ShellNavLinkState extends State<_ShellNavLink> {
-  bool _hover = false;
+  final AppShellTab tab;
+  final bool selected;
+  final bool showUnread;
+  final String? appUserId;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
     final role = context.roleColors;
-    final on = widget.active;
-    final hovered = _hover && !on;
-    final fg = on ? role.primary : (hovered ? role.primary : FigmaColors.gray700);
+    final icon = Icon(
+      selected ? tab.selectedIcon : tab.icon,
+      size: size,
+      color: selected ? role.primary : FigmaColors.gray600,
+    );
+    if (!showUnread || appUserId == null) return icon;
 
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      cursor: SystemMouseCursors.click,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: widget.onTap,
-          borderRadius: BorderRadius.circular(8),
-          hoverColor: FigmaColors.gray100.withValues(alpha: 0.75),
-          splashColor: role.tint.withValues(alpha: 0.5),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            child: IntrinsicWidth(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    widget.label,
-                    maxLines: 1,
-                    softWrap: false,
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.inter(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      height: 1.2,
-                      color: fg,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  SizedBox(
-                    height: 3,
-                    child: on
-                        ? DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: role.primary,
-                              borderRadius: BorderRadius.circular(1),
-                            ),
-                          )
-                        : const SizedBox.shrink(),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
+    return StreamBuilder<int>(
+      stream: FirestoreService().unreadMessageCountStream(appUserId!),
+      builder: (context, snap) {
+        final unread = snap.data ?? 0;
+        return Badge(
+          isLabelVisible: unread > 0,
+          label: Text(unread > 9 ? '9+' : '$unread'),
+          backgroundColor: role.primary,
+          child: icon,
+        );
+      },
     );
   }
 }
