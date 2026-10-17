@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../figma_ui/figma_colors.dart';
 import '../../theme/mobile_layout.dart';
+import '../../widgets/anchored_popover_geometry.dart';
 import '../../models/app_user.dart';
 import '../../models/notification.dart' as n;
 import '../../services/firestore_service.dart';
@@ -19,6 +20,7 @@ class NotificationsPopover {
     BuildContext context, {
     required GlobalKey anchorKey,
     required AppUser appUser,
+    bool openBesideAnchor = false,
   }) {
     if (_entry != null) {
       hide();
@@ -52,15 +54,17 @@ class NotificationsPopover {
     if (box == null || !box.hasSize) return;
 
     final overlay = Overlay.of(context);
-    final anchorOffset = box.localToGlobal(Offset.zero);
-    final anchorSize = box.size;
     final screen = MediaQuery.sizeOf(context);
     const popupWidth = 400.0;
     const maxHeight = 480.0;
 
-    var left = anchorOffset.dx + anchorSize.width - popupWidth;
-    left = left.clamp(12.0, screen.width - popupWidth - 12.0);
-    final top = anchorOffset.dy + anchorSize.height + 10;
+    final popup = anchoredPopoverRect(
+      viewport: screen,
+      anchor: box.localToGlobal(Offset.zero) & box.size,
+      preferredWidth: popupWidth,
+      maxHeight: maxHeight,
+      openBesideAnchor: openBesideAnchor,
+    );
 
     _entry = OverlayEntry(
       builder: (ctx) => Stack(
@@ -73,14 +77,14 @@ class NotificationsPopover {
             ),
           ),
           Positioned(
-            left: left,
-            top: top,
-            width: popupWidth,
+            left: popup.left,
+            top: popup.top,
+            width: popup.width,
             child: Material(
               color: Colors.transparent,
               child: _NotificationDropdown(
                 appUser: appUser,
-                maxHeight: maxHeight,
+                maxHeight: popup.height,
                 onClose: hide,
               ),
             ),
@@ -133,7 +137,9 @@ class _NotificationDropdown extends StatelessWidget {
               ],
             ),
       child: ClipRRect(
-        borderRadius: useCardLayout ? BorderRadius.zero : BorderRadius.circular(10),
+        borderRadius: useCardLayout
+            ? BorderRadius.zero
+            : BorderRadius.circular(10),
         child: Stack(
           children: [
             StreamBuilder<List<n.AppNotification>>(
@@ -142,7 +148,9 @@ class _NotificationDropdown extends StatelessWidget {
                 if (isStreamWaiting(snap)) {
                   return SizedBox(
                     height: useCardLayout ? 160 : 120,
-                    child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                    child: const Center(
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
                   );
                 }
                 final items = snap.data ?? [];
@@ -166,9 +174,12 @@ class _NotificationDropdown extends StatelessWidget {
                     final note = items[index];
                     return _NotificationRow(
                       note: note,
-                      timeLabel: _formatNotificationTime(note.createdAt.toDate()),
+                      timeLabel: _formatNotificationTime(
+                        note.createdAt.toDate(),
+                      ),
                       useCardLayout: useCardLayout,
-                      onTap: () => firestore.markNotificationRead(note.notificationId),
+                      onTap: () =>
+                          firestore.markNotificationRead(note.notificationId),
                     );
                   },
                 );
@@ -195,7 +206,10 @@ class _NotificationDropdown extends StatelessWidget {
                   icon: const Icon(Icons.close, size: 20),
                   visualDensity: VisualDensity.compact,
                   padding: const EdgeInsets.all(10),
-                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                  constraints: const BoxConstraints(
+                    minWidth: 36,
+                    minHeight: 36,
+                  ),
                   style: IconButton.styleFrom(
                     foregroundColor: FigmaColors.gray600,
                     hoverColor: FigmaColors.gray100,
@@ -248,9 +262,13 @@ class _NotificationSheet extends StatelessWidget {
               children: [
                 Expanded(
                   child: StreamBuilder<List<n.AppNotification>>(
-                    stream: FirestoreService().notificationsForUser(appUser.userId),
+                    stream: FirestoreService().notificationsForUser(
+                      appUser.userId,
+                    ),
                     builder: (context, snap) {
-                      final unread = (snap.data ?? []).where((note) => !note.isRead).length;
+                      final unread = (snap.data ?? [])
+                          .where((note) => !note.isRead)
+                          .length;
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -267,7 +285,10 @@ class _NotificationSheet extends StatelessWidget {
                               padding: const EdgeInsets.only(top: 2),
                               child: Text(
                                 unread == 1 ? '1 unread' : '$unread unread',
-                                style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray600),
+                                style: GoogleFonts.inter(
+                                  fontSize: 13,
+                                  color: FigmaColors.gray600,
+                                ),
                               ),
                             ),
                         ],
@@ -278,7 +299,9 @@ class _NotificationSheet extends StatelessWidget {
                 IconButton(
                   onPressed: onClose,
                   icon: const Icon(Icons.close_rounded),
-                  style: IconButton.styleFrom(foregroundColor: FigmaColors.gray700),
+                  style: IconButton.styleFrom(
+                    foregroundColor: FigmaColors.gray700,
+                  ),
                 ),
               ],
             ),
@@ -306,7 +329,10 @@ class _NotificationsEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 24, vertical: compact ? 36 : 48),
+      padding: EdgeInsets.symmetric(
+        horizontal: 24,
+        vertical: compact ? 36 : 48,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -317,19 +343,31 @@ class _NotificationsEmptyState extends StatelessWidget {
               color: FigmaColors.tintBlue,
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.notifications_none_rounded, size: 28, color: FigmaColors.navy),
+            child: const Icon(
+              Icons.notifications_none_rounded,
+              size: 28,
+              color: FigmaColors.navy,
+            ),
           ),
           const SizedBox(height: 16),
           Text(
             'No notifications yet',
             textAlign: TextAlign.center,
-            style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: FigmaColors.gray900),
+            style: GoogleFonts.inter(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: FigmaColors.gray900,
+            ),
           ),
           const SizedBox(height: 6),
           Text(
             'Updates about bookings, messages, and your account will show up here.',
             textAlign: TextAlign.center,
-            style: GoogleFonts.inter(fontSize: 14, color: FigmaColors.gray500, height: 1.45),
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              color: FigmaColors.gray500,
+              height: 1.45,
+            ),
           ),
         ],
       ),
@@ -353,21 +391,45 @@ class _NotificationRow extends StatelessWidget {
   ({IconData icon, Color bg, Color fg}) _visualForType() {
     final type = note.notificationType.toLowerCase();
     if (type.contains('booking')) {
-      return (icon: Icons.event_available_outlined, bg: FigmaColors.tintBlue, fg: FigmaColors.navy);
+      return (
+        icon: Icons.event_available_outlined,
+        bg: FigmaColors.tintBlue,
+        fg: FigmaColors.navy,
+      );
     }
     if (type.contains('message') || type.contains('chat')) {
-      return (icon: Icons.chat_bubble_outline_rounded, bg: FigmaColors.tintGreen, fg: FigmaColors.green);
+      return (
+        icon: Icons.chat_bubble_outline_rounded,
+        bg: FigmaColors.tintGreen,
+        fg: FigmaColors.green,
+      );
     }
     if (type.contains('payment') || type.contains('fee')) {
-      return (icon: Icons.payments_outlined, bg: const Color(0xFFFFF4E5), fg: const Color(0xFFB45309));
+      return (
+        icon: Icons.payments_outlined,
+        bg: const Color(0xFFFFF4E5),
+        fg: const Color(0xFFB45309),
+      );
     }
     if (type.contains('security') || type.contains('account')) {
-      return (icon: Icons.shield_outlined, bg: FigmaColors.gray100, fg: FigmaColors.gray800);
+      return (
+        icon: Icons.shield_outlined,
+        bg: FigmaColors.gray100,
+        fg: FigmaColors.gray800,
+      );
     }
     if (type.contains('announce')) {
-      return (icon: Icons.campaign_outlined, bg: FigmaColors.tintGreen2, fg: FigmaColors.green);
+      return (
+        icon: Icons.campaign_outlined,
+        bg: FigmaColors.tintGreen2,
+        fg: FigmaColors.green,
+      );
     }
-    return (icon: Icons.notifications_outlined, bg: FigmaColors.gray100, fg: FigmaColors.gray800);
+    return (
+      icon: Icons.notifications_outlined,
+      bg: FigmaColors.gray100,
+      fg: FigmaColors.gray800,
+    );
   }
 
   @override
@@ -415,7 +477,10 @@ class _NotificationRow extends StatelessWidget {
                       const SizedBox(width: 8),
                       Text(
                         timeLabel,
-                        style: GoogleFonts.inter(fontSize: 12, color: FigmaColors.gray500),
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: FigmaColors.gray500,
+                        ),
                       ),
                     ],
                   ),
@@ -468,7 +533,9 @@ class _NotificationRow extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isUnread ? FigmaColors.navy.withValues(alpha: 0.2) : FigmaColors.gray200,
+            color: isUnread
+                ? FigmaColors.navy.withValues(alpha: 0.2)
+                : FigmaColors.gray200,
           ),
           boxShadow: [
             BoxShadow(

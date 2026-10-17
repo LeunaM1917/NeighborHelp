@@ -13,6 +13,8 @@ import 'app_shell_sidebar.dart';
 import 'figma_colors.dart';
 import 'figma_marketing_assets.dart';
 import '../widgets/app_scroll_chrome.dart';
+import '../widgets/app_footer.dart';
+import '../widgets/workspace_page_frame.dart';
 import 'widgets/figma_brand_row.dart';
 
 typedef AppShellNavigate = void Function(int index);
@@ -40,7 +42,7 @@ class AppShellLayout extends StatelessWidget {
   final VoidCallback onSignOut;
   final Widget child;
 
-  /// Notification bell and help icon in the header (customer & provider).
+  /// Notification and help actions in the desktop rail or mobile header.
   final bool showUtilityActions;
 
   /// Active tab scroll (back-to-top FAB + re-tap tab).
@@ -51,67 +53,59 @@ class AppShellLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     final native = MobileLayout.isNativeApp(context);
     final wide = !native && AdaptiveBreakpoints.isExpanded(context);
     final mobile = MobileLayout.useMobileChrome(context);
 
-    return ColoredBox(
-      color: colorScheme.surfaceContainerLow,
-      child: SafeArea(
-        top: native,
-        bottom: false,
-        child: Column(
-          children: [
-            _AppShellTopBar(
-              currentTitle: wide ? tabs[currentIndex].label : null,
-              onHomeTap: () => onTabChanged(0),
-              roleBadge: roleBadge,
-              appUser: appUser,
-              onSignOut: onSignOut,
-              showUtilityActions: showUtilityActions,
-              compact: mobile,
-            ),
-            Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (wide)
-                    AppShellSidebar(
-                      tabs: tabs,
-                      currentIndex: currentIndex,
-                      onTabChanged: onTabChanged,
-                      roleBadge: roleBadge,
-                      iconBuilder: (index, selected) => _ShellTabIcon(
-                        tab: tabs[index],
-                        selected: selected,
-                        size: 20,
-                        appUserId: appUser.userId,
-                        showUnread: index == messagesTabIndex,
-                      ),
-                    ),
-                  Expanded(
-                    // Keep tab state and scroll positions when the sidebar appears.
-                    key: const ValueKey('app-shell-content'),
-                    child: AppShellScrollChrome(
-                      scrollController: scrollController,
-                      child: child,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (!wide)
-              _ShellBottomNav(
-                tabs: tabs,
-                currentIndex: currentIndex,
-                onTabChanged: onTabChanged,
-                useShortLabels: mobile,
-                appUserId: appUser.userId,
-                messagesTabIndex: messagesTabIndex,
-              ),
-          ],
+    return WorkspacePageFrame(
+      wide: wide,
+      rail: AppShellSidebar(
+        tabs: tabs,
+        currentIndex: currentIndex,
+        onTabChanged: onTabChanged,
+        roleBadge: roleBadge,
+        account: _UserMenu(
+          appUser: appUser,
+          onSignOut: onSignOut,
+          compact: true,
         ),
+        bottomActions: showUtilityActions
+            ? _ShellUtilityActions(
+                appUser: appUser,
+                roleBadge: roleBadge,
+                vertical: true,
+              )
+            : null,
+        iconBuilder: (index, selected) => _ShellTabIcon(
+          tab: tabs[index],
+          selected: selected,
+          appUserId: appUser.userId,
+          showUnread: index == messagesTabIndex,
+        ),
+      ),
+      header: _AppShellTopBar(
+        currentTitle: wide ? tabs[currentIndex].label : null,
+        onHomeTap: () => onTabChanged(0),
+        roleBadge: roleBadge,
+        appUser: appUser,
+        onSignOut: onSignOut,
+        showUtilityActions: showUtilityActions,
+        compact: mobile,
+        desktop: wide,
+      ),
+      footer: AppFooter(roleLabel: roleBadge),
+      bottomNavigation: _ShellBottomNav(
+        tabs: tabs,
+        currentIndex: currentIndex,
+        onTabChanged: onTabChanged,
+        useShortLabels: mobile,
+        appUserId: appUser.userId,
+        messagesTabIndex: messagesTabIndex,
+      ),
+      child: AppShellScrollChrome(
+        scrollController: scrollController,
+        footerClearance: wide ? 0 : 300,
+        child: child,
       ),
     );
   }
@@ -126,6 +120,7 @@ class _AppShellTopBar extends StatelessWidget {
     required this.onSignOut,
     required this.showUtilityActions,
     required this.compact,
+    required this.desktop,
   });
 
   final String? currentTitle;
@@ -135,10 +130,35 @@ class _AppShellTopBar extends StatelessWidget {
   final VoidCallback onSignOut;
   final bool showUtilityActions;
   final bool compact;
+  final bool desktop;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+
+    if (desktop) {
+      return SizedBox(
+        height: 56,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  currentTitle!,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              _RoleBadge(label: roleBadge),
+            ],
+          ),
+        ),
+      );
+    }
 
     return Material(
       color: colors.surface,
@@ -304,21 +324,19 @@ class _ShellTabIcon extends StatelessWidget {
     required this.selected,
     required this.showUnread,
     this.appUserId,
-    this.size = 24,
   });
 
   final AppShellTab tab;
   final bool selected;
   final bool showUnread;
   final String? appUserId;
-  final double size;
 
   @override
   Widget build(BuildContext context) {
     final role = context.roleColors;
     final icon = Icon(
       selected ? tab.selectedIcon : tab.icon,
-      size: size,
+      size: 24,
       color: selected ? role.primary : FigmaColors.gray600,
     );
     if (!showUnread || appUserId == null) return icon;
@@ -343,11 +361,13 @@ class _ShellUtilityActions extends StatefulWidget {
     required this.appUser,
     required this.roleBadge,
     this.compact = false,
+    this.vertical = false,
   });
 
   final AppUser appUser;
   final String roleBadge;
   final bool compact;
+  final bool vertical;
 
   @override
   State<_ShellUtilityActions> createState() => _ShellUtilityActionsState();
@@ -379,16 +399,19 @@ class _ShellUtilityActionsState extends State<_ShellUtilityActions> {
         final iconConstraints = tight
             ? const BoxConstraints(minWidth: 32, minHeight: 32)
             : compact
-                ? const BoxConstraints(minWidth: 36, minHeight: 36)
-                : const BoxConstraints(minWidth: 48, minHeight: 48);
+            ? const BoxConstraints(minWidth: 36, minHeight: 36)
+            : const BoxConstraints(minWidth: 48, minHeight: 48);
 
-        return Row(
+        return Flex(
+          direction: widget.vertical ? Axis.vertical : Axis.horizontal,
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
               key: _helpKey,
               tooltip: 'Help',
-              visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
+              visualDensity: compact
+                  ? VisualDensity.compact
+                  : VisualDensity.standard,
               constraints: iconConstraints,
               padding: compact ? EdgeInsets.zero : null,
               onPressed: () {
@@ -397,6 +420,7 @@ class _ShellUtilityActionsState extends State<_ShellUtilityActions> {
                   context,
                   anchorKey: _helpKey,
                   roleLabel: widget.roleBadge,
+                  openBesideAnchor: widget.vertical,
                 );
               },
               icon: Icon(Icons.help_outline_rounded, size: compact ? 22 : 24),
@@ -413,7 +437,9 @@ class _ShellUtilityActionsState extends State<_ShellUtilityActions> {
               child: IconButton(
                 key: _bellKey,
                 tooltip: 'Notifications',
-                visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
+                visualDensity: compact
+                    ? VisualDensity.compact
+                    : VisualDensity.standard,
                 constraints: iconConstraints,
                 padding: compact ? EdgeInsets.zero : null,
                 onPressed: () {
@@ -422,12 +448,17 @@ class _ShellUtilityActionsState extends State<_ShellUtilityActions> {
                     context,
                     anchorKey: _bellKey,
                     appUser: widget.appUser,
+                    openBesideAnchor: widget.vertical,
                   );
                 },
                 icon: Icon(
-                  unread > 0 ? Icons.notifications_rounded : Icons.notifications_outlined,
+                  unread > 0
+                      ? Icons.notifications_rounded
+                      : Icons.notifications_outlined,
                   size: compact ? 22 : 24,
-                  color: unread > 0 ? role.primary : colorScheme.onSurfaceVariant,
+                  color: unread > 0
+                      ? role.primary
+                      : colorScheme.onSurfaceVariant,
                 ),
                 style: IconButton.styleFrom(
                   foregroundColor: FigmaColors.gray700,
@@ -454,7 +485,9 @@ class _RoleBadge extends StatelessWidget {
     final isProvider = label.toLowerCase() == 'provider';
     final bg = isProvider ? FigmaColors.gray100 : role.tint;
     final fg = isProvider ? FigmaColors.navy : role.primary;
-    final border = isProvider ? FigmaColors.gray200 : role.primary.withValues(alpha: 0.25);
+    final border = isProvider
+        ? FigmaColors.gray200
+        : role.primary.withValues(alpha: 0.25);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
@@ -476,10 +509,15 @@ class _RoleBadge extends StatelessWidget {
 }
 
 class _UserMenu extends StatelessWidget {
-  const _UserMenu({required this.appUser, required this.onSignOut});
+  const _UserMenu({
+    required this.appUser,
+    required this.onSignOut,
+    this.compact = false,
+  });
 
   final AppUser appUser;
   final VoidCallback onSignOut;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -487,7 +525,7 @@ class _UserMenu extends StatelessWidget {
     final role = context.roleColors;
     final initials = _initials(appUser.fullName);
 
-    final compact = MobileLayout.useMobileChrome(context);
+    final compact = this.compact || MobileLayout.useMobileChrome(context);
 
     return PopupMenuButton<String>(
       tooltip: 'Account',
@@ -504,11 +542,18 @@ class _UserMenu extends StatelessWidget {
             children: [
               Text(
                 appUser.fullName,
-                style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: colorScheme.onSurface),
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: colorScheme.onSurface,
+                ),
               ),
               Text(
                 appUser.email,
-                style: GoogleFonts.inter(fontSize: 12, color: colorScheme.onSurfaceVariant),
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: colorScheme.onSurfaceVariant,
+                ),
               ),
             ],
           ),
@@ -517,24 +562,39 @@ class _UserMenu extends StatelessWidget {
         const PopupMenuItem<String>(value: 'signout', child: Text('Sign out')),
       ],
       child: Padding(
-        padding: EdgeInsets.only(left: compact ? 2 : 8, right: compact ? 0 : 8, top: 4, bottom: 4),
+        padding: EdgeInsets.only(
+          left: compact ? 2 : 8,
+          right: compact ? 0 : 8,
+          top: 4,
+          bottom: 4,
+        ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             CircleAvatar(
               radius: compact ? 13 : 16,
               backgroundColor: role.tint,
-              backgroundImage: appUser.profilePhotoUrl != null ? NetworkImage(appUser.profilePhotoUrl!) : null,
+              backgroundImage: appUser.profilePhotoUrl != null
+                  ? NetworkImage(appUser.profilePhotoUrl!)
+                  : null,
               child: appUser.profilePhotoUrl == null
                   ? Text(
                       initials,
-                      style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: role.primary),
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: role.primary,
+                      ),
                     )
                   : null,
             ),
             if (!compact) ...[
               const SizedBox(width: 8),
-              Icon(Icons.expand_more, color: colorScheme.onSurfaceVariant, size: 20),
+              Icon(
+                Icons.expand_more,
+                color: colorScheme.onSurfaceVariant,
+                size: 20,
+              ),
             ],
           ],
         ),

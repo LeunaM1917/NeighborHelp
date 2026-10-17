@@ -20,9 +20,11 @@ class AppScrollChrome extends StatefulWidget {
   final Widget child;
   final ScrollController? scrollController;
   final Color? accentColor;
+
   /// Space above bottom edge (e.g. mobile bottom nav). Defaults by breakpoint.
   final double? bottomInset;
   final double footerClearance;
+
   /// When false, no scroll-to-top FAB (dialogs, pushed routes, marketing).
   final bool showBackToTop;
 
@@ -32,15 +34,22 @@ class AppScrollChrome extends StatefulWidget {
 
 /// App shell tabs (customer / provider / admin main area).
 class AppShellScrollChrome extends StatelessWidget {
-  const AppShellScrollChrome({super.key, required this.child, this.scrollController});
+  const AppShellScrollChrome({
+    super.key,
+    required this.child,
+    this.scrollController,
+    this.footerClearance = 300,
+  });
 
   final Widget child;
   final ScrollController? scrollController;
+  final double footerClearance;
 
   @override
   Widget build(BuildContext context) {
     return AppScrollChrome(
       scrollController: scrollController,
+      footerClearance: footerClearance,
       showBackToTop: !MobileLayout.isNativeApp(context),
       child: child,
     );
@@ -55,7 +64,9 @@ class _ScrollChromeFabState {
 
   @override
   bool operator ==(Object other) =>
-      other is _ScrollChromeFabState && show == other.show && nearBottom == other.nearBottom;
+      other is _ScrollChromeFabState &&
+      show == other.show &&
+      nearBottom == other.nearBottom;
 
   @override
   int get hashCode => Object.hash(show, nearBottom);
@@ -110,7 +121,9 @@ class _AppScrollChromeState extends State<AppScrollChrome> {
 
   void _applyMetrics(ScrollMetrics metrics) {
     if (!widget.showBackToTop) return;
-    final nearBottom = metrics.maxScrollExtent > 0 && metrics.pixels >= metrics.maxScrollExtent - 64;
+    final nearBottom =
+        metrics.maxScrollExtent > 0 &&
+        metrics.pixels >= metrics.maxScrollExtent - 64;
     final show = metrics.pixels > _showAfterScroll;
     final next = _ScrollChromeFabState(show, nearBottom);
     if (next == _fabState.value) return;
@@ -142,7 +155,9 @@ class _AppScrollChromeState extends State<AppScrollChrome> {
   double _fabBottom(BuildContext context, bool nearBottom) {
     final wide = AdaptiveBreakpoints.isExpanded(context);
     final base = widget.bottomInset ?? (wide ? 28.0 : 92.0);
-    final footerPad = MobileLayout.hideMarketingFooter(context) ? 24.0 : widget.footerClearance;
+    final footerPad = MobileLayout.hideMarketingFooter(context)
+        ? 24.0
+        : widget.footerClearance;
     if (nearBottom) return base + footerPad;
     return base;
   }
@@ -204,7 +219,11 @@ class _BackToTopButton extends StatelessWidget {
             shape: BoxShape.circle,
             border: Border.all(color: primary.withValues(alpha: 0.35)),
           ),
-          child: Icon(Icons.keyboard_arrow_up_rounded, color: primary, size: 28),
+          child: Icon(
+            Icons.keyboard_arrow_up_rounded,
+            color: primary,
+            size: 28,
+          ),
         ),
       ),
     );

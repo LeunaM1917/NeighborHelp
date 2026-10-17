@@ -1,15 +1,13 @@
-import 'dart:convert';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:neighbor_help/figma_ui/app_shell_layout.dart';
 import 'package:neighbor_help/figma_ui/app_shell_sidebar.dart';
 import 'package:neighbor_help/figma_ui/app_shell_tab.dart';
 import 'package:neighbor_help/models/app_user.dart';
+import 'package:neighbor_help/widgets/app_footer.dart';
 import 'package:neighbor_help/theme/role_theme.dart';
+import 'support/ui_test_support.dart';
 
 const _customerTabs = [
   AppShellTab(
@@ -71,54 +69,7 @@ const _providerTabs = [
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  setUp(() {
-    GoogleFonts.config.allowRuntimeFetching = false;
-    // Supply font assets in memory so layout tests never need network access.
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMessageHandler('flutter/assets', (message) async {
-          final key = utf8.decode(message!.buffer.asUint8List());
-          if (key == 'AssetManifest.bin' || key == 'AssetManifest.bin.json') {
-            final manifest = const StandardMessageCodec().encodeMessage({
-              for (final weight in ['Regular', 'Medium', 'SemiBold', 'Bold'])
-                'test-fonts/Inter-$weight.ttf': [
-                  {'asset': 'test-fonts/Inter-$weight.ttf'},
-                ],
-            })!;
-            return key.endsWith('.json')
-                ? ByteData.sublistView(
-                    utf8.encode(
-                      jsonEncode(base64Encode(manifest.buffer.asUint8List())),
-                    ),
-                  )
-                : manifest;
-          }
-          if (key == 'AssetManifest.json') {
-            return ByteData.sublistView(
-              utf8.encode(
-                jsonEncode({
-                  for (final weight in [
-                    'Regular',
-                    'Medium',
-                    'SemiBold',
-                    'Bold',
-                  ])
-                    'test-fonts/Inter-$weight.ttf': [
-                      'test-fonts/Inter-$weight.ttf',
-                    ],
-                }),
-              ),
-            );
-          }
-          if (key.startsWith('test-fonts/')) return ByteData(0);
-          return null;
-        });
-  });
-
-  tearDown(() {
-    GoogleFonts.config.allowRuntimeFetching = true;
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMessageHandler('flutter/assets', null);
-  });
+  setUpOfflineFonts();
 
   void setSize(WidgetTester tester, Size size) {
     tester.view.devicePixelRatio = 1;
@@ -144,7 +95,7 @@ void main() {
       final sidebar = find.byType(AppShellSidebar);
       expect(sidebar, findsOneWidget);
       expect(tester.getSize(sidebar).width, AppShellSidebar.width);
-      expect(find.text('${role.toUpperCase()} WORKSPACE'), findsOneWidget);
+      expect(find.byTooltip('NeighborHelp home'), findsOneWidget);
       expect(find.text(provider ? 'Browse' : 'Services'), findsNothing);
 
       for (var i = 0; i < tabs.length; i++) {
@@ -152,17 +103,16 @@ void main() {
           find.descendant(of: sidebar, matching: find.text(tabs[i].label)),
         );
         await tester.pumpAndSettle();
-        final tile = tester.widget<ListTile>(
-          find.widgetWithText(ListTile, tabs[i].label),
+        final tile = tester.widget<TextButton>(
+          find.widgetWithText(TextButton, tabs[i].label),
         );
-        expect(tile.selected, isTrue);
         expect(
-          tile.selectedColor,
+          tile.style!.foregroundColor!.resolve({}),
           (provider ? RoleTheme.provider : RoleTheme.customer).primary,
         );
         expect(find.text('Current page: $i'), findsOneWidget);
       }
-      await tester.tap(find.widgetWithText(ListTile, 'Profile'));
+      await tester.tap(find.widgetWithText(TextButton, 'Profile'));
       await tester.pumpAndSettle();
       expect(taps, [0, 1, 2, 3, 4, 4]);
       expect(tester.takeException(), isNull);
@@ -175,7 +125,7 @@ void main() {
       await tester.pumpWidget(_Harness(provider: provider));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Remember this page'));
-      await tester.tap(find.widgetWithText(ListTile, 'Profile'));
+      await tester.tap(find.widgetWithText(TextButton, 'Profile'));
       await tester.pumpAndSettle();
 
       final position = tester
@@ -227,6 +177,33 @@ void main() {
       },
     );
   }
+
+  testShell('desktop back-to-top stays close to the shared footer', (
+    tester,
+  ) async {
+    setSize(tester, const Size(1280, 900));
+    await tester.pumpWidget(const _Harness(provider: false));
+    await tester.pumpAndSettle();
+    final position = tester
+        .state<ScrollableState>(
+          find.descendant(
+            of: find.byType(_PageStateProbe),
+            matching: find.byType(Scrollable),
+          ),
+        )
+        .position;
+    position.jumpTo(position.maxScrollExtent);
+    await tester.pumpAndSettle();
+    final button = find.byIcon(Icons.keyboard_arrow_up_rounded);
+    expect(button, findsOneWidget);
+    final footerTop = tester.getTopLeft(find.byType(AppFooter)).dy;
+    final buttonBottom = tester.getBottomRight(button).dy;
+    expect(buttonBottom, lessThan(footerTop));
+    expect(footerTop - buttonBottom, lessThan(80));
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    expect(position.pixels, 0);
+  });
 
   for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
     testShell('$platform keeps bottom navigation at tablet widths', (

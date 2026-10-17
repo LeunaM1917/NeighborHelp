@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../figma_ui/figma_colors.dart';
-import '../../figma_ui/figma_layout.dart';
-import '../../figma_ui/figma_marketing_assets.dart';
-import '../../figma_ui/widgets/figma_brand_row.dart';
 import '../../models/app_user.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/app_scroll_chrome.dart';
+import '../../widgets/app_footer.dart';
+import '../../widgets/workspace_page_frame.dart';
+import '../../theme/mobile_layout.dart';
+import '../../theme/role_theme.dart';
+import 'widgets/admin_navigation.dart';
 import '../../widgets/app_shell_tab_scroll.dart';
 import 'widgets/admin_widgets.dart';
 import 'pages/admin_activity_page.dart';
@@ -84,150 +86,100 @@ class _AdminShellState extends State<AdminShell> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final wide = MediaQuery.sizeOf(context).width >= 900;
+    final wide =
+        !MobileLayout.isNativeApp(context) &&
+        MediaQuery.sizeOf(context).width >= 900;
     final auth = widget.auth;
 
-    return Scaffold(
-      backgroundColor: FigmaColors.gray50,
-      body: Column(
-        children: [
-          _AdminTopBar(
+    return RoleThemeScope(
+      palette: RoleTheme.admin,
+      child: Scaffold(
+        body: WorkspacePageFrame(
+          wide: wide,
+          rail: AdminNavigation(currentIndex: _tab, onSelect: _selectTab),
+          header: _AdminTopBar(
+            title: _tabs[_tab].label,
             appUser: widget.appUser,
             firestoreConnected: !auth.isLocalAdminOnly,
             onSignOut: () => auth.signOut(),
+            onNotificationsTap: () => _selectTab(10),
           ),
-          Expanded(
-            child: Row(
-              children: [
-                if (wide)
-                  _AdminSideNav(
-                    tabs: _tabs,
-                    selectedIndex: _tab,
-                    onSelect: _selectTab,
+          footer: const AppFooter(roleLabel: 'Admin'),
+          bottomNavigation: AdminNavigation(
+            currentIndex: _tab,
+            onSelect: _selectTab,
+            compact: true,
+          ),
+          child: AppScrollChrome(
+            showBackToTop: true,
+            footerClearance: 0,
+            scrollController: _tabScroll.controllerFor(_tab),
+            child: ClipRect(
+              child: IndexedStack(
+                index: _tab,
+                sizing: StackFit.expand,
+                children: [
+                  _adminTabScope(
+                    0,
+                    AdminOverviewPage(auth: auth, onNavigateToTab: _selectTab),
                   ),
-                Expanded(
-                  child: AppScrollChrome(
-                    showBackToTop: true,
-                    scrollController: _tabScroll.controllerFor(_tab),
-                    child: ClipRect(
-                      child: IndexedStack(
-                        index: _tab,
-                        sizing: StackFit.expand,
-                        children: [
-                          _adminTabScope(
-                            0,
-                            AdminOverviewPage(
-                              auth: auth,
-                              onNavigateToTab: _selectTab,
-                            ),
-                          ),
-                          _adminTabScope(
-                            1,
-                            AdminCustomersPage(
-                              auth: auth,
-                              onNavigateToTab: _selectTab,
-                            ),
-                          ),
-                          _adminTabScope(
-                            2,
-                            AdminProvidersPage(
-                              auth: auth,
-                              onNavigateToTab: _selectTab,
-                            ),
-                          ),
-                          _adminTabScope(
-                            3,
-                            AdminUserReportsPage(
-                              auth: auth,
-                              onNavigateToTab: _selectTab,
-                            ),
-                          ),
-                          _adminTabScope(
-                            4,
-                            AdminVerificationPage(
-                              auth: auth,
-                              reviewerUserId: widget.appUser.userId,
-                            ),
-                          ),
-                          _adminTabScope(
-                            5,
-                            AdminCertificatesPage(auth: auth),
-                          ),
-                          _adminTabScope(
-                            6,
-                            AdminServicesPage(
-                              auth: auth,
-                              onNavigateToTab: _selectTab,
-                            ),
-                          ),
-                          _adminTabScope(
-                            7,
-                            AdminBookingsPage(
-                              auth: auth,
-                              onNavigateToTab: _selectTab,
-                            ),
-                          ),
-                          _adminTabScope(
-                            8,
-                            AdminReportsPage(
-                              auth: auth,
-                              onNavigateToTab: _selectTab,
-                            ),
-                          ),
-                          _adminTabScope(
-                            9,
-                            AdminActivityPage(
-                              auth: auth,
-                              onNavigateToTab: _selectTab,
-                            ),
-                          ),
-                          _adminTabScope(10, AdminNotificationsPage(auth: auth)),
-                          _adminTabScope(
-                            11,
-                            AdminRecommendationRankingPage(auth: auth),
-                          ),
-                          _adminTabScope(
-                            12,
-                            AdminSettingsPage(
-                              auth: auth,
-                              appUser: widget.appUser,
-                              onNavigateToTab: _selectTab,
-                            ),
-                          ),
-                        ],
-                      ),
+                  _adminTabScope(
+                    1,
+                    AdminCustomersPage(auth: auth, onNavigateToTab: _selectTab),
+                  ),
+                  _adminTabScope(
+                    2,
+                    AdminProvidersPage(auth: auth, onNavigateToTab: _selectTab),
+                  ),
+                  _adminTabScope(
+                    3,
+                    AdminUserReportsPage(
+                      auth: auth,
+                      onNavigateToTab: _selectTab,
                     ),
                   ),
-                ),
-              ],
-            ),
-          ),
-          if (!wide)
-            Material(
-              color: colorScheme.surface,
-              child: SafeArea(
-                top: false,
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                  child: Row(
-                    children: [
-                      for (var i = 0; i < _tabs.length; i++)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: ChoiceChip(
-                            label: Text(_tabs[i].label),
-                            selected: _tab == i,
-                            onSelected: (_) => _selectTab(i),
-                          ),
-                        ),
-                    ],
+                  _adminTabScope(
+                    4,
+                    AdminVerificationPage(
+                      auth: auth,
+                      reviewerUserId: widget.appUser.userId,
+                    ),
                   ),
-                ),
+                  _adminTabScope(5, AdminCertificatesPage(auth: auth)),
+                  _adminTabScope(
+                    6,
+                    AdminServicesPage(auth: auth, onNavigateToTab: _selectTab),
+                  ),
+                  _adminTabScope(
+                    7,
+                    AdminBookingsPage(auth: auth, onNavigateToTab: _selectTab),
+                  ),
+                  _adminTabScope(
+                    8,
+                    AdminReportsPage(auth: auth, onNavigateToTab: _selectTab),
+                  ),
+                  _adminTabScope(
+                    9,
+                    AdminActivityPage(auth: auth, onNavigateToTab: _selectTab),
+                  ),
+                  _adminTabScope(10, AdminNotificationsPage(auth: auth)),
+                  _adminTabScope(
+                    11,
+                    AdminRecommendationRankingPage(auth: auth),
+                  ),
+                  _adminTabScope(
+                    12,
+                    AdminSettingsPage(
+                      auth: auth,
+                      appUser: widget.appUser,
+                      onNavigateToTab: _selectTab,
+                    ),
+                  ),
+                ],
               ),
             ),
-        ],
+          ),
+        ),
       ),
     );
   }
@@ -235,297 +187,106 @@ class _AdminShellState extends State<AdminShell> {
 
 class _AdminTopBar extends StatelessWidget {
   const _AdminTopBar({
+    required this.title,
     required this.appUser,
     required this.firestoreConnected,
     required this.onSignOut,
+    required this.onNotificationsTap,
   });
 
+  final String title;
   final AppUser appUser;
   final bool firestoreConnected;
   final VoidCallback onSignOut;
+  final VoidCallback onNotificationsTap;
 
   @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Material(
-      color: colorScheme.surface,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: colorScheme.outline)),
-        ),
-        child: FigmaWideContainer(
-          child: LayoutBuilder(
-            builder: (context, c) {
-              final showName = c.maxWidth >= 720;
-
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Row(
-                        children: [
-                          Flexible(
-                            fit: FlexFit.loose,
-                            child: FigmaBrandRow(
-                              logoHeight: 40,
-                              titleFontSize: 17,
-                              logoAssetPath: FigmaMarketingAssets.navLogo,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: FigmaColors.tintBlue,
-                              borderRadius: BorderRadius.circular(999),
-                              border: Border.all(color: FigmaColors.gray200),
-                            ),
-                            child: Text(
-                              'Admin Console',
-                              style: GoogleFonts.inter(
-                                color: FigmaColors.navy,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                          if (!firestoreConnected) ...[
-                            const SizedBox(width: 8),
-                            Flexible(
-                              child: Text(
-                                'Preview only',
-                                style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            IconButton(
-                              onPressed: () {},
-                              icon: const Icon(Icons.notifications_outlined, size: 22),
-                              tooltip: 'Notifications',
-                            ),
-                            Positioned(
-                              right: 10,
-                              top: 10,
-                              child: Container(
-                                width: 8,
-                                height: 8,
-                                decoration: const BoxDecoration(
-                                  color: FigmaColors.red600,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (showName)
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 200),
-                            child: Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: Text(
-                                appUser.fullName,
-                                style: GoogleFonts.inter(
-                                  color: colorScheme.onSurface,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ),
-                        PopupMenuButton<String>(
-                          offset: const Offset(0, 8),
-                          tooltip: 'Account menu',
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          onSelected: (value) {
-                            if (value != 'signout') return;
-                            // Wait for the menu overlay to close before sign-out rebuilds the tree.
-                            WidgetsBinding.instance.addPostFrameCallback((_) => onSignOut());
-                          },
-                          itemBuilder: (context) => [
-                            PopupMenuItem<String>(
-                              value: 'signout',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.logout_rounded, size: 20, color: colorScheme.onSurface),
-                                  const SizedBox(width: 10),
-                                  Text('Sign out', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
-                                ],
-                              ),
-                            ),
-                          ],
-                          child: CircleAvatar(
-                            radius: 18,
-                            backgroundColor: FigmaColors.navy,
-                            child: Text(
-                              _initials(appUser.fullName),
-                              style: GoogleFonts.inter(
-                                color: FigmaColors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _AdminSideNav extends StatelessWidget {
-  const _AdminSideNav({
-    required this.tabs,
-    required this.selectedIndex,
-    required this.onSelect,
-  });
-
-  final List<_AdminTab> tabs;
-  final int selectedIndex;
-  final ValueChanged<int> onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 248,
-      decoration: const BoxDecoration(
-        color: FigmaColors.white,
-        border: Border(right: BorderSide(color: FigmaColors.gray200)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+  Widget build(BuildContext context) => SizedBox(
+    height: 56,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
         children: [
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'PLATFORM MANAGEMENT',
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.inter(
-                    color: FigmaColors.gray500,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.8,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(height: 12),
-                for (var i = 0; i < tabs.length; i++)
-                  _AdminNavTile(
-                    tab: tabs[i],
-                    selected: selectedIndex == i,
-                    onTap: () => onSelect(i),
-                  ),
+                if (!firestoreConnected)
+                  Text('Preview only', style: GoogleFonts.inter(fontSize: 10)),
               ],
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Material(
-              color: FigmaColors.gray50,
-              borderRadius: BorderRadius.circular(10),
-              child: InkWell(
-                onTap: () {},
-                borderRadius: BorderRadius.circular(10),
-                child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.headset_mic_outlined, color: FigmaColors.gray600, size: 22),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Need help?',
-                              style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600),
-                            ),
-                            Text(
-                              'Contact support',
-                              style: GoogleFonts.inter(fontSize: 12, color: FigmaColors.gray500),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Icon(Icons.chevron_right, color: FigmaColors.gray400, size: 20),
-                    ],
-                  ),
+          if (MediaQuery.sizeOf(context).width >= 600)
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Text(
+                'Admin Console',
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: FigmaColors.gray600,
+                ),
+              ),
+            ),
+          IconButton(
+            tooltip: 'Notifications',
+            onPressed: onNotificationsTap,
+            icon: const Icon(Icons.notifications_outlined, size: 22),
+          ),
+          PopupMenuButton<String>(
+            tooltip: 'Account menu',
+            onSelected: (value) {
+              if (value == 'signout') {
+                WidgetsBinding.instance.addPostFrameCallback(
+                  (_) => onSignOut(),
+                );
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem<String>(
+                enabled: false,
+                child: Text(appUser.fullName),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem<String>(
+                value: 'signout',
+                child: Text('Sign out'),
+              ),
+            ],
+            child: CircleAvatar(
+              radius: 16,
+              backgroundColor: FigmaColors.navy,
+              child: Text(
+                _initials(appUser.fullName),
+                style: GoogleFonts.inter(
+                  color: FigmaColors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
           ),
         ],
       ),
-    );
-  }
-}
-
-class _AdminNavTile extends StatelessWidget {
-  const _AdminNavTile({required this.tab, required this.selected, required this.onTap});
-
-  final _AdminTab tab;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final bg = selected ? FigmaColors.tintGreen : Colors.transparent;
-    final fg = selected ? FigmaColors.green : FigmaColors.gray600;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Material(
-        color: bg,
-        borderRadius: BorderRadius.circular(10),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(10),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-            child: Row(
-              children: [
-                Icon(tab.icon, color: fg, size: 20),
-                const SizedBox(width: 12),
-                Text(
-                  tab.label,
-                  style: GoogleFonts.inter(
-                    color: fg,
-                    fontSize: 14,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+    ),
+  );
 }
 
 String _initials(String name) {
   final parts = name.trim().split(RegExp(r'\s+'));
   if (parts.isEmpty) return 'A';
-  if (parts.length == 1) return parts.first.isNotEmpty ? parts.first[0].toUpperCase() : 'A';
+  if (parts.length == 1) {
+    return parts.first.isNotEmpty ? parts.first[0].toUpperCase() : 'A';
+  }
   return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
 }
 
