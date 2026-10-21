@@ -184,6 +184,7 @@ void main() {
     setSize(tester, const Size(1280, 900));
     await tester.pumpWidget(const _Harness(provider: false));
     await tester.pumpAndSettle();
+    expect(find.byType(AppFooter), findsNothing);
     final position = tester
         .state<ScrollableState>(
           find.descendant(
@@ -192,17 +193,28 @@ void main() {
           ),
         )
         .position;
+    position.jumpTo(position.maxScrollExtent / 2);
+    await tester.pumpAndSettle();
+    expect(find.byType(AppFooter), findsNothing);
     position.jumpTo(position.maxScrollExtent);
     await tester.pumpAndSettle();
+    expect(find.byType(AppFooter), findsOneWidget);
     final button = find.byIcon(Icons.keyboard_arrow_up_rounded);
     expect(button, findsOneWidget);
     final footerTop = tester.getTopLeft(find.byType(AppFooter)).dy;
     final buttonBottom = tester.getBottomRight(button).dy;
     expect(buttonBottom, lessThan(footerTop));
     expect(footerTop - buttonBottom, lessThan(80));
+    position.jumpTo(position.maxScrollExtent);
+    await tester.pumpAndSettle();
+    expect(find.byType(AppFooter), findsOneWidget);
+    position.jumpTo(position.maxScrollExtent / 2);
+    await tester.pumpAndSettle();
+    expect(find.byType(AppFooter), findsNothing);
     await tester.tap(button);
     await tester.pumpAndSettle();
     expect(position.pixels, 0);
+    expect(find.byType(AppFooter), findsNothing);
   });
 
   for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {

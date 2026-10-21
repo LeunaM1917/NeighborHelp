@@ -96,6 +96,7 @@ class _AdminShellState extends State<AdminShell> {
       child: Scaffold(
         body: WorkspacePageFrame(
           wide: wide,
+          scrollController: _tabScroll.controllerFor(_tab),
           rail: AdminNavigation(currentIndex: _tab, onSelect: _selectTab),
           header: _AdminTopBar(
             title: _tabs[_tab].label,

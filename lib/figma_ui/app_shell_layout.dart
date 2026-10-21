@@ -59,6 +59,7 @@ class AppShellLayout extends StatelessWidget {
 
     return WorkspacePageFrame(
       wide: wide,
+      scrollController: scrollController,
       rail: AppShellSidebar(
         tabs: tabs,
         currentIndex: currentIndex,
