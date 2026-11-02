@@ -1,3 +1,5 @@
+import 'package:file_picker/file_picker.dart';
+import '../../services/storage_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../figma_ui/figma_colors.dart';
@@ -116,6 +118,22 @@ class _ProviderCertificationDialogState extends State<ProviderCertificationDialo
     _description.addListener(_onFieldsChanged);
   }
 
+  Future<void> _uploadCertificate() async {
+    setState(() => _saving = true);
+    try {
+      final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'], withData: true);
+      if (result == null) return;
+      final file = result.files.single;
+      if (file.bytes == null || file.size > 5 * 1024 * 1024) throw StateError('Choose a file up to 5 MB.');
+      final url = await StorageService().uploadCertificate(providerId: widget.providerId,
+        certificateId: widget.initial?.id.isNotEmpty == true ? widget.initial!.id : ProviderCertificationEntry.newId(),
+        bytes: file.bytes!, extension: (file.extension ?? '').toLowerCase());
+      if (mounted) setState(() => _url.text = url);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e is StateError ? e.message.toString() : 'Could not upload the certificate. Please retry.')));
+    } finally { if (mounted) setState(() => _saving = false); }
+  }
+
   void _onFieldsChanged() => setState(() {});
 
   bool get _canSave =>
@@ -171,7 +189,7 @@ class _ProviderCertificationDialogState extends State<ProviderCertificationDialo
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
-      // New/edited certs always go back to Pending for Verification Agency review.
+      // New/edited certs always go back to Pending for System Administrator review.
       final entryId = (widget.initial?.id.isNotEmpty == true)
           ? widget.initial!.id
           : ProviderCertificationEntry.newId();
@@ -219,8 +237,7 @@ class _ProviderCertificationDialogState extends State<ProviderCertificationDialo
       }
 
       // Provider may only remove (not add) approved ids — editing clears prior approval.
-      final approvedIds = List<String>.from(profile?.approvedCertificationIds ?? [])
-        ..removeWhere((id) => id == entryId);
+      final approvedIds = <String>[]; // Any change requires renewed review of the submitted certificate set.
 
       await FirestoreService().updateServiceProvider(
         providerId: profile?.providerId ?? widget.providerId,
@@ -303,13 +320,16 @@ class _ProviderCertificationDialogState extends State<ProviderCertificationDialo
           ),
           const SizedBox(height: 18),
           _labeledField(
-            label: 'Certification URL (Optional)',
+            label: 'Certificate document or verification URL',
             field: TextFormField(
               controller: _url,
               keyboardType: TextInputType.url,
               decoration: _inputDecoration(),
             ),
           ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(onPressed: _saving ? null : _uploadCertificate, icon: const Icon(Icons.upload_file), label: const Text('Upload PDF or image (up to 5 MB)')),
+          const Text('Changing certificates sends the certificate set back for administrator review.', style: TextStyle(fontSize: 12)),
         ],
       ),
     );

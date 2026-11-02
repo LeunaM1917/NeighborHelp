@@ -1,4 +1,6 @@
-import 'dart:math' as math;
+import '../../../models/review.dart';
+import '../../../utils/report_analytics.dart';
+import 'package:intl/intl.dart';
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
@@ -43,7 +45,7 @@ List<CategoryReportRow> buildCategoryRows({
   for (final b in bookings) {
     final cat = _categoryForBooking(b, servicesById);
     totals[cat] = (totals[cat] ?? 0) + 1;
-    if (b.status.toLowerCase() == 'completed') {
+    if (b.isCompleted) {
       completed[cat] = (completed[cat] ?? 0) + 1;
     }
     final r = providerRating[b.providerId] ?? 0;
@@ -103,32 +105,26 @@ class AdminReportsTrendChart extends StatelessWidget {
     super.key,
     required this.bookings,
     this.granularity = 'Daily',
+    this.range = 'This month',
   });
 
   final List<Booking> bookings;
   final String granularity;
+  final String range;
 
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final days = List.generate(
-      now.day.clamp(7, 31),
-      (i) => DateTime(now.year, now.month, i + 1),
-    );
-    if (days.length > 14 && granularity == 'Daily') {
-      // Sample every other day label on small screens handled by chart
-    }
-
-    final completed = List<double>.filled(days.length, 0);
-    final total = List<double>.filled(days.length, 0);
-
+    final from = reportRangeStart(range, now);
+    final step = granularity == 'Weekly' ? 7 : 1;
+    final days = List.generate(now.difference(from).inDays ~/ step + 1, (i) => from.add(Duration(days: i * step)));
+    final completed = List<double>.filled(days.length, 0), total = List<double>.filled(days.length, 0);
     for (final b in bookings) {
-      final dt = b.scheduledDate.toDate();
-      if (dt.year != now.year || dt.month != now.month) continue;
-      final idx = dt.day - 1;
-      if (idx < 0 || idx >= days.length) continue;
+      final dt = b.createdAt.toDate();
+      final idx = dt.difference(from).inDays ~/ step;
+      if (dt.isBefore(from) || dt.isAfter(now) || idx < 0 || idx >= days.length) continue;
       total[idx]++;
-      if (b.status.toLowerCase() == 'completed') completed[idx]++;
+      if (b.isCompleted) completed[idx]++;
     }
 
     final maxY = [...completed, ...total].fold<double>(0, (a, b) => a > b ? a : b);
@@ -424,95 +420,28 @@ class AdminReportsRatingDistribution extends StatelessWidget {
 }
 
 class AdminReportsRatingTrend extends StatelessWidget {
-  const AdminReportsRatingTrend({super.key, required this.providers});
-
-  final List<ServiceProviderProfile> providers;
-
+  const AdminReportsRatingTrend({super.key, required this.reviews});
+  final List<Review> reviews;
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final days = List.generate(
-      now.day.clamp(5, 31),
-      (i) => DateTime(now.year, now.month, i + 1),
-    );
-    final values = List<double>.filled(days.length, 0);
-    final counts = List<int>.filled(days.length, 0);
-
-    for (final p in providers) {
-      if (p.averageRating <= 0) continue;
-      final dt = p.updatedAt.toDate();
-      if (dt.year != now.year || dt.month != now.month) continue;
-      final idx = dt.day - 1;
-      if (idx < 0 || idx >= days.length) continue;
-      values[idx] += p.averageRating;
-      counts[idx]++;
-    }
-
-    var last = providers
-        .where((p) => p.averageRating > 0)
-        .fold<double>(4.0, (a, p) => p.averageRating);
-    if (providers.any((p) => p.averageRating > 0)) {
-      last = providers.where((p) => p.averageRating > 0).map((p) => p.averageRating).reduce((a, b) => a + b) /
-          providers.where((p) => p.averageRating > 0).length;
-    }
-
-    final spots = <FlSpot>[];
-    for (var i = 0; i < days.length; i++) {
-      final v = counts[i] > 0 ? values[i] / counts[i] : last;
-      last = v;
-      spots.add(FlSpot(i.toDouble(), v));
-    }
-
-    final minY = (spots.map((s) => s.y).fold<double>(5, math.min) - 0.3).clamp(3.5, 4.9);
-    final maxY = (spots.map((s) => s.y).fold<double>(0, math.max) + 0.2).clamp(4.0, 5.0);
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 0, 16, 12),
-      child: SizedBox(
-        height: 180,
-        child: LineChart(
-          LineChartData(
-            minY: minY,
-            maxY: maxY,
-            gridData: FlGridData(
-              show: true,
-              drawVerticalLine: false,
-              getDrawingHorizontalLine: (_) => FlLine(color: FigmaColors.gray200, strokeWidth: 1),
-            ),
-            borderData: FlBorderData(show: false),
-            titlesData: FlTitlesData(
-              topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-              rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-              leftTitles: AxisTitles(
-                sideTitles: SideTitles(
-                  showTitles: true,
-                  reservedSize: 32,
-                  interval: 0.5,
-                  getTitlesWidget: (v, _) => Text(
-                    v.toStringAsFixed(1),
-                    style: GoogleFonts.inter(fontSize: 10, color: FigmaColors.gray500),
-                  ),
-                ),
-              ),
-              bottomTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            ),
-            lineBarsData: [
-              LineChartBarData(
-                spots: spots,
-                isCurved: true,
-                color: FigmaColors.green,
-                barWidth: 2.5,
-                dotData: const FlDotData(show: false),
-                belowBarData: BarAreaData(
-                  show: true,
-                  color: FigmaColors.tintGreen.withValues(alpha: 0.5),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    final values = dailyReviewRatings(reviews);
+    if (values.isEmpty) return const Padding(padding: EdgeInsets.all(24), child: Text('No customer ratings were submitted during this period.'));
+    if (values.length == 1) return Padding(padding: const EdgeInsets.all(24), child: Text('${values.values.single.toStringAsFixed(2)} stars on ${DateFormat('MMM d').format(values.keys.single)}'));
+    final days = values.keys.toList();
+    final origin = days.first;
+    final spots = [for (final day in days) FlSpot(day.difference(origin).inDays.toDouble(), values[day]!)];
+    return Column(children: [
+      const Text('Daily mean of submitted customer star ratings. Only observed dates are plotted.', style: TextStyle(fontSize: 12)),
+      const SizedBox(height: 12),
+      SizedBox(height: 180, child: LineChart(LineChartData(minY: 1, maxY: 5,
+        lineBarsData: [LineChartBarData(spots: spots, color: FigmaColors.green, isCurved: false, dotData: const FlDotData(show: true))],
+        titlesData: FlTitlesData(topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)), rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          leftTitles: const AxisTitles(axisNameWidget: Text('Stars'), sideTitles: SideTitles(showTitles: true, reservedSize: 28, interval: 1)),
+          bottomTitles: AxisTitles(axisNameWidget: const Text('Review date'), sideTitles: SideTitles(showTitles: true, reservedSize: 26,
+            getTitlesWidget: (v, _) => Text(DateFormat('M/d').format(origin.add(Duration(days: v.toInt()))), style: const TextStyle(fontSize: 10))))),
+        borderData: FlBorderData(show: false),
+      ))),
+    ]);
   }
 }
 

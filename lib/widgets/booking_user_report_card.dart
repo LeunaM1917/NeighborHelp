@@ -62,7 +62,7 @@ class _BookingUserReportCardState extends State<BookingUserReportCard> {
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: chosen,
+                    initialValue: chosen,
                     isExpanded: true,
                     items: _reasons
                         .map(

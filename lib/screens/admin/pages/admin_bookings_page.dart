@@ -1,3 +1,4 @@
+import '../../../services/export_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -102,7 +103,7 @@ class _AdminBookingsPageState extends State<AdminBookingsPage> {
         builder: (ctx, setLocal) => AlertDialog(
           title: Text('Update status', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
           content: DropdownButtonFormField<String>(
-            value: _statusOptions.contains(selected) ? selected : _statusOptions.first,
+            initialValue: _statusOptions.contains(selected) ? selected : _statusOptions.first,
             decoration: const InputDecoration(border: OutlineInputBorder()),
             items: [
               for (final s in _statusOptions)
@@ -296,9 +297,7 @@ class _AdminBookingsPageState extends State<AdminBookingsPage> {
                         () => _selectedId = selected ? r.booking.bookingId : null,
                       ),
                       onExport: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Export bookings — coming soon.')),
-                        );
+                        ExportService.exportCollection(context, 'bookings');
                       },
                       onView: (r) => _showBookingDetail(context, firestore, r),
                       onCopyId: (id) => _copyId(context, id),

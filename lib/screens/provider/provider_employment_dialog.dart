@@ -419,7 +419,7 @@ class _ProviderEmploymentDialogState extends State<ProviderEmploymentDialog> {
     ];
 
     return DropdownButtonFormField<String?>(
-      value: value != null && value.isNotEmpty ? value : null,
+      initialValue: value != null && value.isNotEmpty ? value : null,
       isExpanded: true,
       decoration: _inputDecoration(),
       items: items,
@@ -438,7 +438,7 @@ class _ProviderEmploymentDialogState extends State<ProviderEmploymentDialog> {
     ];
 
     return DropdownButtonFormField<String?>(
-      value: value != null && value.isNotEmpty ? value : null,
+      initialValue: value != null && value.isNotEmpty ? value : null,
       isExpanded: true,
       decoration: _inputDecoration(),
       items: items,

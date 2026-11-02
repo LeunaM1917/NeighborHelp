@@ -1,3 +1,8 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../models/review.dart';
+import '../../../utils/report_analytics.dart';
+import '../../../services/export_service.dart';
+import '../widgets/admin_feedback_location_reports.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -64,7 +69,7 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
               return StreamBuilder<List<ServiceProviderProfile>>(
                 stream: firestore.serviceProvidersStream(),
                 builder: (context, providerSnap) {
-                  final bookings = bookingSnap.data ?? [];
+                  final bookings = bookingsInRange(bookingSnap.data ?? [], _dateRange);
                   final servicesById = <String, ServiceListing>{
                     for (final s in serviceSnap.data ?? []) s.serviceId: s,
                   };
@@ -73,7 +78,7 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
                   final total = bookings.length;
                   var completed = 0;
                   for (final b in bookings) {
-                    if (b.status.toLowerCase() == 'completed') completed++;
+                    if (b.isCompleted) completed++;
                   }
 
                   final categoryCounts = bookingCountsByCategory(bookings, servicesById);
@@ -114,11 +119,11 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
                         dateRange: _dateRange,
                         onDateRangeChanged: (v) => setState(() => _dateRange = v),
                         onExport: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Export report — coming soon.')),
-                          );
+                          ExportService.exportCollection(context, 'bookings', rows: bookings.map((b) => <String, Object?>{'id': b.bookingId, ...b.toMap()}).toList(), label: 'Export bookings in $_dateRange');
                         },
                       ),
+                      const SizedBox(height: 24),
+                      AdminFeedbackLocationReports(bookings: bookings, range: _dateRange),
                       const SizedBox(height: 24),
                       AdminMetricGrid(
                         children: [
@@ -150,7 +155,7 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
                             iconColor: FigmaColors.green,
                           ),
                           AdminMetricCard(
-                            label: 'Average provider rating',
+                            label: 'Current provider rating',
                             value: avgRating > 0 ? '${avgRating.toStringAsFixed(2)} / 5' : '—',
                             hint: rated > 0 ? '↑ from $rated rated providers' : 'No ratings yet',
                             icon: Icons.star_outline,
@@ -188,6 +193,7 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
                             child: AdminReportsTrendChart(
                               bookings: bookings,
                               granularity: _trendGranularity,
+                              range: _dateRange,
                             ),
                           );
                           final categoryCard = AdminPanelCard(
@@ -224,7 +230,12 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
                           );
                           final ratingTime = AdminPanelCard(
                             title: 'Average rating over time',
-                            child: AdminReportsRatingTrend(providers: providers),
+                            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(stream: FirebaseFirestore.instance.collection('reviews').snapshots(), builder: (context, snapshot) {
+                              if (snapshot.hasError) return const Text('Could not load rating history.');
+                              if (!snapshot.hasData) return const LinearProgressIndicator();
+                              final reviews = snapshot.data!.docs.map((d) => Review.fromFirestore(d.id, d.data())).where((r) => inReportRange(r.createdAt.toDate(), _dateRange)).toList();
+                              return AdminReportsRatingTrend(reviews: reviews);
+                            }),
                           );
                           final insights = AdminReportsInsightsPanel(
                             completionRate: completionRate,
@@ -294,16 +305,12 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
                           );
                           final actions = AdminReportsQuickActions(
                             onExportCsv: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Export CSV — coming soon.')),
-                              );
+                              ExportService.exportCollection(context, 'bookings', rows: bookings.map((b) => <String, Object?>{'id': b.bookingId, ...b.toMap()}).toList(), label: 'Export bookings in $_dateRange');
                             },
                             onViewBookings: () => widget.onNavigateToTab?.call(7),
                             onReviewProviders: () => widget.onNavigateToTab?.call(2),
                             onGenerateSummary: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Generate summary — coming soon.')),
-                              );
+                              showDialog<void>(context: context, builder: (ctx) => AlertDialog(title: Text('Summary for $_dateRange'), content: Text('$total requested bookings, $completed completed, ${(completionRate * 100).toStringAsFixed(1)}% completion. Most requested category: ${topCategory.isEmpty ? 'None' : topCategory}. Current average provider rating: ${avgRating.toStringAsFixed(2)} / 5.'), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))]));
                             },
                           );
 

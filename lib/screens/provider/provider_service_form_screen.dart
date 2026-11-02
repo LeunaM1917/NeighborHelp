@@ -250,19 +250,19 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
       if (!(profile?.isVerifiedProvider ?? false)) {
         if (mounted) {
           setState(() => _saving = false);
-          _snack('Complete identity verification (Verification Agency approval) before publishing.');
+          _snack('Complete identity verification (System Administrator approval) before publishing.');
         }
         return;
       }
       final title = _title.text.trim();
       // Only services that need credentials are gated — not the whole provider.
       if (serviceRequiresCertification(category: category, serviceTitle: title) &&
-          !(profile?.hasApprovedCertifications ?? false)) {
+          !(profile != null && hasMatchingServiceCertificate(profile, category: category, serviceTitle: title))) {
         if (mounted) {
           setState(() => _saving = false);
           _snack(
             'This service needs an authenticated certificate. '
-            'Submit one on your profile for Verification Agency review, then try again.',
+            'Submit one on your profile for System Administrator review, then try again.',
           );
         }
         return;
@@ -1223,7 +1223,7 @@ class _CertificationPolicyBanner extends StatelessWidget {
           Expanded(
             child: Text(
               requiresCert
-                  ? 'Certificate required — Verification Agency must authenticate a credential on your profile before you can publish this listing. Admin still reviews the listing after that.'
+                  ? 'Certificate required — System Administrator must authenticate a credential on your profile before you can publish this listing. Admin still reviews the listing after that.'
                   : 'No certificate required for this service — you can publish after identity verification. Admin reviews the listing as usual.',
               style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray700, height: 1.4),
             ),

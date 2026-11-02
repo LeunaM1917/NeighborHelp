@@ -1,3 +1,4 @@
+import '../../widgets/chat_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -127,6 +128,7 @@ class _BookingChatScreenState extends State<BookingChatScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              if (m.mediaUrl?.isNotEmpty == true) ChatImage(url: m.mediaUrl!),
                               Text(
                                 m.messageText ?? '',
                                 style: GoogleFonts.inter(
@@ -163,6 +165,12 @@ class _BookingChatScreenState extends State<BookingChatScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     child: Row(
                       children: [
+                        IconButton(tooltip: 'Attach image', icon: const Icon(Icons.attach_file), onPressed: _sending ? null : () async {
+                          setState(() => _sending = true);
+                          await sendBookingImage(context, bookingId: widget.booking.bookingId, customerId: widget.booking.customerId,
+                            providerId: widget.booking.providerId, senderId: widget.appUser.userId, receiverId: widget.otherPartyId);
+                          if (mounted) setState(() => _sending = false);
+                        }),
                         Expanded(
                           child: TextField(
                             controller: _controller,

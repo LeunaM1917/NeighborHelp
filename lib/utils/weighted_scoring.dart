@@ -27,9 +27,8 @@ bool isColdStartProvider({required int reviewCount, required double averageRatin
 /// where C = [kBayesianConfidenceWeight], m = [kBayesianPriorOutOfFive],
 /// R = observed mean, n = review count.
 ///
-/// Firestore `averageRating` is written by Cloud Functions as a Bayesian value
-/// after reviews; treating it as R here keeps the same damping for small n and
-/// also protects against not-yet-updated raw means (e.g. a lone 5.0).
+/// Use this for raw observed means. Firestore averageRating is already Bayesian
+/// and is normalized directly rather than passed through this function twice.
 double computeBayesianRatingOutOfFive({
   required double observedAverageOutOfFive,
   required int reviewCount,
@@ -50,11 +49,8 @@ double normalizedRatingScore({
   required double bayesianRatingOutOfFive,
   required int reviewCount,
 }) {
-  final bayes = computeBayesianRatingOutOfFive(
-    observedAverageOutOfFive: bayesianRatingOutOfFive,
-    reviewCount: reviewCount,
-  );
-  return (bayes / 5.0).clamp(0.0, 1.0);
+  final rating = reviewCount <= 0 ? kBayesianPriorOutOfFive : bayesianRatingOutOfFive;
+  return (rating / 5.0).clamp(0.0, 1.0);
 }
 
 /// Normalized completion feature C in [0, 1].
@@ -135,10 +131,7 @@ WeightedScoreBreakdown computeWeightedScoreBreakdown({
     completion: completion,
     recommendationScore: rs,
     distanceKm: distanceKm,
-    bayesianRatingOutOfFive: computeBayesianRatingOutOfFive(
-      observedAverageOutOfFive: bayesianRatingOutOfFive,
-      reviewCount: reviewCount,
-    ),
+    bayesianRatingOutOfFive: reviewCount <= 0 ? kBayesianPriorOutOfFive : bayesianRatingOutOfFive,
     isAvailable: isAvailable,
     completionRateDisplay: completionDisplay,
   );

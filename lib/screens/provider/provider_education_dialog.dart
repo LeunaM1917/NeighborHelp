@@ -354,7 +354,7 @@ class _ProviderEducationDialogState extends State<ProviderEducationDialog> {
     ];
 
     return DropdownButtonFormField<String?>(
-      value: value != null && value.isNotEmpty ? value : null,
+      initialValue: value != null && value.isNotEmpty ? value : null,
       isExpanded: true,
       decoration: _inputDecoration(),
       items: items,
@@ -364,7 +364,7 @@ class _ProviderEducationDialogState extends State<ProviderEducationDialog> {
 
   Widget _degreeDropdown() {
     return DropdownButtonFormField<String?>(
-      value: _degree != null && _degree!.isNotEmpty ? _degree : null,
+      initialValue: _degree != null && _degree!.isNotEmpty ? _degree : null,
       isExpanded: true,
       decoration: _inputDecoration(hint: 'Degree (Optional)'),
       items: [

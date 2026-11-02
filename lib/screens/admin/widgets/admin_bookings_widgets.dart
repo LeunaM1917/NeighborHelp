@@ -12,8 +12,8 @@ import 'admin_widgets.dart';
 
 int bookingStatusBucket(String status) {
   final s = status.toLowerCase();
-  if (s == 'completed') return 0;
-  if (s == 'cancelled' || s == 'canceled' || s == 'disputed') return 2;
+  if (s == 'completed' || s == 'milestone complete') return 0;
+  if (s == 'cancelled' || s == 'canceled' || s == 'declined' || s == 'disputed') return 2;
   return 1;
 }
 

@@ -1,3 +1,7 @@
+import 'package:cloud_functions/cloud_functions.dart';
+import '../constants/functions_config.dart';
+import 'firestore_service.dart';
+import 'push_notification_service.dart';
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -133,30 +137,8 @@ class AuthService {
     final existing = await userRef.get();
     if (existing.exists && existing.data() != null) return true;
 
-    if (email != null && email.trim().isNotEmpty) {
-      final emailQ = await _firestore
-          .collection(FirestoreCollections.users)
-          .where('email', isEqualTo: email.trim())
-          .limit(1)
-          .get();
-      if (emailQ.docs.isNotEmpty && emailQ.docs.first.id != uid) {
-        return false;
-      }
-    }
-
     var providerSnap =
         await _firestore.collection(FirestoreCollections.serviceProviders).doc(uid).get();
-
-    if (!providerSnap.exists) {
-      final byUserId = await _firestore
-          .collection(FirestoreCollections.serviceProviders)
-          .where('userId', isEqualTo: uid)
-          .limit(1)
-          .get();
-      if (byUserId.docs.isNotEmpty) {
-        providerSnap = byUserId.docs.first;
-      }
-    }
 
     final hasProvider = providerSnap.exists;
     final role = hasProvider ? UserRole.provider : UserRole.customer;
@@ -345,7 +327,7 @@ class AuthService {
         updates['role'] = UserRole.provider.firestoreValue;
       }
 
-      await ref.update(updates);
+      if (data['accountStatus'] == 'Active') await ref.update(updates);
 
       if (effectiveRole == UserRole.provider && !hasProviderProfile) {
         final now = Timestamp.now();
@@ -486,6 +468,10 @@ class AuthService {
   }
 
   Future<void> signOut() async {
+    if (_auth.currentUser != null) {
+      try { await FirebaseFunctions.instanceFor(region: kNeighborHelpFunctionsRegion).httpsCallable('recordSessionEvent').call({'action': 'logout'}).timeout(const Duration(seconds: 3)); } catch (_) {}
+    }
+    try { await PushNotificationService().unregister().timeout(const Duration(seconds: 3)); } catch (_) {}
     if (_localAdminSignedIn) {
       _localAdminSignedIn = false;
       _localAdminController.add(false);
@@ -496,6 +482,7 @@ class AuthService {
       // Ignore if Google was never used.
     }
     await _auth.signOut();
+    await FirestoreService().clearSession();
   }
 
   static const _invalidApiKeyHelp =

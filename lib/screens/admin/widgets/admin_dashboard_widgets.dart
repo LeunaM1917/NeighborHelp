@@ -259,7 +259,7 @@ class AdminBookingTrendChart extends StatelessWidget {
       final idx = days.indexWhere((d) => d == day);
       if (idx < 0) continue;
       final s = b.status.toLowerCase();
-      if (s == 'completed') {
+      if (s == 'completed' || s == 'milestone complete') {
         completed[idx]++;
       } else if (s != 'cancelled' && s != 'canceled') {
         pending[idx]++;
@@ -496,7 +496,7 @@ class AdminStatusChip extends StatelessWidget {
     final s = status.toLowerCase();
     Color bg;
     Color fg;
-    if (s == 'completed') {
+    if (s == 'completed' || s == 'milestone complete') {
       bg = FigmaColors.tintGreen;
       fg = FigmaColors.green;
     } else if (s == 'in progress' || s == 'in_progress') {

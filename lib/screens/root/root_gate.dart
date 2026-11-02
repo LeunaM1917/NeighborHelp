@@ -1,3 +1,4 @@
+import '../../widgets/session_idle_guard.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -18,7 +19,7 @@ import '../../widgets/stream_snapshot.dart';
 import '../admin/admin_shell.dart';
 import '../customer/customer_shell.dart';
 import '../provider/provider_shell.dart';
-import '../verification_agency/verification_agency_shell.dart';
+
 
 class RootGate extends StatelessWidget {
   const RootGate({super.key});
@@ -38,13 +39,13 @@ class RootGate extends StatelessWidget {
 
         final firebaseUser = authSnap.data;
         if (firebaseUser != null) {
-          return _SignedInUserGate(
+          return SessionIdleGuard(key: ValueKey(firebaseUser.uid), child: _SignedInUserGate(
             key: ValueKey(firebaseUser.uid),
             uid: firebaseUser.uid,
             email: firebaseUser.email,
             displayName: firebaseUser.displayName,
             auth: auth,
-          );
+          ));
         }
 
         return StreamBuilder<bool>(
@@ -281,9 +282,7 @@ class _SignedInUserGateState extends State<_SignedInUserGate> {
             onSignOut: () => widget.auth.signOut(),
           );
         }
-        if (appUser.role != UserRole.administrator &&
-            appUser.role != UserRole.verificationAgency &&
-            appUser.accountStatus.isBlocked) {
+        if (appUser.accountStatus.isBlocked) {
           return AccountBlockedGate(
             appUser: appUser,
             onSignOut: widget.auth.signOut,
@@ -293,7 +292,7 @@ class _SignedInUserGateState extends State<_SignedInUserGate> {
           return AdminShell(appUser: appUser, auth: widget.auth);
         }
         if (appUser.role == UserRole.verificationAgency) {
-          return VerificationAgencyShell(appUser: appUser, auth: widget.auth);
+          return Scaffold(body: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [const Padding(padding: EdgeInsets.all(24), child: Text('Verification is now managed by the System Administrator. This legacy account has no review access.')), OutlinedButton(onPressed: widget.auth.signOut, child: const Text('Sign out'))])));
         }
         if (appUser.role == UserRole.provider) {
           return _SignedInApp(appUser: appUser, role: UserRole.provider, auth: widget.auth);
@@ -399,7 +398,7 @@ class _SignedInApp extends StatelessWidget {
       case UserRole.administrator:
         return AdminShell(appUser: appUser, auth: auth);
       case UserRole.verificationAgency:
-        return VerificationAgencyShell(appUser: appUser, auth: auth);
+        return const Scaffold(body: Center(child: Text('This legacy verification account has been retired. Please contact the System Administrator.')));
     }
   }
 }

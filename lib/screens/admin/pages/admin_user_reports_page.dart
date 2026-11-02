@@ -4,13 +4,11 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import '../../../figma_ui/figma_colors.dart';
-import '../../../models/account_status.dart';
 import '../../../models/app_user.dart';
 import '../../../models/booking.dart';
 import '../../../models/booking_user_report.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/firestore_service.dart';
-import '../../../widgets/stream_snapshot.dart';
 import '../widgets/admin_dashboard_widgets.dart';
 import '../widgets/admin_detail_dialog.dart';
 import '../widgets/admin_widgets.dart';
@@ -266,9 +264,9 @@ class _AdminUserReportsPageState extends State<AdminUserReportsPage> {
                   // Metrics
                   var open = 0, resolved = 0, dismissed = 0;
                   for (final r in reportsRaw) {
-                    if (r.status == BookingUserReport.statusResolved) resolved++;
-                    else if (r.status == BookingUserReport.statusDismissed) dismissed++;
-                    else open++;
+                    if (r.status == BookingUserReport.statusResolved) { resolved++; }
+                    else if (r.status == BookingUserReport.statusDismissed) { dismissed++; }
+                    else { open++; }
                   }
 
                   return Column(

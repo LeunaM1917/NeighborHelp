@@ -1,3 +1,5 @@
+import '../../../utils/service_search.dart';
+import '../../../services/provider_recommendation_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -42,6 +44,7 @@ class _CustomerBrowseTabState extends State<CustomerBrowseTab> {
   String _query = '';
   String? _categoryFilter;
   String _location = 'Panabo City';
+  double _radiusKm = 15;
   String? _priceFilter;
   String? _ratingFilter;
   String? _availabilityFilter;
@@ -76,8 +79,14 @@ class _CustomerBrowseTabState extends State<CustomerBrowseTab> {
   }
 
   List<CustomerBrowseServiceItem> _filterAndSort(List<CustomerBrowseServiceItem> items) {
-    var list = [...items];
+    var list = items.where((s) => matchesServiceFilters(price: s.price, rating: s.rating,
+      area: s.serviceArea, profile: s.profile, location: _location, priceFilter: _priceFilter,
+      ratingFilter: _ratingFilter, availability: _availabilityFilter)).toList();
 
+    final origin = geoPointOrNull(widget.appUser.location);
+    if (origin != null && !isDefaultSignupLocation(origin)) {
+      list = list.where((s) => _straightLineKm(origin, s) <= _radiusKm && _straightLineKm(origin, s) <= (s.profile?.serviceRadiusKm ?? 0)).toList();
+    }
     if (_query.isNotEmpty) {
       list = list
           .where(
@@ -131,11 +140,11 @@ class _CustomerBrowseTabState extends State<CustomerBrowseTab> {
         break;
       case _BrowseSort.recommended:
         if (_listFilter == _BrowseListFilter.all) {
-          list.sort((a, b) {
-            final r = b.rating.compareTo(a.rating);
-            if (r != 0) return r;
-            return b.reviews.compareTo(a.reviews);
-          });
+          final profiles = {for (final item in list) if (item.profile != null) item.profile!.providerId: item.profile!};
+          final ranked = rankProvidersByRecommendation(providers: profiles.values.toList(), customerOrigin: widget.appUser.location, maxSearchRadiusKm: _radiusKm);
+          final rank = {for (final r in ranked) r.profile.providerId: r.rank};
+          list.removeWhere((s) => !rank.containsKey(s.listing?.providerId));
+          list.sort((a, b) => rank[a.listing!.providerId]!.compareTo(rank[b.listing!.providerId]!));
         }
         break;
     }
@@ -215,6 +224,8 @@ class _CustomerBrowseTabState extends State<CustomerBrowseTab> {
                     _BrowseFilterBar(
                       category: _categoryFilter,
                       location: _location,
+                      radiusKm: _radiusKm,
+                      onRadius: (v) => setState(() => _radiusKm = v),
                       price: _priceFilter,
                       rating: _ratingFilter,
                       availability: _availabilityFilter,
@@ -465,6 +476,8 @@ class _BrowseFilterBar extends StatelessWidget {
   const _BrowseFilterBar({
     required this.category,
     required this.location,
+    required this.radiusKm,
+    required this.onRadius,
     required this.price,
     required this.rating,
     required this.availability,
@@ -479,6 +492,8 @@ class _BrowseFilterBar extends StatelessWidget {
 
   final String? category;
   final String location;
+  final double radiusKm;
+  final ValueChanged<double> onRadius;
   final String? price;
   final String? rating;
   final String? availability;
@@ -523,7 +538,7 @@ class _BrowseFilterBar extends StatelessWidget {
           children: [
             _FilterChipDropdown(
               label: 'Location: $location',
-              items: const ['Panabo City', 'Tagum City', 'Davao City', 'Digos City'],
+              items: const ['Panabo City', 'All locations'],
               onSelected: (v) => onLocation(v),
             ),
             const SizedBox(width: 4),
@@ -540,6 +555,7 @@ class _BrowseFilterBar extends StatelessWidget {
             ),
           ],
         ),
+        _FilterChipDropdown(label: '${radiusKm.toInt()} km radius', items: const ['5 km', '10 km', '15 km', '25 km', '50 km'], onSelected: (v) => onRadius(double.parse(v.split(' ').first))),
         _FilterChipDropdown(
           label: price ?? 'Price Range',
           items: const ['Any price', 'Under ₱300', '₱300 – ₱500', '₱500+'],

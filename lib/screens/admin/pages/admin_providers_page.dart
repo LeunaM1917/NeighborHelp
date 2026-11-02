@@ -1,3 +1,4 @@
+import '../../../services/export_service.dart';
 import 'package:flutter/material.dart';
 
 import '../../../figma_ui/figma_colors.dart';
@@ -295,9 +296,7 @@ class _AdminProvidersPageState extends State<AdminProvidersPage> {
                             () => _selectedId = selected ? r.profile.providerId : null,
                           ),
                           onExport: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Export providers — coming soon.')),
-                            );
+                            ExportService.exportCollection(context, 'serviceProviders');
                           },
                           page: page,
                           pageSize: _pageSize,

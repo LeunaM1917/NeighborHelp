@@ -1,7 +1,11 @@
+import '../../../models/admin_dashboard_stats.dart';
+import '../../../models/user_role.dart';
+import '../../../utils/report_analytics.dart';
+import '../../../services/export_service.dart';
+import '../widgets/admin_reports_widgets.dart';
 import 'package:flutter/material.dart';
 
 import '../../../figma_ui/figma_colors.dart';
-import '../../../models/admin_dashboard_stats.dart';
 import '../../../models/app_user.dart';
 import '../../../models/booking.dart';
 import '../../../models/provider.dart';
@@ -70,7 +74,7 @@ class _AdminOverviewPageState extends State<AdminOverviewPage> {
           if (statsSnap.hasError || !statsSnap.hasData) {
             return const AdminErrorBox(message: 'Could not load dashboard stats.');
           }
-          final stats = statsSnap.data!;
+
 
           return StreamBuilder<List<Booking>>(
             stream: firestore.allBookingsStream(),
@@ -84,7 +88,7 @@ class _AdminOverviewPageState extends State<AdminOverviewPage> {
                       return StreamBuilder<List<ServiceProviderProfile>>(
                         stream: firestore.serviceProvidersStream(),
                         builder: (context, providerSnap) {
-                          final bookings = bookingSnap.data ?? [];
+                          final bookings = bookingsInRange(bookingSnap.data ?? [], _dateRange);
                           final usersById = <String, AppUser>{
                             for (final u in userSnap.data ?? []) u.userId: u,
                           };
@@ -107,6 +111,10 @@ class _AdminOverviewPageState extends State<AdminOverviewPage> {
                             }
                           }
 
+                          final stats = AdminDashboardStats(customerCount: usersById.values.where((u) => u.role == UserRole.customer).length,
+                            providerCount: providers.length, bookingCount: bookings.length,
+                            pendingBookingCount: bookings.where((b) => b.isPending).length, pendingVerificationCount: pendingV,
+                            activeServiceCount: servicesById.values.where((s) => s.isMarketplaceVisible).length);
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
@@ -116,9 +124,7 @@ class _AdminOverviewPageState extends State<AdminOverviewPage> {
                                 dateRange: _dateRange,
                                 onDateRangeChanged: (v) => setState(() => _dateRange = v),
                                 onExport: () {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Export report — coming soon.')),
-                                  );
+                                  ExportService.exportCollection(context, 'bookings', rows: bookings.map((b) => <String, Object?>{'id': b.bookingId, ...b.toMap()}).toList(), label: 'Export bookings in $_dateRange');
                                 },
                               ),
                               const SizedBox(height: 24),
@@ -167,7 +173,7 @@ class _AdminOverviewPageState extends State<AdminOverviewPage> {
                                 breakpoint: 720,
                                 main: AdminPanelCard(
                                   title: 'Booking Trends',
-                                  child: AdminBookingTrendChart(bookings: bookings),
+                                  child: AdminReportsTrendChart(bookings: bookings, range: _dateRange),
                                 ),
                                 side: AdminPanelCard(
                                   title: 'Verification Status',

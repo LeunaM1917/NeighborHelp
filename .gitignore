@@ -46,3 +46,7 @@ app.*.map.json
 secrets.local.json
 android/secrets.properties
 .cursor/mcp.json
+# Local build and emulator test output
+/android/.kotlin/
+/functions/*-audit.log
+/functions/emulator-test.log

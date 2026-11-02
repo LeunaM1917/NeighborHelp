@@ -796,7 +796,7 @@ class _ProviderPerformanceOverviewPanelState extends State<ProviderPerformanceOv
 
   int _completedInMonth(List<Booking> bookings, int year, int month) {
     return bookings.where((b) {
-      if (b.status.toLowerCase() != 'completed') return false;
+      if (!b.isCompleted) return false;
       final d = b.updatedAt.toDate();
       return d.year == year && d.month == month;
     }).length;
@@ -819,7 +819,7 @@ class _CompletedJobsLineChart extends StatelessWidget {
     final daysInMonth = DateTime(year, month + 1, 0).day;
     final counts = List<double>.filled(daysInMonth, 0);
     for (final b in bookings) {
-      if (b.status.toLowerCase() != 'completed') continue;
+      if (!b.isCompleted) continue;
       final d = b.updatedAt.toDate();
       if (d.year == year && d.month == month) counts[d.day - 1]++;
     }

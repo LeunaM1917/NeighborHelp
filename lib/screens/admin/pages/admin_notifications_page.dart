@@ -1,3 +1,6 @@
+import 'package:cloud_functions/cloud_functions.dart';
+import '../../../constants/functions_config.dart';
+import '../../../services/export_service.dart';
 import 'package:flutter/material.dart';
 
 import '../../../figma_ui/figma_colors.dart';
@@ -26,7 +29,7 @@ class _AdminNotificationsPageState extends State<AdminNotificationsPage> {
   String _audienceMode = 'all';
   String _broadcastFilter = 'All users';
   bool _inApp = true;
-  bool _email = true;
+  bool _email = false;
   bool _push = true;
   bool _scheduleNow = true;
   String _insightsPeriod = 'Last 30 days';
@@ -73,9 +76,22 @@ class _AdminNotificationsPageState extends State<AdminNotificationsPage> {
     }
 
     if (!_scheduleNow) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Scheduled send — coming soon.')),
-      );
+      final day = await showDatePicker(context: context, initialDate: DateTime.now().add(const Duration(days: 1)), firstDate: DateTime.now(), lastDate: DateTime.now().add(const Duration(days: 365)));
+      if (day == null || !mounted) return;
+      final time = await showTimePicker(context: context, initialTime: const TimeOfDay(hour: 9, minute: 0));
+      if (time == null || !mounted) return;
+      setState(() => _sending = true);
+      try {
+        await FirebaseFunctions.instanceFor(region: kNeighborHelpFunctionsRegion).httpsCallable('queueAnnouncement').call({
+          'title': _titleController.text.trim(), 'message': _messageController.text.trim(),
+          'pushEnabled': _push,
+          'audience': _audienceMode == 'specific' ? 'specific' : _broadcastFilter, 'userId': _userIdController.text.trim(),
+          'scheduledAt': DateTime(day.year, day.month, day.day, time.hour, time.minute).millisecondsSinceEpoch,
+        });
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Announcement scheduled. Delivery runs every 15 minutes.')));
+      } on FirebaseFunctionsException catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message ?? 'Could not schedule announcement.')));
+      } finally { if (mounted) setState(() => _sending = false); }
       return;
     }
 
@@ -104,6 +120,7 @@ class _AdminNotificationsPageState extends State<AdminNotificationsPage> {
           userId: uid,
           title: _titleController.text.trim(),
           message: _messageController.text.trim(),
+          pushEnabled: _push,
           notificationType: 'Direct',
         );
         if (!mounted) return;
@@ -114,6 +131,7 @@ class _AdminNotificationsPageState extends State<AdminNotificationsPage> {
         final count = await firestore.adminBroadcastNotification(
           title: _titleController.text.trim(),
           message: _messageController.text.trim(),
+          pushEnabled: _push,
           roleFilter: _roleFromFilter(),
           notificationType: 'Broadcast',
         );
@@ -123,17 +141,7 @@ class _AdminNotificationsPageState extends State<AdminNotificationsPage> {
         );
       }
 
-      if (_email || _push) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              _email && _push
-                  ? 'Email and push delivery are not wired yet — in-app notification saved.'
-                  : 'Additional channels are not wired yet — in-app notification saved.',
-            ),
-          ),
-        );
-      }
+
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
@@ -268,9 +276,7 @@ class _AdminNotificationsPageState extends State<AdminNotificationsPage> {
                         onTargetUser: () => setState(() => _audienceMode = 'specific'),
                         onViewHistory: () {},
                         onExport: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Export notifications — coming soon.')),
-                          );
+                          ExportService.exportCollection(context, 'notifications');
                         },
                       ),
                     ],

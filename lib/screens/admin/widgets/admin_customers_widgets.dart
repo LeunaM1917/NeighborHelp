@@ -378,7 +378,7 @@ class AdminCustomerInsightsPanel extends StatelessWidget {
     var cancelled = 0;
     for (final b in bookings) {
       final s = b.status.toLowerCase();
-      if (s == 'completed') {
+      if (s == 'completed' || s == 'milestone complete') {
         completed++;
       } else if (s == 'cancelled' || s == 'canceled') {
         cancelled++;

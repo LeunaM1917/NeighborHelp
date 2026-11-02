@@ -12,7 +12,7 @@ import '../admin/pages/admin_verification_page.dart';
 import '../admin/widgets/admin_widgets.dart';
 import 'agency_certificates_page.dart';
 
-/// Own shell for the Verification Agency role (identity + certificate authentication).
+/// Own shell for the System Administrator role (identity + certificate authentication).
 class VerificationAgencyShell extends StatefulWidget {
   const VerificationAgencyShell({
     super.key,
@@ -138,7 +138,7 @@ class _AgencyTopBar extends StatelessWidget {
                           border: Border.all(color: FigmaColors.gray200),
                         ),
                         child: Text(
-                          'Verification Agency',
+                          'System Administrator',
                           style: GoogleFonts.inter(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
@@ -298,7 +298,7 @@ class _AgencyAboutPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AdminPageFrame(
-      title: 'Verification Agency role',
+      title: 'System Administrator role',
       subtitle: 'How identity verification fits NeighborHelp',
       child: Container(
         padding: const EdgeInsets.all(24),
@@ -334,7 +334,7 @@ class _AgencyAboutPage extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             _bullet('1. Provider submits ID + selfie through Didit.'),
-            _bullet('2. Verification Agency reviews and approves/rejects identity.'),
+            _bullet('2. System Administrator reviews and approves/rejects identity.'),
             _bullet('3. For technical jobs (e.g. Electrical / Plumbing), provider submits certificates → Agency authenticates them.'),
             _bullet('4. Soft services (Cleaning, Tutoring, etc.) can be listed without certificates after identity approval.'),
             _bullet('5. Provider publishes → Administrator reviews the listing. Marketplace shows approved + active services.'),

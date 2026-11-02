@@ -1,3 +1,4 @@
+import '../demo/job_title_ranking_demos.dart' show isJobTitleDemoProviderId;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -6,7 +7,7 @@ import '../models/provider.dart';
 import '../models/review.dart';
 import '../models/service.dart';
 import '../screens/customer/customer_service_detail_screen.dart';
-import '../demo/job_title_ranking_demos.dart';
+import '../services/provider_recommendation_service.dart';
 import '../services/firestore_service.dart';
 import '../utils/listing_rating.dart';
 import '../widgets/customer_provider_profile_dialog.dart';
@@ -305,22 +306,9 @@ class _ServiceDetailDialogState extends State<_ServiceDetailDialog> {
       profiles[listing.providerId] ??= await _firestore.getProviderProfile(listing.providerId);
     }
 
-    // Live listings + Ceiling Repair demo peers (UI-only), ranked by RS.
-    final ranked = mergeAndRankListingsForJobTitle(
-      serviceTitle: widget.service.name,
-      liveListings: matches,
-      liveProfiles: profiles,
-      liveUsers: users,
-      customerOrigin: widget.browseContext.appUser?.location,
-      absorbDemoMaps: (p, u) {
-        profiles
-          ..clear()
-          ..addAll(p);
-        users
-          ..clear()
-          ..addAll(u);
-      },
-    );
+    final eligible = matches.where((s) => profiles[s.providerId]?.canOfferService(s.serviceId) == true && users[s.providerId]?.accountStatus.isBlocked == false).toList();
+    final ranked = sortListingsByProviderRecommendation(listings: eligible, profilesByProviderId: profiles,
+      customerOrigin: widget.browseContext.appUser?.location);
 
     if (!mounted) return;
     setState(() {
@@ -356,7 +344,7 @@ class _ServiceDetailDialogState extends State<_ServiceDetailDialog> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'No live listing for "${widget.service.name}" yet. Demo rows are for ranking demos only.',
+              'No live listing for "${widget.service.name}" yet. Only verified providers with approved services appear here.',
               style: GoogleFonts.inter(),
             ),
           ),

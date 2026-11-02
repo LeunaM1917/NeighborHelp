@@ -1,3 +1,4 @@
+import '../../widgets/booking_reschedule_card.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -260,7 +261,8 @@ class _ProviderBookingDetailScreenState extends State<ProviderBookingDetailScree
                                   (b.isCancelled &&
                                       (b.wasCancelledByProvider || b.wasCancelledByCustomer))) ...[
                                 const SizedBox(height: 20),
-                                BookingCancellationCard(
+                                BookingRescheduleCard(booking: b, asCustomer: false),
+                  BookingCancellationCard(
                                   appUser: widget.appUser,
                                   booking: b,
                                   viewerRole: 'provider',

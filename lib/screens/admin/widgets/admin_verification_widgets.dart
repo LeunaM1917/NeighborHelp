@@ -13,7 +13,7 @@ class AdminVerificationPageHeader extends StatelessWidget {
   const AdminVerificationPageHeader({
     super.key,
     this.title = 'Identity verification',
-    this.subtitle = 'Monitor Didit ID checks. Primary approval is by the Verification Agency.',
+    this.subtitle = 'Monitor Didit ID checks. Primary approval is by the System Administrator.',
   });
 
   final String title;

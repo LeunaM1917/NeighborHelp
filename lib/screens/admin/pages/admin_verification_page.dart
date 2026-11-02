@@ -22,7 +22,7 @@ class AdminVerificationPage extends StatefulWidget {
 
   final AuthService auth;
 
-  /// When true, UI is branded for the Verification Agency (primary identity reviewer).
+  /// When true, UI is branded for the System Administrator (primary identity reviewer).
   final bool forAgency;
 
   /// Firebase uid recorded on approve/reject (agency or admin).
@@ -154,7 +154,7 @@ class _AdminVerificationPageState extends State<AdminVerificationPage> {
           userId: user.userId,
           approve: approve,
           reviewedByUserId: widget.reviewerUserId,
-          reviewedByRole: widget.forAgency ? 'Verification Agency' : 'Administrator',
+          reviewedByRole: widget.forAgency ? 'System Administrator' : 'Administrator',
         );
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -167,7 +167,7 @@ class _AdminVerificationPageState extends State<AdminVerificationPage> {
             SnackBar(
               content: Text(
                 widget.forAgency
-                    ? 'Action failed. Check Verification Agency permissions.'
+                    ? 'Action failed. Check System Administrator permissions.'
                     : 'Action failed. Check admin permissions.',
               ),
             ),
@@ -193,7 +193,7 @@ class _AdminVerificationPageState extends State<AdminVerificationPage> {
         providerId: profile.providerId,
         approve: approve,
         reviewedByUserId: widget.reviewerUserId,
-        reviewedByRole: widget.forAgency ? 'Verification Agency' : 'Administrator',
+        reviewedByRole: widget.forAgency ? 'System Administrator' : 'Administrator',
       );
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -206,7 +206,7 @@ class _AdminVerificationPageState extends State<AdminVerificationPage> {
           SnackBar(
             content: Text(
               widget.forAgency
-                  ? 'Action failed. Check Verification Agency permissions.'
+                  ? 'Action failed. Check System Administrator permissions.'
                   : 'Action failed. Check admin permissions.',
             ),
           ),
@@ -248,7 +248,7 @@ class _AdminVerificationPageState extends State<AdminVerificationPage> {
       return AdminPageFrame(
         auth: widget.auth,
         title: 'Identity verification',
-        subtitle: 'Monitor Didit ID checks. Primary approval is by the Verification Agency.',
+        subtitle: 'Didit verifies identities automatically. Review flagged cases and verification records here.',
         child: const AdminErrorBox(message: 'Firebase admin required.'),
       );
     }
@@ -275,8 +275,8 @@ class _AdminVerificationPageState extends State<AdminVerificationPage> {
 
               final allUsers = userSnap.data ?? [];
               final customers = allUsers.where((u) => u.role == UserRole.customer).toList();
-              final pending = providers.where((p) => p.canAdminReviewVerification).length +
-                  customers.where((u) => u.canAdminReviewVerification).length;
+              final pending = providers.where((p) => p.isVerificationInReview || p.isAwaitingAdminApproval).length +
+                  customers.where((u) => u.isVerificationInReview || u.isAwaitingVerificationApproval).length;
               final approvedMonth = _countBucketThisMonthProviders(providers, 0) +
                   _countBucketThisMonthCustomers(customers, 0);
               final rejectedMonth = _countBucketThisMonthProviders(providers, 2) +
@@ -287,10 +287,10 @@ class _AdminVerificationPageState extends State<AdminVerificationPage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   AdminVerificationPageHeader(
-                    title: widget.forAgency ? 'Verification Agency review' : 'Identity verification',
+                    title: widget.forAgency ? 'System Administrator review' : 'Identity verification',
                     subtitle: widget.forAgency
                         ? 'Review submitted government ID and Didit facial verification. Approve or reject identity requests.'
-                        : 'Monitor identity records and handle exceptional cases. Primary approval is by the Verification Agency.',
+                        : 'Didit verifies identities automatically. Review flagged cases and verification records here.',
                   ),
                   const SizedBox(height: 24),
                   AdminMetricGrid(

@@ -1,19 +1,38 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
+    function signedIn() { return request.auth != null; }
+    function user() { return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data; }
+    function active() { return signedIn() && user().accountStatus == 'Active'; }
+    function admin() { return active() && user().role == 'Administrator'; }
+    function image() { return request.resource != null && request.resource.size <= 5 * 1024 * 1024 && request.resource.contentType.matches('image/(jpeg|png|webp)'); }
     match /users/{userId}/{allPaths=**} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow read: if active();
+      allow create, update: if active() && request.auth.uid == userId && image();
+      allow delete: if active() && request.auth.uid == userId;
     }
-
     match /services/{providerId}/{allPaths=**} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == providerId;
+      allow read: if active();
+      allow create, update: if active() && request.auth.uid == providerId && image();
+      allow delete: if active() && request.auth.uid == providerId;
     }
-
     match /portfolio/{providerId}/{allPaths=**} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == providerId;
+      allow read: if active();
+      allow create, update: if active() && request.auth.uid == providerId && image();
+      allow delete: if active() && request.auth.uid == providerId;
+    }
+    match /certificates/{providerId}/{certificateId}/{fileName} {
+      allow read: if admin() || (active() && request.auth.uid == providerId);
+      allow create: if resource == null && active() && request.auth.uid == providerId && request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType.matches('(application/pdf|image/jpeg|image/png)');
+      allow update, delete: if false;
+    }
+    match /messages/{bookingId}/{senderId}/{fileName} {
+      function booking() { return firestore.get(/databases/(default)/documents/bookings/$(bookingId)).data; }
+      function participant() { return active() && request.auth.uid in [booking().customerId, booking().providerId]; }
+      allow read: if participant();
+      allow create: if resource == null && participant() && request.auth.uid == senderId && image();
+      allow update, delete: if false;
     }
   }
 }

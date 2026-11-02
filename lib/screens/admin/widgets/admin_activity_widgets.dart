@@ -49,7 +49,7 @@ List<AdminActivityEntry> buildActivityLog({
 
   for (final b in bookings) {
     final st = b.status.toLowerCase();
-    final title = st == 'completed'
+    final title = (st == 'completed' || st == 'milestone complete')
         ? 'Booking completed'
         : st == 'cancelled' || st == 'canceled'
             ? 'Booking cancelled'
@@ -110,7 +110,7 @@ List<AdminActivityEntry> buildActivityLog({
 
 String _normalizeBookingStatus(String status) {
   final s = status.toLowerCase();
-  if (s == 'completed') return 'Completed';
+  if (s == 'completed' || s == 'milestone complete') return 'Completed';
   if (s == 'cancelled' || s == 'canceled') return 'Cancelled';
   if (s == 'in progress' || s == 'in_progress') return 'In Progress';
   if (s == 'accepted') return 'Accepted';
@@ -140,6 +140,7 @@ Color activityStatusChartColor(String status) {
     case 'accepted':
       return const Color(0xFF7C3AED);
     case 'completed':
+      case 'milestone complete':
       return const Color(0xFF0EA5E9);
     case 'inactive':
       return FigmaColors.gray400;

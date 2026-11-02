@@ -1,294 +1,143 @@
 rules_version = '2';
-
-// =============================================================================
-// ADMIN SETUP (data lives in Firestore Database, NOT in this rules file)
-// =============================================================================
-// 1. Firebase Console → Authentication → Add user:
-//      Email: admin@neighborhelp.com   Password: admin123
-// 2. Copy that user's UID from the Authentication users list.
-// 3. Firestore Database → collection "users" → document ID = that UID
-// 4. Set field: role = "Administrator" (exact string, capital A)
-//    See firebase/ADMIN_SETUP.md for a full example document.
-//
-// Verification Agency (identity review — separate from Administrator):
-// 1. Auth → Add user (e.g. agency@neighborhelp.com)
-// 2. users/{uid}.role = "Verification Agency" (exact string)
-// Agency approves Didit identity; Admin still approves service listings.
-//
-// isAdmin() below reads users/{request.auth.uid}.role == 'Administrator'
-// and unlocks admin read/update across users, providers, services, bookings.
-// =============================================================================
-
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    function signedIn() {
-      return request.auth != null;
+    function signedIn() { return request.auth != null; }
+    function userPath() { return /databases/$(database)/documents/users/$(request.auth.uid); }
+    function activeUser() { return signedIn() && exists(userPath()) && get(userPath()).data.get('accountStatus', '') == 'Active'; }
+    function isAdmin() { return activeUser() && get(userPath()).data.role == 'Administrator'; }
+    function owns(id) { return activeUser() && request.auth.uid == id; }
+    function actorValid() { return request.resource.data.get('updatedBy', request.auth.uid) == request.auth.uid; }
+    function bookingPath(id) { return /databases/$(database)/documents/bookings/$(id); }
+    function participant(id) {
+      return activeUser() && exists(bookingPath(id))
+        && request.auth.uid in [get(bookingPath(id)).data.customerId, get(bookingPath(id)).data.providerId];
     }
-
-    function userPath() {
-      return /databases/$(database)/documents/users/$(request.auth.uid);
+    function ownerProfileFields() {
+      return ['fullName', 'contactNumber', 'profilePhotoUrl', 'address', 'location', 'bio', 'lastActive',
+        'updatedAt', 'updatedBy', 'notificationPreferences', 'accountAppeal', 'accountAppealSubmittedAt'];
     }
-
-    function userExists() {
-      return exists(userPath());
-    }
-
-    function userRole() {
-      return userExists() ? get(userPath()).data.role : '';
-    }
-
-    function isAdmin() {
-      return signedIn()
-        && userExists()
-        && userRole() == 'Administrator';
-    }
-
-    // Verification Agency reviews Didit identity + authenticates certificates
-    // (separate from Admin service listing approval).
-    function isVerificationAgency() {
-      return signedIn()
-        && userExists()
-        && userRole() == 'Verification Agency';
-    }
-
-    function isAdminOrAgency() {
-      return isAdmin() || isVerificationAgency();
-    }
-
-    function bookingDoc(bookingId) {
-      return get(/databases/$(database)/documents/bookings/$(bookingId));
-    }
-
-    function participatesInBooking(bookingId) {
-      let b = bookingDoc(bookingId);
-      return b.exists
-        && (b.data.customerId == request.auth.uid || b.data.providerId == request.auth.uid);
-    }
-
-    // Milestone done when status says complete or provider set completedAt.
-    function milestoneCompleteBooking(bookingId) {
-      let b = bookingDoc(bookingId);
-      return b.exists
-        && (
-          b.data.get('status', '').lower() == 'milestone complete'
-          || b.data.get('status', '').lower() == 'completed'
-          || b.data.get('completedAt', null) != null
-        );
-    }
-
-    function milestoneReviewCreateAllowed() {
-      let d = request.resource.data;
-      let b = bookingDoc(d.bookingId);
-      let role = d.get('reviewerRole', '');
-      return b.exists
-        && milestoneCompleteBooking(d.bookingId)
-        && d.reviewerId == request.auth.uid
-        && (
-          (role == 'customer'
-            && request.auth.uid == b.data.customerId
-            && d.revieweeId == b.data.providerId)
-          || (role == 'provider'
-            && request.auth.uid == b.data.providerId
-            && d.revieweeId == b.data.customerId)
-        );
-    }
-
-    function userVerificationFieldsUnchanged() {
-      return request.resource.data.get('isVerified', false) == resource.data.get('isVerified', false)
-        && request.resource.data.get('verificationStatus', 'Pending') == resource.data.get('verificationStatus', 'Pending')
-        && request.resource.data.get('diditStatus', '') == resource.data.get('diditStatus', '')
-        && request.resource.data.get('diditSessionId', '') == resource.data.get('diditSessionId', '')
-        && request.resource.data.get('verificationProvider', '') == resource.data.get('verificationProvider', '')
-        && request.resource.data.get('governmentIdTypeCode', '') == resource.data.get('governmentIdTypeCode', '')
-        && request.resource.data.get('governmentIdTypeLabel', '') == resource.data.get('governmentIdTypeLabel', '');
-    }
-
-    // --- users ---
-    match /users/{userId} {
-      allow read: if signedIn();
-      allow create: if signedIn() && request.auth.uid == userId;
-      allow update: if signedIn()
-        && (isAdmin()
-            || isVerificationAgency()
-            || (request.auth.uid == userId && userVerificationFieldsUnchanged()));
-      allow delete: if signedIn()
-        && (request.auth.uid == userId || isAdmin());
-    }
-
-    // --- serviceProviders ---
-    // Verification fields are owned by the Didit webhook (Admin SDK, bypasses
-    // rules) and by admins. Providers may edit their own profile but must NOT
-    // change these fields (no self-approval).
-    // New provider docs may omit optional verification keys; treat missing as defaults.
-    function verificationFieldsUnchanged() {
-      return request.resource.data.get('isVerified', false) == resource.data.get('isVerified', false)
-        && request.resource.data.get('verificationStatus', 'Pending') == resource.data.get('verificationStatus', 'Pending')
-        && request.resource.data.get('diditStatus', '') == resource.data.get('diditStatus', '')
-        && request.resource.data.get('diditSessionId', '') == resource.data.get('diditSessionId', '')
-        && request.resource.data.get('verificationProvider', '') == resource.data.get('verificationProvider', '')
-        && request.resource.data.get('governmentIdTypeCode', '') == resource.data.get('governmentIdTypeCode', '')
-        && request.resource.data.get('governmentIdTypeLabel', '') == resource.data.get('governmentIdTypeLabel', '');
-    }
-
-    // Providers may remove ids from the agency allow-list (e.g. after editing a
-    // cert) but must never add new approved ids themselves.
-    function providerApprovedCertIdsValid() {
-      let oldIds = resource.data.get('approvedCertificationIds', []);
-      let newIds = request.resource.data.get('approvedCertificationIds', oldIds);
-      return newIds.hasOnly(oldIds);
-    }
-
-    match /serviceProviders/{providerId} {
-      allow read: if signedIn();
-      allow create: if signedIn()
-        && request.auth.uid == providerId
-        && request.resource.data.userId == request.auth.uid
-        && request.resource.data.isVerified == false
-        && request.resource.data.get('approvedCertificationIds', []).size() == 0;
-      allow update: if signedIn()
-        && (isAdmin()
-            || isVerificationAgency()
-            || (request.auth.uid == providerId
-                && verificationFieldsUnchanged()
-                && providerApprovedCertIdsValid()));
-    }
-
-    // --- services ---
-    // Providers submit listings as Pending; only admins may approve or reject.
-    function providerServiceCreateValid() {
-      return request.resource.data.providerId == request.auth.uid
-        && request.resource.data.get('approvalStatus', 'Pending') in ['Pending', 'Draft']
-        && request.resource.data.isActive == false;
-    }
-
-    function providerCannotSelfApprove() {
-      let newStatus = request.resource.data.get('approvalStatus', 'Pending');
-      return newStatus != 'Approved' && newStatus != 'Rejected';
-    }
-
-    function providerListingVisibilityValid() {
-      return request.resource.data.isActive == false
-        || request.resource.data.get('approvalStatus', resource.data.get('approvalStatus', '')) == 'Approved';
-    }
-
-    function providerRejectionReasonValid() {
-      return request.resource.data.get('rejectionReason', '')
-          == resource.data.get('rejectionReason', '')
-        || (request.resource.data.approvalStatus == 'Pending'
-            && request.resource.data.get('rejectionReason', '') == '');
-    }
-
-    match /services/{serviceId} {
-      allow read: if signedIn();
-      allow create: if signedIn() && providerServiceCreateValid();
-      allow update: if signedIn()
-        && (isAdmin()
-            || (resource.data.providerId == request.auth.uid
-                && providerCannotSelfApprove()
-                && providerListingVisibilityValid()
-                && providerRejectionReasonValid()));
-      allow delete: if signedIn()
-        && (resource.data.providerId == request.auth.uid || isAdmin());
-    }
-
-    // --- contracts (customer + provider ongoing relationship) ---
-    match /contracts/{contractId} {
-      allow read: if signedIn()
-        && (resource.data.customerId == request.auth.uid
-            || resource.data.providerId == request.auth.uid
-            || isAdmin());
-      allow create: if signedIn()
-        && request.resource.data.providerId == request.auth.uid
-        && request.resource.data.status == 'active'
-        && request.resource.data.customerId is string;
-      allow update: if signedIn()
-        && (resource.data.customerId == request.auth.uid
-            || resource.data.providerId == request.auth.uid
-            || isAdmin());
-    }
-
-    // --- bookings ---
-    match /bookings/{bookingId} {
-      allow read: if signedIn()
-        && (resource.data.customerId == request.auth.uid
-            || resource.data.providerId == request.auth.uid
-            || isAdmin());
-      allow create: if signedIn()
-        && request.resource.data.customerId == request.auth.uid;
-      allow update: if signedIn()
-        && (resource.data.customerId == request.auth.uid
-            || resource.data.providerId == request.auth.uid
-            || isAdmin());
-    }
-
-    // --- booking user reports (customer/provider moderation queue) ---
-    match /bookingUserReports/{reportId} {
-      function bookingUserReportTargetValid(bookingId, reportedUserId) {
-        let b = get(/databases/$(database)/documents/bookings/$(bookingId));
-        return b.exists
-          && (b.data.customerId == reportedUserId || b.data.providerId == reportedUserId);
+    match /users/{id} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == id);
+      allow create: if signedIn() && request.auth.uid == id
+        && request.resource.data.role in ['Customer', 'Provider']
+        && request.resource.data.accountStatus == 'Active'
+        && request.resource.data.get('isVerified', false) == false
+        && request.resource.data.get('verificationStatus', 'Pending') == 'Pending'
+        && request.resource.data.get('diditStatus', '') == ''
+        && request.resource.data.get('diditSessionId', '') == ''
+        && request.resource.data.get('verificationProvider', '') == '';
+      allow update: if actorValid() && (isAdmin() || (signedIn() && request.auth.uid == id
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(ownerProfileFields())
+        && (activeUser() || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['accountAppeal', 'accountAppealSubmittedAt', 'updatedAt', 'updatedBy']))));
+      // Account deletion needs a retention review; never orphan its transaction records.
+      allow delete: if false;
+      match /devices/{deviceId} {
+        allow read, delete: if signedIn() && request.auth.uid == id;
+        allow create, update: if false;
       }
-
+    }
+    // Public projection contains display information only, never private IDs/contact details.
+    match /publicProfiles/{id} { allow read: if activeUser(); allow write: if false; }
+    match /publicProviders/{id} { allow read: if activeUser(); allow write: if false; }
+    function providerEditable() {
+      return ['bio', 'serviceArea', 'location', 'serviceRadiusKm', 'education', 'educationHistory', 'employmentHistory',
+        'portfolioUrls', 'portfolioProjects', 'videoIntroUrl', 'certifications', 'certificationHistory', 'approvedCertificationIds',
+        'otherExperiences', 'linkedAccounts', 'profileTraits', 'weeklyAvailability', 'updatedAt', 'updatedBy'];
+    }
+    function certificateEditsValid() {
+      return request.resource.data.get('approvedCertificationIds', []).hasOnly(resource.data.get('approvedCertificationIds', []))
+        && (request.resource.data.get('certificationHistory', []) == resource.data.get('certificationHistory', [])
+          || request.resource.data.get('approvedCertificationIds', []).size() == 0);
+    }
+    match /serviceProviders/{id} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == id);
+      allow create: if owns(id) && get(userPath()).data.role == 'Provider' && request.resource.data.userId == id
+        && request.resource.data.isVerified == false
+        && request.resource.data.get('verificationStatus', 'Pending') == 'Pending'
+        && request.resource.data.get('diditStatus', '') == ''
+        && request.resource.data.get('diditSessionId', '') == ''
+        && request.resource.data.get('verificationProvider', '') == ''
+        && request.resource.data.get('averageRating', 0) == 0
+        && request.resource.data.get('reviewCount', 0) == 0
+        && request.resource.data.get('acceptedBookings', 0) == 0
+        && request.resource.data.get('completedBookings', 0) == 0
+        && request.resource.data.get('approvedCertificationIds', []).size() == 0;
+      allow update: if actorValid() && (isAdmin() || (owns(id)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(providerEditable()) && certificateEditsValid()));
+      allow delete: if false;
+    }
+    function providerVerified(id) {
+      return exists(/databases/$(database)/documents/serviceProviders/$(id))
+        && get(/databases/$(database)/documents/serviceProviders/$(id)).data.isVerified == true
+        && get(/databases/$(database)/documents/users/$(id)).data.accountStatus == 'Active';
+    }
+    match /services/{id} {
+      allow read: if activeUser();
+      allow create: if owns(request.resource.data.providerId)
+        && request.resource.data.approvalStatus in ['Draft', 'Pending']
+        && request.resource.data.isActive == false;
+      allow update: if actorValid() && (isAdmin() || (owns(resource.data.providerId)
+        && request.resource.data.providerId == resource.data.providerId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['serviceTitle', 'category', 'description', 'estimatedPrice',
+          'priceType', 'estimatedDuration', 'availability', 'serviceImages', 'requiresCertification', 'approvalStatus', 'isActive', 'rejectionReason', 'updatedAt', 'updatedBy'])
+        && (request.resource.data.approvalStatus in ['Draft', 'Pending'] && request.resource.data.isActive == false
+          || (request.resource.data.approvalStatus == resource.data.approvalStatus
+            && resource.data.approvalStatus == 'Approved'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isActive', 'updatedAt', 'updatedBy'])))));
+      allow delete: if isAdmin() || owns(resource.data.providerId);
+    }
+    // Only validated server commands may change booking money, participants or status.
+    match /bookings/{id} {
+      allow read: if isAdmin() || (activeUser() && request.auth.uid in [resource.data.customerId, resource.data.providerId]);
+      allow write: if false;
+    }
+    match /providerSchedules/{id} { allow read, write: if false; }
+    match /contracts/{id} {
+      allow read: if isAdmin() || (activeUser() && request.auth.uid in [resource.data.customerId, resource.data.providerId]);
+      allow create, delete: if false;
+      allow update: if activeUser() && request.auth.uid in [resource.data.customerId, resource.data.providerId]
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'endedAt', 'endedByUserId', 'endedByRole', 'updatedAt'])
+        && resource.data.status == 'active' && request.resource.data.status == 'ended'
+        && request.resource.data.endedByUserId == request.auth.uid;
+    }
+    match /bookingUserReports/{id} {
       allow read: if isAdmin();
-
-      allow create: if signedIn()
-        && participatesInBooking(request.resource.data.get('bookingId'))
-        && request.resource.data.get('reporterId') == request.auth.uid
-        && bookingUserReportTargetValid(request.resource.data.get('bookingId'), request.resource.data.get('reportedUserId'))
-        && request.resource.data.get('reportedUserId') != request.resource.data.get('reporterId')
-        && request.resource.data.get('reason', '') is string
-        && request.resource.data.get('reason', '').size() >= 3;
-
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow create: if participant(request.resource.data.bookingId)
+        && request.resource.data.reporterId == request.auth.uid
+        && request.resource.data.reportedUserId in [get(bookingPath(request.resource.data.bookingId)).data.customerId, get(bookingPath(request.resource.data.bookingId)).data.providerId]
+        && request.resource.data.reportedUserId != request.auth.uid
+        && request.resource.data.get('status', 'Pending') == 'Pending'
+        && request.resource.data.reason is string && request.resource.data.reason.size() >= 3;
+      allow update: if isAdmin() && actorValid();
+      allow delete: if false;
     }
-
-    // --- messages ---
-    match /messages/{messageId} {
-      allow read: if signedIn()
-        && (resource.data.senderId == request.auth.uid
-            || resource.data.receiverId == request.auth.uid);
-      allow create: if signedIn()
+    match /messages/{id} {
+      allow read: if activeUser() && request.auth.uid in [resource.data.senderId, resource.data.receiverId];
+      allow create: if participant(request.resource.data.bookingId)
         && request.resource.data.senderId == request.auth.uid
-        && participatesInBooking(request.resource.data.bookingId);
-      allow update: if signedIn()
-        && resource.data.receiverId == request.auth.uid;
+        && request.resource.data.receiverId in [get(bookingPath(request.resource.data.bookingId)).data.customerId, get(bookingPath(request.resource.data.bookingId)).data.providerId]
+        && request.resource.data.receiverId != request.auth.uid
+        && request.resource.data.messageType in ['Text', 'Image']
+        && request.resource.data.isRead == false
+        && request.resource.data.get('messageText', '').size() <= 6000;
+      allow update: if owns(resource.data.receiverId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']) && request.resource.data.isRead == true;
+      allow delete: if false;
     }
-
-    // --- reviews (milestone feedback: customer→provider or provider→customer) ---
-    match /reviews/{reviewId} {
-      allow read: if signedIn();
-      allow create: if signedIn()
-        && request.resource.data.bookingId is string
-        && request.resource.data.bookingId.size() > 0
-        && participatesInBooking(request.resource.data.bookingId)
-        && request.resource.data.rating is number
-        && request.resource.data.rating >= 1
-        && request.resource.data.rating <= 5
-        && request.resource.data.reviewerId is string
-        && request.resource.data.revieweeId is string
-        && milestoneReviewCreateAllowed();
-      allow update, delete: if signedIn() && isAdmin();
+    match /reviews/{id} {
+      allow read: if activeUser();
+      allow write: if false;
     }
-
-    // --- notifications (users read/update own; admins create announcements) ---
-    match /notifications/{notificationId} {
-      allow read: if signedIn()
-        && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isAdmin()
-        && request.resource.data.userId is string
-        && request.resource.data.title is string
-        && request.resource.data.message is string;
-      allow update: if signedIn()
-        && (resource.data.userId == request.auth.uid || isAdmin());
-      allow delete: if signedIn()
-        && (resource.data.userId == request.auth.uid || isAdmin());
+    match /notifications/{id} {
+      allow read: if isAdmin() || owns(resource.data.userId);
+      allow create: if isAdmin() && request.resource.data.userId is string
+        && request.resource.data.title is string && request.resource.data.message is string;
+      allow update: if (isAdmin() || owns(resource.data.userId))
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']) && request.resource.data.isRead == true;
+      allow delete: if false;
     }
-
-    // Deny everything else explicitly (same as default, clearer for audits).
-    match /{document=**} {
-      allow read, write: if false;
-    }
+    match /scheduledAnnouncements/{id} { allow read: if isAdmin(); allow write: if false; }
+    match /auditLogs/{id} { allow read: if isAdmin(); allow write: if false; }
+    match /{document=**} { allow read, write: if false; }
   }
 }

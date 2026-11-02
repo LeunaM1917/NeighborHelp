@@ -8,6 +8,9 @@ import 'package:neighbor_help/services/provider_recommendation_service.dart';
 import 'package:neighbor_help/utils/weighted_scoring.dart';
 
 void main() {
+  test('a stored Bayesian average is normalized once for ranking', () {
+    expect(normalizedRatingScore(bayesianRatingOutOfFive: 3.75, reviewCount: 2), 0.75);
+  });
   group('computeBayesianRatingOutOfFive', () {
     test('matches Cloud Functions formula (C=10, m=3.5)', () {
       // Two 5-star reviews: (10*3.5 + 2*5) / (10+2) = 45/12 = 3.75
@@ -54,7 +57,7 @@ void main() {
     });
 
     test('keeps manuscript weights 0.40 / 0.30 / 0.20 / 0.10', () {
-      // P = 1; R = bayesian(4, n=1000)/5; A = 1; C = 0.8
+      // P = 1; stored Bayesian R = 4/5; A = 1; C = 0.8
       const n = 1000;
       final s = weightedProviderScore(
         distanceKm: 0,
@@ -65,11 +68,7 @@ void main() {
         acceptedBookings: 10,
         reviewCount: n,
       );
-      final bayes = computeBayesianRatingOutOfFive(
-        observedAverageOutOfFive: 4,
-        reviewCount: n,
-      );
-      final r = bayes / 5;
+      final r = 4 / 5;
       expect(s, closeTo(0.40 * 1 + 0.30 * r + 0.20 * 1 + 0.10 * 0.8, 1e-9));
     });
 
@@ -77,7 +76,7 @@ void main() {
       final withTwoFives = weightedProviderScore(
         distanceKm: 5,
         maxSearchRadiusKm: 15,
-        bayesianRatingOutOfFive: 5,
+        bayesianRatingOutOfFive: computeBayesianRatingOutOfFive(observedAverageOutOfFive: 5, reviewCount: 2),
         isAvailable: true,
         completedBookings: 5,
         acceptedBookings: 5,
@@ -367,12 +366,12 @@ void main() {
       expect(ranked.single.recommendationScore, greaterThan(0.4));
     });
 
-    test('provider with two raw five-stars does not beat experienced on rating alone', () {
+    test('aggregated small-review Bayesian rating does not beat an experienced provider', () {
       final twoFives = provider(
         id: 'two',
         lat: 7.31,
         lng: 125.685,
-        rating: 5.0,
+        rating: computeBayesianRatingOutOfFive(observedAverageOutOfFive: 5, reviewCount: 2),
         verified: true,
         completed: 5,
         accepted: 5,
@@ -382,7 +381,7 @@ void main() {
         id: 'exp',
         lat: 7.31,
         lng: 125.685,
-        rating: 4.6,
+        rating: computeBayesianRatingOutOfFive(observedAverageOutOfFive: 4.6, reviewCount: 40),
         verified: true,
         completed: 5,
         accepted: 5,

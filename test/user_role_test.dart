@@ -17,10 +17,10 @@ void main() {
   });
 
   group('UserRole.resolve', () {
-    test('uses provider profile when stored role is customer', () {
+    test('preserves explicit customer role despite a stray provider profile', () {
       expect(
         UserRole.resolve(storedRole: UserRole.customer, hasProviderProfile: true),
-        UserRole.provider,
+        UserRole.customer,
       );
     });
 

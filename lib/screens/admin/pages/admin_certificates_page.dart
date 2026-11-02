@@ -11,7 +11,7 @@ import '../../../services/firestore_service.dart';
 import '../../../widgets/loading_indicator.dart';
 import '../widgets/admin_widgets.dart';
 
-/// Read-only Admin view of certificates authenticated by Verification Agency.
+/// Read-only Admin view of certificates authenticated by System Administrator.
 class AdminCertificatesPage extends StatefulWidget {
   const AdminCertificatesPage({super.key, required this.auth});
 
@@ -58,7 +58,7 @@ class _AdminCertificatesPageState extends State<AdminCertificatesPage> {
               return AdminPageFrame(
                 auth: widget.auth,
                 title: 'Certificates',
-                subtitle: 'Credentials authenticated by the Verification Agency.',
+                subtitle: 'Credentials authenticated by the System Administrator.',
                 child: const Padding(
                   padding: EdgeInsets.symmetric(vertical: 48),
                   child: LoadingIndicator(message: 'Loading certificates…'),
@@ -123,7 +123,7 @@ class _AdminCertificatesPageState extends State<AdminCertificatesPage> {
               auth: widget.auth,
               title: 'Certificates',
               subtitle:
-                  'View credentials authenticated by the Verification Agency. Approve/reject actions stay with the Agency role.',
+                  'View credentials authenticated by the System Administrator. Approve/reject actions stay with the Agency role.',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [

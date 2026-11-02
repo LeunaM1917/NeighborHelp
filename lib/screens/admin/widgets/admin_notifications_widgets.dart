@@ -261,7 +261,7 @@ class AdminComposeAnnouncementCard extends StatelessWidget {
               runSpacing: 8,
               children: [
                 _ChannelChip(label: 'In-app', icon: Icons.notifications_outlined, selected: inApp, onChanged: onInAppChanged),
-                _ChannelChip(label: 'Email', icon: Icons.mail_outline, selected: email, onChanged: onEmailChanged),
+                const Text('Email is outside this platform?s notification scope.', style: TextStyle(fontSize: 12)),
                 _ChannelChip(label: 'Push', icon: Icons.phone_android_outlined, selected: push, onChanged: onPushChanged),
               ],
             ),

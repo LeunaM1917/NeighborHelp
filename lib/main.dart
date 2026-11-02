@@ -1,4 +1,9 @@
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 
@@ -9,10 +14,25 @@ import 'services/push_notification_service.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  const useEmulators = bool.fromEnvironment('USE_FIREBASE_EMULATORS');
+  if (!useEmulators) FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
   try {
-    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    await Firebase.initializeApp(options: useEmulators ? const FirebaseOptions(
+      apiKey: 'demo-api-key', appId: '1:1234567890:web:neighborhelp', messagingSenderId: '1234567890',
+      projectId: 'demo-neighborhelp', storageBucket: 'demo-neighborhelp.appspot.com',
+    ) : DefaultFirebaseOptions.currentPlatform);
+    if (useEmulators) {
+      const host = String.fromEnvironment('FIREBASE_EMULATOR_HOST', defaultValue: 'localhost');
+      await FirebaseAuth.instance.useAuthEmulator(host, 9098);
+      FirebaseFirestore.instance.useFirestoreEmulator(host, 8088);
+      FirebaseFunctions.instance.useFunctionsEmulator(host, 5008);
+      await FirebaseStorage.instance.useStorageEmulator(host, 9198);
+    } else if (kIsWeb) {
+      try {
+        FirebaseFirestore.instance.settings = const Settings(persistenceEnabled: true);
+      } catch (_) { /* Unsupported browsers still retain in-memory loaded data. */ }
+    }
   } catch (e, st) {
     debugPrint('Firebase init failed: $e\n$st');
     runApp(const _FirebaseInitErrorApp());
@@ -23,6 +43,7 @@ Future<void> main() async {
   // cold start (blank page with only index.html title) until the user interacts.
   runApp(const NeighborHelpApp());
   WidgetsBinding.instance.addPostFrameCallback((_) async {
+    if (useEmulators) return;
     try {
       await PushNotificationService().init();
     } catch (e, st) {

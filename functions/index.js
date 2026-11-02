@@ -1,3 +1,5 @@
+const {getAuth} = require('firebase-admin/auth');
+const { FieldValue, getFirestore } = require('firebase-admin/firestore');
 const functions = require('firebase-functions/v1');
 const admin = require('firebase-admin');
 const crypto = require('crypto');
@@ -12,7 +14,7 @@ try {
 
 admin.initializeApp();
 
-const db = admin.firestore();
+const db = getFirestore();
 const C = 10;
 
 // ---------------------------------------------------------------------------
@@ -48,18 +50,16 @@ functions.logger.info('Didit env at cold start', {
  * Terminal: Approved -> verified, Declined -> rejected.
  * Everything else stays in the "pending" bucket so admins still see it.
  */
-/**
- * Didit terminal statuses update diditStatus only. Platform badge requires admin
- * approval (adminVerifyProvider sets isVerified + verificationStatus Approved).
- */
-function mapDiditStatus(diditStatus) {
+// Preserve a manual rejection until the provider starts a new identity session.
+function mapDiditStatus(diditStatus, current = {}) {
+  if (current.verificationManualDecision === 'Rejected') return { isVerified: false, verificationStatus: 'Rejected' };
   const norm = String(diditStatus || '')
     .trim()
     .toLowerCase()
     .replace(/[\s-]+/g, '_');
   switch (norm) {
     case 'approved':
-      return { isVerified: false, verificationStatus: 'Pending' };
+      return { isVerified: true, verificationStatus: 'Approved' };
     case 'declined':
       return { isVerified: false, verificationStatus: 'Rejected' };
     default:
@@ -318,7 +318,7 @@ exports.refreshDiditStatus = functions
           latest = fallback;
         }
       }
-      const mapped = mapDiditStatus(latest.diditStatus);
+      const mapped = mapDiditStatus(latest.diditStatus, (await docRef.get()).data());
       await docRef.set(
         {
           verificationProvider: 'didit',
@@ -326,8 +326,8 @@ exports.refreshDiditStatus = functions
           diditSessionId: latest.sessionId || diditSessionId,
           isVerified: mapped.isVerified,
           verificationStatus: mapped.verificationStatus,
-          verificationUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          verificationUpdatedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
         },
         { merge: true }
       );
@@ -435,13 +435,14 @@ async function createDiditSessionCore(uid, data) {
 
   const verificationPatch = {
     verificationProvider: 'didit',
+    verificationManualDecision: FieldValue.delete(),
     diditSessionId: json.session_id || null,
     diditStatus: diditStatusWhenLaunchingHostedFlow(json.status),
     verificationStatus: 'Pending',
     isVerified: false,
     governmentIdTypeCode: documentType,
     governmentIdTypeLabel: documentLabel || documentType,
-    verificationUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    verificationUpdatedAt: FieldValue.serverTimestamp(),
   };
 
   try {
@@ -449,7 +450,7 @@ async function createDiditSessionCore(uid, data) {
       await db.collection('users').doc(uid).set(
         {
           ...verificationPatch,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
         },
         { merge: true }
       );
@@ -457,7 +458,7 @@ async function createDiditSessionCore(uid, data) {
       await db.collection('serviceProviders').doc(uid).set(
         {
           ...verificationPatch,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
         },
         { merge: true }
       );
@@ -540,7 +541,7 @@ function keywordSentimentFallback(text) {
         ? { negative: 0.7, neutral: 0.2, positive: 0.1 }
         : { negative: 0.15, neutral: 0.7, positive: 0.15 },
     modelVersion: 'keyword-fallback',
-    analyzedAt: admin.firestore.FieldValue.serverTimestamp(),
+    analyzedAt: FieldValue.serverTimestamp(),
     source: 'keyword',
   };
 }
@@ -591,7 +592,7 @@ async function predictReviewSentiment(review) {
       confidence: Number(json.confidence) || 0,
       probabilities,
       modelVersion: typeof json.model_version === 'string' ? json.model_version : null,
-      analyzedAt: admin.firestore.FieldValue.serverTimestamp(),
+      analyzedAt: FieldValue.serverTimestamp(),
       source: 'lstm',
     };
   } catch (err) {
@@ -732,7 +733,7 @@ exports.createDiditSessionHttp = functions
 
         let uid;
         try {
-          const decoded = await admin.auth().verifyIdToken(match[1]);
+          const decoded = await getAuth().verifyIdToken(match[1]);
           uid = decoded.uid;
         } catch (err) {
           functions.logger.warn('createDiditSessionHttp invalid token', err);
@@ -888,15 +889,21 @@ exports.diditWebhook = functions.region(functionsRegion).https.onRequest(async (
     subject = resolveVerificationSubject({}, userRole);
   }
 
-  const mapped = mapDiditStatus(diditStatus);
+  const targetRef = db.collection(subject === 'customer' ? 'users' : 'serviceProviders').doc(userId);
+  const current = (await targetRef.get()).data() || {};
+  if (current.diditSessionId && event.session_id && current.diditSessionId !== event.session_id) {
+    res.status(200).json({ ok: true, ignored: 'superseded verification session' });
+    return;
+  }
+  const mapped = mapDiditStatus(diditStatus, current);
   const patch = {
     verificationProvider: 'didit',
     diditStatus,
     diditSessionId: event.session_id || null,
     isVerified: mapped.isVerified,
     verificationStatus: mapped.verificationStatus,
-    verificationUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    verificationUpdatedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   };
 
   try {
@@ -928,6 +935,8 @@ exports.submitMilestoneReview = functions
       throw new functions.https.HttpsError('unauthenticated', 'Sign in required.');
     }
 
+    const actor = (await db.collection('users').doc(uid).get()).data();
+    if (actor?.accountStatus !== 'Active') throw new functions.https.HttpsError('permission-denied', 'An active account is required.');
     const bookingId = data && typeof data.bookingId === 'string' ? data.bookingId.trim() : '';
     const reviewerRole =
       data && typeof data.reviewerRole === 'string' ? data.reviewerRole.trim().toLowerCase() : '';
@@ -985,19 +994,30 @@ exports.submitMilestoneReview = functions
       reviewerId: uid,
       revieweeId,
       reviewerRole,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
     };
     if (comment) payload.comment = comment;
     if (booking.contractId) payload.contractId = booking.contractId;
     if (booking.milestoneNumber != null) payload.milestoneNumber = booking.milestoneNumber;
 
-    const ref = await db.collection('reviews').add(payload);
+    const sentiment = await predictReviewSentiment({ comment, reviewId: `${bookingId}_${uid}`, providerId: booking.providerId });
+    if (sentiment?.source === 'lstm' && sentiment.confidence >= 0.8 && comment.split(/\s+/).length >= 4 &&
+        ((sentiment.label === 'negative' && rating >= 4) || (sentiment.label === 'positive' && rating <= 2))) {
+      throw new functions.https.HttpsError('failed-precondition', 'Your written feedback and star rating appear to disagree. Please review both before submitting.');
+    }
+    if (sentiment) payload.sentiment = sentiment;
+    const ref = db.collection('reviews').doc(`${bookingId}_${uid}`);
+    await db.runTransaction(async tx => {
+      const existing = await tx.get(ref);
+      if (existing.exists) throw new functions.https.HttpsError('already-exists', 'You already reviewed this milestone.');
+      tx.create(ref, payload);
+    });
     return { reviewId: ref.id };
   });
 
 /**
  * Recalculate Bayesian average for a provider from reviews subcollection pattern
- * or denormalized reviews query. This stub updates `serviceProviders/{id}` using
+ * or denormalized reviews query. Updates `serviceProviders/{id}` using
  * a single aggregate read of `reviews` where providerId matches.
  */
 exports.onReviewCreated = functions.firestore
@@ -1009,12 +1029,12 @@ exports.onReviewCreated = functions.firestore
     const reviewerRole = (review.reviewerRole || '').toLowerCase();
     const isCustomerReview = reviewerRole === 'customer';
 
-    const sentiment = await predictReviewSentiment(review);
+    const sentiment = review.sentiment || await predictReviewSentiment(review);
     if (sentiment) {
       await snap.ref.set(
         {
           sentiment,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
         },
         { merge: true }
       );
@@ -1038,23 +1058,26 @@ exports.onReviewCreated = functions.firestore
       }
     });
 
-    const globalSnap = await db.collection('serviceProviders').limit(200).get();
-    let gSum = 0;
-    let gN = 0;
-    globalSnap.forEach((d) => {
-      const v = d.data().averageRating;
-      if (typeof v === 'number' && v > 0) {
-        gSum += v;
-        gN += 1;
-      }
+    const globalReviews = await db.collection('reviews').where('reviewerRole', '==', 'customer').get();
+    const rawByProvider = new Map();
+    globalReviews.forEach(d => {
+      const r = d.data();
+      if (!r.providerId || typeof r.rating !== 'number') return;
+      const stats = rawByProvider.get(r.providerId) || {sum: 0, count: 0};
+      stats.sum += r.rating; stats.count++;
+      rawByProvider.set(r.providerId, stats);
     });
-    const m = gN === 0 ? 3.5 : gSum / gN;
+    // Compute the prior from raw observations, not previously smoothed outputs.
+    // Retrying a trigger therefore cannot drift the provider's rating.
+    const means = [...rawByProvider.values()].map(v => v.sum / v.count);
+    const m = means.length < 2 ? 3.5 : means.reduce((a, b) => a + b, 0) / means.length;
     const bayes = (C * m + sum) / (C + n);
 
     return db.collection('serviceProviders').doc(providerId).update({
       averageRating: Number(bayes.toFixed(2)),
+      rawAverageRating: n ? sum / n : 0,
       reviewCount: n,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     });
   });
 
@@ -1066,20 +1089,27 @@ exports.onMessageCreated = functions.firestore
     const senderId = message.senderId;
     if (!receiverId || !senderId || receiverId === senderId) return null;
 
+    if (message.bookingId) {
+      await db.collection('bookings').doc(message.bookingId).update({
+        lastMessageAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+
     const text = (message.messageText || '').toString().trim();
     const preview = text.length > 120 ? `${text.slice(0, 117)}…` : text;
     const title = 'New message';
     const body = preview.length > 0 ? preview : 'You have a new message.';
 
-    return db.collection('notifications').add({
+    return db.collection('notifications').doc(`message_${snap.id}`).create({
       userId: receiverId,
       title,
       message: body,
       notificationType: 'Message',
       relatedBookingId: message.bookingId || '',
       isRead: false,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+      createdAt: FieldValue.serverTimestamp(),
+    }).catch(e => { if (e.code !== 6) throw e; });
   });
 
 exports.onBookingCreated = functions.firestore
@@ -1093,13 +1123,30 @@ exports.onBookingCreated = functions.firestore
     const userId = providerUserSnap.data()?.userId;
     if (!userId) return null;
 
-    return db.collection('notifications').add({
+    return db.collection('notifications').doc(`booking_request_${snap.id}`).create({
       userId,
       title: 'New booking request',
       message: 'A customer submitted a new booking request.',
       notificationType: 'Booking Request',
       relatedBookingId: snap.id,
       isRead: false,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+      createdAt: FieldValue.serverTimestamp(),
+    }).catch(e => { if (e.code !== 6) throw e; });
   });
+
+Object.assign(exports, require('./platform_operations')({ db, admin, functions, region: functionsRegion }));
+
+exports.geocodeServiceAddress = functions.region(functionsRegion).https.onCall(async (data, context) => {
+  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Sign in required.');
+  const address = String(data?.address || '').trim();
+  if (address.length < 5 || address.length > 500) throw new functions.https.HttpsError('invalid-argument', 'Enter a complete address.');
+  const key = mapsApiKey();
+  if (!key) throw new functions.https.HttpsError('failed-precondition', 'Address lookup is unavailable. Select the service location on the map.');
+  const url = new URL('https://maps.googleapis.com/maps/api/geocode/json');
+  url.search = new URLSearchParams({ address, components: 'country:PH', key }).toString();
+  const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
+  const result = await response.json();
+  if (!response.ok || result.status !== 'OK' || !result.results?.length) throw new functions.https.HttpsError('not-found', 'Address not found. Add the barangay and city, or select the location on the map.');
+  const first = result.results[0];
+  return { latitude: first.geometry.location.lat, longitude: first.geometry.location.lng, address: first.formatted_address };
+});

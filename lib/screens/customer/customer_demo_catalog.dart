@@ -1,3 +1,4 @@
+import '../../figma_ui/marketing_service_catalog.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
@@ -117,6 +118,8 @@ class CustomerBrowseServiceItem {
     this.listing,
     this.sortKey = 0,
     this.providerLocation,
+    this.profile,
+    this.serviceArea = '',
   });
 
   final String title;
@@ -135,6 +138,8 @@ class CustomerBrowseServiceItem {
   final ServiceListing? listing;
   final double sortKey;
   final GeoPoint? providerLocation;
+  final ServiceProviderProfile? profile;
+  final String serviceArea;
 
   factory CustomerBrowseServiceItem.fromListing({
     required ServiceListing listing,
@@ -144,6 +149,7 @@ class CustomerBrowseServiceItem {
     int? reviewCount,
     bool verified = true,
     GeoPoint? providerLocation,
+    ServiceProviderProfile? profile,
   }) {
     final imageUrl = listing.serviceImages.isNotEmpty
         ? listing.serviceImages.first
@@ -154,7 +160,7 @@ class CustomerBrowseServiceItem {
     return CustomerBrowseServiceItem(
       title: listing.serviceTitle,
       category: listing.category,
-      categoryId: listing.category.toLowerCase().replaceAll(' ', '_'),
+      categoryId: MarketingServiceCatalog.categories.where((c) => c.name.toLowerCase() == listing.category.toLowerCase()).firstOrNull?.id ?? listing.category.toLowerCase().replaceAll(' ', '_'),
       imageUrl: imageUrl,
       providerName: providerName,
       price: listing.estimatedPrice,
@@ -165,6 +171,8 @@ class CustomerBrowseServiceItem {
       listing: listing,
       sortKey: listing.createdAt.millisecondsSinceEpoch.toDouble(),
       providerLocation: providerLocation,
+      profile: profile,
+      serviceArea: profile?.serviceArea ?? '',
     );
   }
 
@@ -225,35 +233,23 @@ List<CustomerBrowseServiceItem> buildCustomerBrowseServices({
   }
 
   final items = <CustomerBrowseServiceItem>[];
-  final usedTitles = <String>{};
 
   for (final listing in live) {
     final profile = profileFor(listing);
     final user = userFor(listing);
+    if (profile == null || !profile.isVerifiedProvider || !profile.canOfferService(listing.serviceId) || user == null || user.accountStatus.isBlocked) continue;
     items.add(
       CustomerBrowseServiceItem.fromListing(
         listing: listing,
-        providerName: user?.fullName.isNotEmpty == true ? user!.fullName : 'Local provider',
-        providerPhotoUrl: user?.profilePhotoUrl,
-        rating: profile?.averageRating,
-        reviewCount: profile?.reviewCount ?? 0,
-        verified: profile?.isVerifiedProvider ?? true,
-        providerLocation: geoPointOrNull(profile?.location),
+        providerName: user.fullName.isNotEmpty ? user.fullName : 'Local provider',
+        providerPhotoUrl: user.profilePhotoUrl,
+        rating: profile.averageRating,
+        reviewCount: profile.reviewCount,
+        verified: profile.isVerifiedProvider,
+        providerLocation: geoPointOrNull(profile.location),
+        profile: profile,
       ),
     );
-    usedTitles.add(listing.serviceTitle.trim().toLowerCase());
-  }
-
-  for (final demo in customerDemoServices) {
-    if (usedTitles.contains(demo.title.trim().toLowerCase())) continue;
-    items.add(CustomerBrowseServiceItem.fromDemo(demo));
-    usedTitles.add(demo.title.trim().toLowerCase());
-  }
-
-  for (final featured in MarketingFeaturedServices.all) {
-    if (usedTitles.contains(featured.title.trim().toLowerCase())) continue;
-    items.add(CustomerBrowseServiceItem.fromFeatured(featured));
-    usedTitles.add(featured.title.trim().toLowerCase());
   }
 
   return items;

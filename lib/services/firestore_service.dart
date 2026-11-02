@@ -21,6 +21,7 @@ import '../models/service_approval_status.dart';
 import '../models/user_role.dart';
 import '../constants/functions_config.dart';
 import '../utils/message_thread.dart';
+import '../utils/service_certification_policy.dart';
 
 /// Shared Firestore access for the app session.
 ///
@@ -52,6 +53,7 @@ class FirestoreService {
   /// [_ReplayStream] hands every new subscriber the cached latest value (or
   /// error) immediately, then forwards live updates.
   Stream<T> _cache<T>(String key, Stream<T> Function() create) {
+    key = '${FirebaseAuth.instance.currentUser?.uid ?? 'guest'}:$key';
     final existing = _streams[key];
     if (existing != null) return (existing as _ReplayStream<T>).stream;
 
@@ -60,18 +62,56 @@ class FirestoreService {
     return replay.stream;
   }
 
+  Future<void> clearSession() async {
+    final entries = _streams.values.toList();
+    _streams.clear();
+    await Future.wait(entries.map((entry) => entry.dispose()));
+  }
+
   DocumentReference<Map<String, dynamic>> userDoc(String userId) {
     return _db.collection(FirestoreCollections.users).doc(userId);
   }
 
-  Stream<AppUser?> userStream(String userId) {
-    return _cache('user:$userId', () {
-      return userDoc(userId).snapshots().map((snap) {
-        if (!snap.exists || snap.data() == null) return null;
-        return AppUser.fromFirestore(snap.id, snap.data()!);
-      });
-    });
+  Future<bool> _isAdministrator() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return false;
+    return (await userDoc(uid).get()).data()?['role'] == 'Administrator';
   }
+
+  AppUser _publicUser(String id, Map<String, dynamic> row) {
+    final data = Map<String, dynamic>.from(row);
+    for (final field in ['createdAt', 'updatedAt']) {
+      if (data[field] is num) data[field] = Timestamp.fromMillisecondsSinceEpoch((data[field] as num).toInt());
+    }
+    return AppUser.fromFirestore(id, data);
+  }
+
+  Future<List<AppUser>> _publicDirectory({String? userId}) async {
+    final result = <AppUser>[];
+    String? after;
+    do {
+      final response = await FirebaseFunctions.instanceFor(region: kNeighborHelpFunctionsRegion)
+          .httpsCallable('getPublicDirectory').call({'userId': userId, if (after != null) 'after': after});
+      final data = Map<String, dynamic>.from(response.data as Map);
+      result.addAll((data['records'] as List).map((r) {
+        final row = Map<String, dynamic>.from(r as Map);
+        return _publicUser(row['userId'] as String, row);
+      }));
+      after = data['after'] as String?;
+    } while (after != null);
+    return result;
+  }
+
+  Stream<AppUser?> userStream(String userId) => _cache('user:$userId', () async* {
+    if (FirebaseAuth.instance.currentUser?.uid == userId || await _isAdministrator()) {
+      yield* userDoc(userId).snapshots().map((d) => d.exists ? AppUser.fromFirestore(d.id, d.data()!) : null);
+    } else {
+      final initial = await _publicDirectory(userId: userId);
+      yield initial.firstOrNull;
+      yield* _db.collection('publicProfiles').doc(userId).snapshots().map((d) =>
+          d.exists ? _publicUser(d.id, d.data()!) : initial.firstOrNull);
+    }
+  });
 
   Future<void> updateUserProfile({
     required String userId,
@@ -80,18 +120,43 @@ class FirestoreService {
     return userDoc(userId).set({
       ...data,
       'updatedAt': FieldValue.serverTimestamp(),
+      'updatedBy': FirebaseAuth.instance.currentUser?.uid,
     }, SetOptions(merge: true));
   }
 
-  Stream<List<ServiceProviderProfile>> serviceProvidersStream() {
-    return _cache('serviceProviders', () {
-      return _db.collection(FirestoreCollections.serviceProviders).snapshots().map(
-            (s) => s.docs.map((d) => ServiceProviderProfile.fromFirestore(d.id, d.data())).toList(),
-          );
-    });
+  ServiceProviderProfile _publicProvider(Map<String, dynamic> row) {
+    final data = Map<String, dynamic>.from(row);
+    final location = data['location'];
+    if (location is Map) data['location'] = GeoPoint((location['latitude'] as num).toDouble(), (location['longitude'] as num).toDouble());
+    for (final field in ['createdAt', 'updatedAt']) { if (data[field] is num) data[field] = Timestamp.fromMillisecondsSinceEpoch((data[field] as num).toInt()); }
+    return ServiceProviderProfile.fromFirestore(data['providerId'] as String, data);
   }
 
-  /// Resolves the Firestore document id for a provider (usually equals [userId]).
+  Future<List<ServiceProviderProfile>> _publicProviders({String? userId}) async {
+    final result = <ServiceProviderProfile>[];
+    String? after;
+    do {
+      final response = await FirebaseFunctions.instanceFor(region: kNeighborHelpFunctionsRegion).httpsCallable('getPublicProviders').call({'userId': userId, if (after != null) 'after': after});
+      final data = Map<String, dynamic>.from(response.data as Map);
+      result.addAll((data['records'] as List).map((r) => _publicProvider(Map<String, dynamic>.from(r as Map))));
+      after = data['after'] as String?;
+    } while (after != null);
+    return result;
+  }
+
+  Stream<List<ServiceProviderProfile>> serviceProvidersStream() => _cache('serviceProviders', () async* {
+    if (await _isAdministrator()) {
+      yield* _db.collection(FirestoreCollections.serviceProviders).snapshots().map((s) => s.docs.map((d) => ServiceProviderProfile.fromFirestore(d.id, d.data())).toList());
+    } else {
+      final profiles = {for (final p in await _publicProviders()) p.providerId: p};
+      yield profiles.values.toList();
+      yield* _db.collection('publicProviders').snapshots().map((s) {
+        for (final c in s.docChanges) { if (c.type == DocumentChangeType.removed) { profiles.remove(c.doc.id); } else { profiles[c.doc.id] = _publicProvider(c.doc.data()!); } }
+        return profiles.values.toList();
+      });
+    }
+  });
+
   Future<String> resolveProviderDocumentId(String userOrProviderId) async {
     final direct = await _db.collection(FirestoreCollections.serviceProviders).doc(userOrProviderId).get();
     if (direct.exists) return userOrProviderId;
@@ -127,23 +192,6 @@ class FirestoreService {
       };
 
   /// Backfills verification guard fields on older provider docs so security rules allow updates.
-  Future<void> _patchProviderVerificationGuardFields(
-    DocumentReference<Map<String, dynamic>> ref,
-    Map<String, dynamic>? data,
-  ) async {
-    if (data == null) return;
-    final patches = <String, dynamic>{};
-    if (!data.containsKey('isVerified')) patches['isVerified'] = false;
-    if (!data.containsKey('verificationStatus')) patches['verificationStatus'] = 'Pending';
-    if (!data.containsKey('diditStatus')) patches['diditStatus'] = '';
-    if (!data.containsKey('diditSessionId')) patches['diditSessionId'] = '';
-    if (!data.containsKey('verificationProvider')) patches['verificationProvider'] = '';
-    if (!data.containsKey('governmentIdTypeCode')) patches['governmentIdTypeCode'] = '';
-    if (!data.containsKey('governmentIdTypeLabel')) patches['governmentIdTypeLabel'] = '';
-    if (patches.isEmpty) return;
-    await ref.set(patches, SetOptions(merge: true));
-  }
-
   /// Creates `serviceProviders/{userId}` when missing so section editors can save.
   Future<void> ensureServiceProviderProfile(String userId) async {
     final userSnap = await userDoc(userId).get();
@@ -164,47 +212,11 @@ class FirestoreService {
       await ref.set(_defaultProviderFields(userId, now));
       return;
     }
-    await _patchProviderVerificationGuardFields(ref, snap.data());
   }
 
-  /// Removes empty `serviceProviders/{uid}` docs created by mistaken customer Didit flows.
-  Future<bool> removeMistakenProviderProfileIfCustomer(String userId) async {
-    final userSnap = await userDoc(userId).get();
-    if (!userSnap.exists) return false;
-    final storedRole = UserRole.fromFirestore(userSnap.data()?['role'] as String?);
-    if (storedRole == UserRole.administrator) return false;
-
-    final providerRef = _db.collection(FirestoreCollections.serviceProviders).doc(userId);
-    final providerSnap = await providerRef.get();
-    if (!providerSnap.exists) return false;
-
-    final data = providerSnap.data() ?? {};
-    final bio = (data['bio'] as String? ?? '').trim();
-    final completed = (data['completedBookings'] as num?)?.toInt() ?? 0;
-    final accepted = (data['acceptedBookings'] as num?)?.toInt() ?? 0;
-    if (bio.isNotEmpty || completed > 0 || accepted > 0) return false;
-
-    final services = await _db
-        .collection(FirestoreCollections.services)
-        .where('providerId', isEqualTo: userId)
-        .limit(1)
-        .get();
-    if (services.docs.isNotEmpty) return false;
-
-    final mistakenForCustomer = storedRole == UserRole.customer;
-    final likelyPromotedByMistake = storedRole == UserRole.provider;
-    if (!mistakenForCustomer && !likelyPromotedByMistake) return false;
-
-    await providerRef.delete();
-
-    if (likelyPromotedByMistake) {
-      await userDoc(userId).update({
-        'role': UserRole.customer.firestoreValue,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-    }
-    return true;
-  }
+  /// Historical stray profiles are preserved. Explicit roles determine access;
+  /// any cleanup requires an administrator's retention review.
+  Future<bool> removeMistakenProviderProfileIfCustomer(String userId) async => false;
 
   Future<void> updateServiceProvider({
     required String providerId,
@@ -215,6 +227,7 @@ class FirestoreService {
     await _db.collection(FirestoreCollections.serviceProviders).doc(providerId).update({
       ...data,
       'updatedAt': FieldValue.serverTimestamp(),
+      'updatedBy': FirebaseAuth.instance.currentUser?.uid,
     });
   }
 
@@ -266,19 +279,16 @@ class FirestoreService {
     });
   }
 
-  Stream<ServiceProviderProfile?> providerProfileForUser(String userId) {
-    return _cache('providerProfile:v2:$userId', () {
-      return _withSeed<ServiceProviderProfile?>(
-        null,
-        _db.collection(FirestoreCollections.serviceProviders).doc(userId).snapshots().map((snap) {
-          if (!snap.exists || snap.data() == null) return null;
-          return ServiceProviderProfile.fromFirestore(snap.id, snap.data()!);
-        }),
-      );
-    });
-  }
+  Stream<ServiceProviderProfile?> providerProfileForUser(String userId) => _cache('providerProfileForUser:$userId', () async* {
+    if (FirebaseAuth.instance.currentUser?.uid == userId || await _isAdministrator()) {
+      yield* _db.collection(FirestoreCollections.serviceProviders).doc(userId).snapshots().map((d) => d.exists ? ServiceProviderProfile.fromFirestore(d.id, d.data()!) : null);
+    } else {
+      final initial = await _publicProviders(userId: userId);
+      yield initial.firstOrNull;
+      yield* _db.collection('publicProviders').doc(userId).snapshots().map((d) => d.exists ? _publicProvider(d.data()!) : initial.firstOrNull);
+    }
+  });
 
-  /// Bookings where this user is the provider (auth uid and provider document id).
   Stream<List<Booking>> bookingsForProviderUser(String userId) {
     return _cache('bookingsForProviderUser:$userId', () {
       return _withSeed<List<Booking>>(const [], _providerBookingsStream(userId));
@@ -413,22 +423,8 @@ class FirestoreService {
     return out;
   }
 
-  Future<ServiceProviderProfile?> getProviderProfile(String userId) async {
-    final snap = await _db.collection(FirestoreCollections.serviceProviders).doc(userId).get();
-    if (snap.exists && snap.data() != null) {
-      return ServiceProviderProfile.fromFirestore(snap.id, snap.data()!);
-    }
-    final query = await _db
-        .collection(FirestoreCollections.serviceProviders)
-        .where('userId', isEqualTo: userId)
-        .limit(1)
-        .get();
-    if (query.docs.isEmpty) return null;
-    final doc = query.docs.first;
-    return ServiceProviderProfile.fromFirestore(doc.id, doc.data());
-  }
+  Future<ServiceProviderProfile?> getProviderProfile(String userId) async => providerProfileForUser(userId).first;
 
-  /// Creates a new service document; returns the new document id.
   Future<String> createServiceListing({
     required String providerId,
     required String serviceTitle,
@@ -476,6 +472,7 @@ class FirestoreService {
   Future<void> updateService(String serviceId, Map<String, dynamic> data) {
     return _db.collection(FirestoreCollections.services).doc(serviceId).update({
       ...data,
+      'updatedBy': FirebaseAuth.instance.currentUser?.uid,
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }
@@ -488,10 +485,20 @@ class FirestoreService {
     required String serviceId,
     required ServiceApprovalStatus status,
     String? rejectionReason,
-  }) {
+  }) async {
+    if (status.isApproved) {
+      final listing = await getService(serviceId);
+      if (listing == null) throw StateError('Service not found.');
+      final profile = await getProviderProfile(listing.providerId);
+      final owner = await getUser(listing.providerId);
+      if (profile == null || !profile.isVerifiedProvider || owner == null || owner.accountStatus.isBlocked || profile.serviceArea.trim().isEmpty) throw StateError('The provider needs a verified identity, active account, and service area.');
+      if (!hasMatchingServiceCertificate(profile, category: listing.category, serviceTitle: listing.serviceTitle)) throw StateError('A valid certificate matching this service is required.');
+    }
     final data = <String, dynamic>{
       'approvalStatus': status.firestoreValue,
       'updatedAt': FieldValue.serverTimestamp(),
+      'updatedBy': FirebaseAuth.instance.currentUser?.uid,
+      'updatedByRole': 'Administrator',
     };
     switch (status) {
       case ServiceApprovalStatus.approved:
@@ -510,9 +517,23 @@ class FirestoreService {
     return updateService(serviceId, data);
   }
 
-  Future<void> createBooking(Booking booking) {
-    return _db.collection(FirestoreCollections.bookings).doc(booking.bookingId).set(booking.toMap());
+  Future<void> _bookingCommand(String action, String bookingId, [Map<String, dynamic> data = const {}]) async {
+    try {
+      await FirebaseFunctions.instanceFor(region: kNeighborHelpFunctionsRegion)
+          .httpsCallable('bookingCommand').call({'action': action, 'bookingId': bookingId, ...data});
+    } on FirebaseFunctionsException catch (e) {
+      throw StateError(e.message ?? 'Could not update booking. Please try again.');
+    }
   }
+
+  Future<void> createBooking(Booking booking) => _bookingCommand('create', booking.bookingId, {
+    'serviceId': booking.serviceId,
+    'serviceLocation': booking.serviceLocation,
+    'location': {'latitude': booking.location.latitude, 'longitude': booking.location.longitude},
+    'scheduledDate': booking.scheduledDate.millisecondsSinceEpoch,
+    'scheduledEndDate': booking.scheduledEnd?.millisecondsSinceEpoch,
+    'notes': booking.notes,
+  });
 
   Stream<Booking?> bookingStream(String bookingId) {
     return _cache('booking:$bookingId', () {
@@ -530,88 +551,17 @@ class FirestoreService {
     return Booking.fromFirestore(snap.id, snap.data()!);
   }
 
-  Future<void> updateBookingStatus(String bookingId, String status) {
-    return _db.collection(FirestoreCollections.bookings).doc(bookingId).update({
-      'status': status,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-  }
+  Future<void> updateBookingStatus(String bookingId, String status) =>
+      _bookingCommand('adminStatus', bookingId, {'status': status});
 
-  Future<void> providerRespondToBooking({
-    required String bookingId,
-    required String providerId,
-    required bool accept,
-  }) async {
-    final ref = _db.collection(FirestoreCollections.bookings).doc(bookingId);
-    if (accept) {
-      final snap = await ref.get();
-      if (!snap.exists) throw StateError('Booking not found');
-      final data = snap.data()!;
-      if (data['providerId'] != providerId) throw StateError('Not your booking');
-      final customerId = data['customerId'] as String? ?? '';
-      final contractId = await _ensureActiveContract(
-        customerId: customerId,
-        providerId: providerId,
-      );
-      final milestoneNumber = await _assignNextMilestone(contractId);
-      await ref.update({
-        'status': 'Accepted',
-        'acceptedAt': FieldValue.serverTimestamp(),
-        'contractId': contractId,
-        'milestoneNumber': milestoneNumber,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-      await _db.collection(FirestoreCollections.serviceProviders).doc(providerId).update({
-        'acceptedBookings': FieldValue.increment(1),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-    } else {
-      await ref.update({
-        'status': 'Cancelled',
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-    }
-  }
+  Future<void> providerRespondToBooking({required String bookingId, required String providerId, required bool accept}) =>
+      _bookingCommand(accept ? 'accept' : 'decline', bookingId);
 
-  Future<String> _ensureActiveContract({
-    required String customerId,
-    required String providerId,
-  }) async {
-    final existing = await _db
-        .collection(FirestoreCollections.contracts)
-        .where('customerId', isEqualTo: customerId)
-        .where('providerId', isEqualTo: providerId)
-        .where('status', isEqualTo: 'active')
-        .limit(1)
-        .get();
-    if (existing.docs.isNotEmpty) return existing.docs.first.id;
+  Future<void> requestReschedule(String bookingId, DateTime when) =>
+      _bookingCommand('requestReschedule', bookingId, {'scheduledDate': when.millisecondsSinceEpoch});
 
-    final ref = _db.collection(FirestoreCollections.contracts).doc();
-    await ref.set({
-      'customerId': customerId,
-      'providerId': providerId,
-      'status': 'active',
-      'milestoneCount': 0,
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-    return ref.id;
-  }
-
-  Future<int> _assignNextMilestone(String contractId) async {
-    final ref = _db.collection(FirestoreCollections.contracts).doc(contractId);
-    return _db.runTransaction((tx) async {
-      final snap = await tx.get(ref);
-      if (!snap.exists) throw StateError('Contract not found');
-      final count = (snap.data()?['milestoneCount'] as num?)?.toInt() ?? 0;
-      final next = count + 1;
-      tx.update(ref, {
-        'milestoneCount': next,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-      return next;
-    });
-  }
+  Future<void> respondToReschedule(String bookingId, {required bool approve}) =>
+      _bookingCommand(approve ? 'approveReschedule' : 'rejectReschedule', bookingId);
 
   Stream<ServiceContract?> contractStream(String contractId) {
     return _db.collection(FirestoreCollections.contracts).doc(contractId).snapshots().map((snap) {
@@ -668,127 +618,17 @@ class FirestoreService {
     });
   }
 
-  Future<void> customerCancelBooking({
-    required String bookingId,
-    required String customerId,
-    required String reason,
-  }) async {
-    final trimmed = reason.trim();
-    if (trimmed.length < 10) {
-      throw StateError('Please provide a cancellation explanation (at least 10 characters).');
-    }
+  Future<void> customerCancelBooking({required String bookingId, required String customerId, required String reason}) =>
+      _bookingCommand('cancel', bookingId, {'reason': reason});
 
-    final ref = _db.collection(FirestoreCollections.bookings).doc(bookingId);
-    final snap = await ref.get();
-    if (!snap.exists) throw StateError('Booking not found');
-    final data = snap.data()!;
-    if (data['customerId'] != customerId) throw StateError('Not your booking');
+  Future<void> providerCancelBooking({required String bookingId, required String providerId, required String reason}) =>
+      _bookingCommand('cancel', bookingId, {'reason': reason});
 
-    final status = (data['status'] as String? ?? '').toLowerCase();
-    if (status == 'pending') {
-      throw StateError('Wait for the provider to respond, or contact support if you need help.');
-    }
-    if (status == 'cancelled' || status == 'canceled') {
-      throw StateError('This booking is already cancelled.');
-    }
-    if (status == 'completed' || status == 'milestone complete') {
-      throw StateError('Completed bookings cannot be cancelled.');
-    }
-    if (status != 'accepted' && status != 'in progress') {
-      throw StateError('This booking cannot be cancelled.');
-    }
+  Future<void> providerStartBooking({required String bookingId, required String providerId}) =>
+      _bookingCommand('start', bookingId);
 
-    await ref.update({
-      'status': 'Cancelled',
-      'cancellationReason': trimmed,
-      'cancelledAt': FieldValue.serverTimestamp(),
-      'cancelledByRole': 'customer',
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-  }
-
-  Future<void> providerCancelBooking({
-    required String bookingId,
-    required String providerId,
-    required String reason,
-  }) async {
-    final trimmed = reason.trim();
-    if (trimmed.length < 10) {
-      throw StateError('Please provide a cancellation explanation (at least 10 characters).');
-    }
-
-    final ref = _db.collection(FirestoreCollections.bookings).doc(bookingId);
-    final snap = await ref.get();
-    if (!snap.exists) throw StateError('Booking not found');
-    final data = snap.data()!;
-    if (data['providerId'] != providerId) throw StateError('Not your booking');
-
-    final status = (data['status'] as String? ?? '').toLowerCase();
-    if (status == 'pending') {
-      throw StateError('Use decline on pending requests instead of cancel.');
-    }
-    if (status == 'cancelled' || status == 'canceled') {
-      throw StateError('This booking is already cancelled.');
-    }
-    if (status == 'completed' || status == 'milestone complete') {
-      throw StateError('Completed bookings cannot be cancelled.');
-    }
-    if (status != 'accepted' && status != 'in progress') {
-      throw StateError('This booking cannot be cancelled.');
-    }
-
-    await ref.update({
-      'status': 'Cancelled',
-      'cancellationReason': trimmed,
-      'cancelledAt': FieldValue.serverTimestamp(),
-      'cancelledByRole': 'provider',
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-  }
-
-  Future<void> providerStartBooking({
-    required String bookingId,
-    required String providerId,
-  }) async {
-    final ref = _db.collection(FirestoreCollections.bookings).doc(bookingId);
-    final snap = await ref.get();
-    if (!snap.exists) throw StateError('Booking not found');
-    final data = snap.data()!;
-    if (data['providerId'] != providerId) throw StateError('Not your booking');
-    final status = (data['status'] as String? ?? '').toLowerCase();
-    if (status != 'accepted') throw StateError('Booking must be accepted before starting');
-    if (data['startedAt'] != null) throw StateError('Job already started');
-
-    await ref.update({
-      'status': 'In Progress',
-      'startedAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-  }
-
-  Future<void> providerCompleteBooking({
-    required String bookingId,
-    required String providerId,
-  }) async {
-    final ref = _db.collection(FirestoreCollections.bookings).doc(bookingId);
-    final snap = await ref.get();
-    if (!snap.exists) throw StateError('Booking not found');
-    final booking = Booking.fromFirestore(snap.id, snap.data()!);
-    if (booking.providerId != providerId) throw StateError('Not your booking');
-    if (!booking.canCompleteMilestone) {
-      throw StateError('Work period has not finished yet');
-    }
-
-    await ref.update({
-      'status': 'Milestone Complete',
-      'completedAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-    await _db.collection(FirestoreCollections.serviceProviders).doc(providerId).update({
-      'completedBookings': FieldValue.increment(1),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-  }
+  Future<void> providerCompleteBooking({required String bookingId, required String providerId}) =>
+      _bookingCommand('complete', bookingId);
 
   /// Submit a moderation report for the other party in a booking.
   ///
@@ -809,7 +649,7 @@ class FirestoreService {
     }
     final trimmedDetails = details.trim();
 
-    final reportId = '${bookingId}_${reporterId}_${reportedUserId}';
+    final reportId = '${bookingId}_${reporterId}_$reportedUserId';
     final ref = _db.collection(FirestoreCollections.bookingUserReports).doc(reportId);
 
     final existing = await ref.get();
@@ -860,6 +700,8 @@ class FirestoreService {
       'status': normalized,
       'adminNotes': adminNotes.trim(),
       'resolvedAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedBy': FirebaseAuth.instance.currentUser?.uid,
     });
   }
 
@@ -886,12 +728,18 @@ class FirestoreService {
       sentAt: Timestamp.now(),
     );
     await ref.set(message.toMap());
-    await _db.collection(FirestoreCollections.bookings).doc(bookingId).update({
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
   }
 
   /// Marks all unread messages in a thread as read for [readerId].
+  Future<void> sendImageMessage({required String bookingId, required String customerId, required String providerId,
+    required String senderId, required String receiverId, required String mediaUrl}) async {
+    await _db.collection(FirestoreCollections.messages).add({
+      'bookingId': bookingId, 'threadId': messageThreadId(customerId, providerId),
+      'senderId': senderId, 'receiverId': receiverId, 'messageText': '', 'mediaUrl': mediaUrl,
+      'messageType': 'Image', 'isRead': false, 'sentAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   Future<void> markConversationMessagesRead({
     required String customerId,
     required String providerId,
@@ -1262,43 +1110,15 @@ class FirestoreService {
       throw StateError('Only the provider on this booking can leave this review.');
     }
 
-    final revieweeId = role == 'customer' ? fresh.providerId : fresh.customerId;
     final existing = await getMilestoneReview(bookingId: fresh.bookingId, reviewerId: reviewerId);
     if (existing != null) throw StateError('You already reviewed this milestone');
 
     final trimmedComment = comment?.trim();
 
     try {
-      await _submitMilestoneReviewCallable(
-        bookingId: fresh.bookingId,
-        reviewerRole: role,
-        rating: rating,
-        comment: trimmedComment,
-      );
+      await _submitMilestoneReviewCallable(bookingId: fresh.bookingId, reviewerRole: role, rating: rating, comment: trimmedComment);
     } on FirebaseFunctionsException catch (e) {
-      if (e.code == 'not-found' || e.code == 'unavailable') {
-        await _submitMilestoneReviewDirect(
-          booking: fresh,
-          reviewerId: authUid,
-          revieweeId: revieweeId,
-          reviewerRole: role,
-          rating: rating,
-          comment: trimmedComment,
-        );
-        return;
-      }
       throw StateError(_milestoneReviewFunctionsMessage(e));
-    } on StateError {
-      rethrow;
-    } catch (_) {
-      await _submitMilestoneReviewDirect(
-        booking: fresh,
-        reviewerId: authUid,
-        revieweeId: revieweeId,
-        reviewerRole: role,
-        rating: rating,
-        comment: trimmedComment,
-      );
     }
   }
 
@@ -1316,43 +1136,6 @@ class FirestoreService {
       'rating': rating,
       if (comment != null && comment.isNotEmpty) 'comment': comment,
     });
-  }
-
-  Future<void> _submitMilestoneReviewDirect({
-    required Booking booking,
-    required String reviewerId,
-    required String revieweeId,
-    required String reviewerRole,
-    required int rating,
-    String? comment,
-  }) async {
-    final ref = _db.collection(FirestoreCollections.reviews).doc();
-    final payload = <String, dynamic>{
-      'bookingId': booking.bookingId,
-      'customerId': booking.customerId,
-      'providerId': booking.providerId,
-      'serviceId': booking.serviceId,
-      'rating': rating,
-      'reviewerId': reviewerId,
-      'revieweeId': revieweeId,
-      'reviewerRole': reviewerRole,
-      'createdAt': FieldValue.serverTimestamp(),
-    };
-    if (comment != null && comment.isNotEmpty) payload['comment'] = comment;
-    if (booking.contractId != null) payload['contractId'] = booking.contractId;
-    if (booking.milestoneNumber != null) payload['milestoneNumber'] = booking.milestoneNumber;
-
-    try {
-      await ref.set(payload);
-    } on FirebaseException catch (e) {
-      if (e.code == 'permission-denied') {
-        throw StateError(
-          'Could not save review (permission denied). '
-          'Deploy Firestore rules and Cloud Functions, then try again.',
-        );
-      }
-      rethrow;
-    }
   }
 
   String _milestoneReviewFunctionsMessage(FirebaseFunctionsException e) {
@@ -1394,12 +1177,7 @@ class FirestoreService {
     );
   }
 
-  Future<Map<String, dynamic>?> providerAvailability(String providerId) async {
-    final snap = await _db.collection(FirestoreCollections.serviceProviders).doc(providerId).get();
-    if (!snap.exists) return null;
-    final data = snap.data();
-    return data?['weeklyAvailability'] as Map<String, dynamic>?;
-  }
+  Future<Map<String, dynamic>?> providerAvailability(String providerId) async => (await getProviderProfile(providerId))?.effectiveWeeklyAvailability.toFirestore();
 
   Future<void> updateProviderAvailability({
     required String providerId,
@@ -1426,6 +1204,7 @@ class FirestoreService {
     required String title,
     required String message,
     String notificationType = 'Announcement',
+    bool pushEnabled = true,
   }) async {
     final ref = _db.collection(FirestoreCollections.notifications).doc();
     await ref.set({
@@ -1433,6 +1212,7 @@ class FirestoreService {
       'title': title,
       'message': message,
       'notificationType': notificationType,
+      'pushEnabled': pushEnabled,
       'relatedBookingId': null,
       'isRead': false,
       'createdAt': FieldValue.serverTimestamp(),
@@ -1444,9 +1224,10 @@ class FirestoreService {
     required String message,
     UserRole? roleFilter,
     String notificationType = 'Broadcast',
+    bool pushEnabled = true,
   }) async {
     final usersSnap = await _db.collection(FirestoreCollections.users).get();
-    var users = usersSnap.docs;
+    var users = usersSnap.docs.where((d) => d.data()['accountStatus'] == 'Active' && ['Customer', 'Provider', 'Administrator'].contains(d.data()['role'])).toList();
     if (roleFilter != null) {
       users = users.where((d) => d.data()['role'] == roleFilter.firestoreValue).toList();
     }
@@ -1457,24 +1238,33 @@ class FirestoreService {
         title: title,
         message: message,
         notificationType: notificationType,
+        pushEnabled: pushEnabled,
       );
       sent++;
-      if (sent >= 100) break;
+
     }
     return sent;
   }
 
   // --- Admin ---
 
-  Stream<List<AppUser>> allUsersStream() {
-    return _cache('allUsers', () {
-      return _db.collection(FirestoreCollections.users).snapshots().map((s) {
-        final list = s.docs.map((d) => AppUser.fromFirestore(d.id, d.data())).toList();
-        list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        return list;
+  Stream<List<AppUser>> allUsersStream() => _cache('allUsers', () async* {
+    if (await _isAdministrator()) {
+      yield* _db.collection(FirestoreCollections.users).snapshots().map((s) =>
+        s.docs.map((d) => AppUser.fromFirestore(d.id, d.data())).toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt)));
+    } else {
+      final profiles = {for (final u in await _publicDirectory()) u.userId: u};
+      yield profiles.values.toList();
+      yield* _db.collection('publicProfiles').snapshots().map((s) {
+        for (final change in s.docChanges) {
+          if (change.type == DocumentChangeType.removed) { profiles.remove(change.doc.id); }
+          else { profiles[change.doc.id] = _publicUser(change.doc.id, change.doc.data()!); }
+        }
+        return profiles.values.toList();
       });
-    });
-  }
+    }
+  });
 
   Stream<List<Booking>> allBookingsStream() {
     return _cache('allBookings', () {
@@ -1551,11 +1341,15 @@ class FirestoreService {
     if (!user.canAdminReviewVerification) {
       throw StateError('Customer has not completed Didit verification.');
     }
+    if (approve && !['approved', 'active'].contains(user.identityVerification.diditStatus.toLowerCase())) throw StateError('Didit must approve the identity before it can be verified.');
     await updateUserProfile(
       userId: userId,
       data: {
         'isVerified': approve,
         'verificationStatus': approve ? 'Approved' : 'Rejected',
+        'verificationManualDecision': approve ? 'Approved' : 'Rejected',
+        'updatedBy': FirebaseAuth.instance.currentUser?.uid,
+        'updatedByRole': 'Administrator',
         if (reviewedByUserId != null) 'verificationReviewedBy': reviewedByUserId,
         'verificationReviewedByRole': reviewedByRole,
         'verificationReviewedAt': FieldValue.serverTimestamp(),
@@ -1576,13 +1370,17 @@ class FirestoreService {
     }
     final profile = ServiceProviderProfile.fromFirestore(snap.id, snap.data() ?? {});
     if (!profile.canAdminReviewVerification) {
-      throw StateError('Provider has not completed Didit verification.');
+      throw StateError('No identity verification is available for review.');
     }
+    if (approve && !['approved', 'active'].contains(profile.diditStatus.toLowerCase())) throw StateError('Didit must approve the identity before it can be verified.');
     await updateServiceProvider(
       providerId: providerId,
       data: {
         'isVerified': approve,
         'verificationStatus': approve ? 'Approved' : 'Rejected',
+        'verificationManualDecision': approve ? 'Approved' : 'Rejected',
+        'updatedBy': FirebaseAuth.instance.currentUser?.uid,
+        'updatedByRole': 'Administrator',
         if (reviewedByUserId != null) 'verificationReviewedBy': reviewedByUserId,
         'verificationReviewedByRole': reviewedByRole,
         'verificationReviewedAt': FieldValue.serverTimestamp(),
@@ -1596,7 +1394,7 @@ class FirestoreService {
     required String certificationEntryId,
     required bool approve,
     String? reviewedByUserId,
-    String reviewedByRole = 'Verification Agency',
+    String reviewedByRole = 'Administrator',
     String rejectionReason = '',
   }) async {
     final ref = _db.collection(FirestoreCollections.serviceProviders).doc(providerId);
@@ -1611,6 +1409,9 @@ class FirestoreService {
       throw StateError('Certification not found.');
     }
 
+    if (approve && (history[idx].url.trim().isEmpty || (DateTime.tryParse(history[idx].expirationDate)?.isBefore(DateTime.now().subtract(const Duration(days: 1))) ?? false))) {
+      throw StateError('A document or verification URL and an unexpired certificate are required.');
+    }
     var entry = history[idx];
     if (entry.id.isEmpty) {
       entry = entry.copyWith(id: certificationEntryId.isNotEmpty ? certificationEntryId : ProviderCertificationEntry.newId());
@@ -1640,6 +1441,8 @@ class FirestoreService {
         'certificationHistory': ProviderCertificationEntry.listToFirestore(history),
         'certifications': history.map((e) => e.displayLine).toList(),
         'approvedCertificationIds': approvedIds,
+        'updatedBy': FirebaseAuth.instance.currentUser?.uid,
+        'updatedByRole': 'Administrator',
       },
     );
   }
@@ -1650,7 +1453,7 @@ class FirestoreService {
   }) {
     return updateUserProfile(
       userId: userId,
-      data: {'accountStatus': status.firestoreValue},
+      data: {'accountStatus': status.firestoreValue, 'updatedByRole': 'Administrator'},
     );
   }
 
@@ -1664,11 +1467,8 @@ class FirestoreService {
     });
   }
 
-  Future<AppUser?> getUser(String userId) async {
-    final snap = await userDoc(userId).get();
-    if (!snap.exists || snap.data() == null) return null;
-    return AppUser.fromFirestore(snap.id, snap.data()!);
-  }
+  Future<AppUser?> getUser(String userId) async => userStream(userId).first;
+
 }
 
 /// Subscribes once to [source] and replays the latest value (or error) to every
@@ -1677,7 +1477,7 @@ class FirestoreService {
 /// while a preview is still subscribed no longer hangs on "Loading…".
 class _ReplayStream<T> {
   _ReplayStream(Stream<T> source) {
-    source.listen(
+    _subscription = source.listen(
       (event) {
         _hasValue = true;
         _hasError = false;
@@ -1696,6 +1496,9 @@ class _ReplayStream<T> {
       },
     );
   }
+
+  late final StreamSubscription<T> _subscription;
+  Future<void> dispose() async { await _subscription.cancel(); await _controller.close(); _latest = null; }
 
   final StreamController<T> _controller = StreamController<T>.broadcast();
   bool _hasValue = false;

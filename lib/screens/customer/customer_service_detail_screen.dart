@@ -1,3 +1,4 @@
+import '../../widgets/service_location_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -45,6 +46,8 @@ class _CustomerServiceDetailScreenState extends State<CustomerServiceDetailScree
   final _location = TextEditingController();
   final _notes = TextEditingController();
   final _fixedPrice = TextEditingController();
+  GeoPoint? _bookingLocation;
+  String? _resolvedAddress;
   DateTime? _preferredDate;
   TimeOfDay? _preferredTime;
   _BookingPricingMode _pricingMode = _BookingPricingMode.hourly;
@@ -128,6 +131,10 @@ class _CustomerServiceDetailScreenState extends State<CustomerServiceDetailScree
                 final right = _BookingRequestPanel(
                   listing: widget.listing,
                   location: _location,
+                  locationPicker: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    ServiceLocationPicker(address: _location, origin: widget.appUser.location, onSelected: (point) => setState(() { _bookingLocation = point; _resolvedAddress = _location.text.trim(); })),
+                    if (_bookingLocation != null && _resolvedAddress == _location.text.trim()) const Text('Service location confirmed', style: TextStyle(fontSize: 12)),
+                  ]),
                   notes: _notes,
                   fixedPrice: _fixedPrice,
                   preferredDate: _preferredDate,
@@ -273,6 +280,10 @@ class _CustomerServiceDetailScreenState extends State<CustomerServiceDetailScree
       }
     }
 
+    if (_bookingLocation == null || _resolvedAddress != _location.text.trim()) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Locate the service address or choose a map pin before booking.')));
+      return;
+    }
     setState(() => _submitting = true);
     final firestore = FirestoreService();
     final ref = FirebaseFirestore.instance.collection(FirestoreCollections.bookings).doc();
@@ -295,7 +306,7 @@ class _CustomerServiceDetailScreenState extends State<CustomerServiceDetailScree
       providerId: widget.listing.providerId,
       serviceId: widget.listing.serviceId,
       serviceLocation: _location.text.trim(),
-      location: widget.appUser.location ?? const GeoPoint(7.3081, 125.6842),
+      location: _bookingLocation!,
       scheduledDate: Timestamp.fromDate(startDt),
       scheduledEndDate: Timestamp.fromDate(endDt),
       status: 'Pending',
@@ -315,10 +326,10 @@ class _CustomerServiceDetailScreenState extends State<CustomerServiceDetailScree
         const SnackBar(content: Text('Booking request sent to the provider')),
       );
       Navigator.of(context).pop();
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not send booking request. Try again.')),
+          SnackBar(content: Text(e is StateError ? e.message.toString() : 'Could not send booking request. Try again.')),
         );
       }
     } finally {
@@ -705,6 +716,7 @@ class _BookingRequestPanel extends StatelessWidget {
   const _BookingRequestPanel({
     required this.listing,
     required this.location,
+    required this.locationPicker,
     required this.notes,
     required this.fixedPrice,
     required this.preferredDate,
@@ -724,6 +736,7 @@ class _BookingRequestPanel extends StatelessWidget {
 
   final ServiceListing listing;
   final TextEditingController location;
+  final Widget locationPicker;
   final TextEditingController notes;
   final TextEditingController fixedPrice;
   final DateTime? preferredDate;
@@ -806,6 +819,7 @@ class _BookingRequestPanel extends StatelessWidget {
               prefixIcon: Icon(Icons.place_outlined),
             ),
           ),
+          locationPicker,
           const SizedBox(height: 14),
           OutlinedButton.icon(
             onPressed: onPickDate,

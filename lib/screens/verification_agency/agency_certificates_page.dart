@@ -1,3 +1,5 @@
+import 'package:url_launcher/url_launcher.dart';
+import '../../services/storage_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -8,11 +10,10 @@ import '../../models/provider_certification.dart';
 import '../../services/firestore_service.dart';
 import '../../theme/adaptive_breakpoints.dart';
 import '../../theme/mobile_layout.dart';
-import '../../theme/role_theme.dart';
 import '../../widgets/loading_indicator.dart';
 import '../admin/widgets/admin_widgets.dart';
 
-/// Verification Agency queue to authenticate provider-submitted certificates.
+/// System Administrator queue to authenticate provider-submitted certificates.
 class AgencyCertificatesPage extends StatefulWidget {
   const AgencyCertificatesPage({
     super.key,
@@ -299,7 +300,6 @@ class _CertCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rc = context.roleColors;
     final entry = row.entry;
     final statusColor = entry.isApproved
         ? FigmaColors.green
@@ -353,7 +353,10 @@ class _CertCard extends StatelessWidget {
           ],
           if (entry.url.isNotEmpty) ...[
             const SizedBox(height: 6),
-            Text(entry.url, style: GoogleFonts.inter(fontSize: 12, color: rc.primary)),
+            TextButton.icon(onPressed: () async {
+              try { final url = await StorageService().readableUrl(entry.url); await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication); }
+              catch (_) { if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open the certificate. Check your access and connection.'))); }
+            }, icon: const Icon(Icons.open_in_new), label: const Text('View certificate document')),
           ],
           if (entry.isRejected && entry.rejectionReason.isNotEmpty) ...[
             const SizedBox(height: 8),

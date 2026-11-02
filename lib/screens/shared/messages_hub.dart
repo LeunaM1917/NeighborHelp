@@ -1,3 +1,4 @@
+import '../../widgets/chat_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -737,6 +738,14 @@ class _ChatPaneState extends State<_ChatPane> {
     super.dispose();
   }
 
+  Future<void> _attach() async {
+    if (_sending) return;
+    setState(() => _sending = true);
+    await sendBookingImage(context, bookingId: widget.booking.bookingId, customerId: widget.thread.customerId,
+      providerId: widget.thread.providerId, senderId: widget.appUser.userId, receiverId: widget.thread.otherUserId);
+    if (mounted) setState(() => _sending = false);
+  }
+
   Future<void> _send() async {
     final text = _controller.text.trim();
     if (text.isEmpty || _sending) return;
@@ -916,6 +925,7 @@ class _ChatPaneState extends State<_ChatPane> {
           controller: _controller,
           sending: _sending,
           onSend: _send,
+          onAttach: _attach,
         ),
         if (widget.showInfoInChat)
           SizedBox(
@@ -1051,6 +1061,7 @@ class _MessageBlock extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 6),
+              if (message.mediaUrl?.isNotEmpty == true) ChatImage(url: message.mediaUrl!),
               Text(
                 message.messageText ?? '',
                 style: GoogleFonts.inter(fontSize: 14, color: FigmaColors.gray800, height: 1.5),
@@ -1068,11 +1079,13 @@ class _MessageComposer extends StatelessWidget {
     required this.controller,
     required this.sending,
     required this.onSend,
+    required this.onAttach,
   });
 
   final TextEditingController controller;
   final bool sending;
   final VoidCallback onSend;
+  final VoidCallback onAttach;
 
   @override
   Widget build(BuildContext context) {
@@ -1109,6 +1122,7 @@ class _MessageComposer extends StatelessWidget {
             onSubmitted: (_) => onSend(),
           ),
           if (compact) ...[
+            Align(alignment: Alignment.centerLeft, child: TextButton.icon(onPressed: sending ? null : onAttach, icon: const Icon(Icons.attach_file), label: const Text('Attach image'))),
             const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,
@@ -1137,7 +1151,7 @@ class _MessageComposer extends StatelessWidget {
             Row(
               children: [
                 IconButton(onPressed: () {}, icon: const Icon(Icons.text_fields, size: 20), color: FigmaColors.gray600),
-                IconButton(onPressed: () {}, icon: const Icon(Icons.attach_file, size: 20), color: FigmaColors.gray600),
+                IconButton(onPressed: sending ? null : onAttach, tooltip: 'Attach an image', icon: const Icon(Icons.attach_file, size: 20), color: FigmaColors.gray600),
                 IconButton(onPressed: () {}, icon: const Icon(Icons.auto_awesome_outlined, size: 20), color: FigmaColors.gray600),
                 IconButton(onPressed: () {}, icon: const Icon(Icons.emoji_emotions_outlined, size: 20), color: FigmaColors.gray600),
                 const Spacer(),

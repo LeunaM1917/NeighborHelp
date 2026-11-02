@@ -67,7 +67,7 @@ List<RankedProvider> rankProvidersByRecommendation({
         continue;
       }
       distanceKm = haversineDistanceKmFromGeoPoints(origin, providerLoc);
-      if (distanceKm > maxSearchRadiusKm) continue;
+      if (distanceKm > maxSearchRadiusKm || distanceKm > profile.serviceRadiusKm) continue;
       proximityInputKm = distanceKm;
     } else {
       // No customer GPS: skip proximity filter; use neutral P via synthetic distance.
@@ -79,8 +79,7 @@ List<RankedProvider> rankProvidersByRecommendation({
       reviewCount: profile.reviewCount,
       averageRating: profile.averageRating,
     );
-    // averageRating is maintained as Bayesian by Cloud Functions; scoring also
-    // applies computeBayesianRatingOutOfFive for small-n damping / CF lag.
+    // averageRating is already Bayesian from the backend; normalize it once.
     final score = weightedProviderScore(
       distanceKm: proximityInputKm,
       maxSearchRadiusKm: maxSearchRadiusKm,

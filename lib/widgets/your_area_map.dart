@@ -408,20 +408,11 @@ bool _hasRealProviderGeo(ServiceProviderProfile profile) {
   return loc != null && !isDefaultSignupLocation(loc);
 }
 
-LatLng _offsetKm(LatLng origin, double kmNorth, double kmEast) {
-  final latRad = origin.latitude * math.pi / 180;
-  final dLat = kmNorth / 111.0;
-  final dLng = kmEast / (111.0 * math.cos(latRad));
-  return LatLng(origin.latitude + dLat, origin.longitude + dLng);
-}
-
 List<NearbyMapPin> _buildPins({
   required AppUser customer,
   required List<ServiceProviderProfile> providers,
   required Map<String, AppUser> users,
 }) {
-  final origin = _userLatLng(customer);
-
   final ranked = rankProvidersByRecommendation(
     providers: providers,
     customerOrigin: customer.location,
@@ -436,34 +427,8 @@ List<NearbyMapPin> _buildPins({
     );
   }
 
-  // No ranked providers with real coordinates — optional preview offsets only.
-  final verified = providers.where((p) => p.isVerifiedProvider).toList();
-  final withoutRealGeo = verified.where((p) => !_hasRealProviderGeo(p)).toList();
-  const demoOffsets = [
-    (0.8, 1.2),
-    (-1.0, 0.6),
-    (0.4, -1.4),
-    (-1.2, -0.8),
-    (1.3, -0.5),
-  ];
-  var demoIndex = 0;
-  final pins = <NearbyMapPin>[];
-  for (final p in withoutRealGeo.take(5)) {
-    final user = users[p.userId];
-    final name = user?.fullName.isNotEmpty == true ? user!.fullName : 'Provider';
-    final off = demoOffsets[demoIndex % demoOffsets.length];
-    demoIndex++;
-    pins.add(
-      NearbyMapPin(
-        id: p.providerId,
-        position: _offsetKm(origin, off.$1, off.$2),
-        label: name,
-        photoUrl: user?.profilePhotoUrl,
-        isDemo: true,
-      ),
-    );
-  }
-  return pins;
+  return const <NearbyMapPin>[];
+
 }
 
 List<NearbyMapPin> _pinsFromProfiles(

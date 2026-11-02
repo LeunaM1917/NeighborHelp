@@ -40,6 +40,7 @@ class ServiceProviderProfile {
     this.linkedAccounts = const {},
     this.profileTraits = const [],
     this.weeklyAvailability,
+    this.eligibleServiceIds,
   });
 
   final String providerId;
@@ -60,6 +61,9 @@ class ServiceProviderProfile {
 
   /// Weekly schedule used for availability scoring (A). Null → defaults.
   final ProviderWeeklyAvailability? weeklyAvailability;
+  /// Server-computed eligibility on public projections; absent on private profiles.
+  final List<String>? eligibleServiceIds;
+  bool canOfferService(String serviceId) => eligibleServiceIds?.contains(serviceId) ?? isVerifiedProvider;
 
   /// Raw Didit session status, e.g. "Approved", "In Review", "Declined".
   final String diditStatus;
@@ -81,7 +85,7 @@ class ServiceProviderProfile {
   final String videoIntroUrl;
   final List<String> certifications;
   final List<ProviderCertificationEntry> certificationHistory;
-  /// Certificate entry ids authenticated by Verification Agency (cannot be forged by provider).
+  /// Certificate entry ids authenticated by System Administrator (cannot be forged by provider).
   final List<String> approvedCertificationIds;
   final List<String> otherExperiences;
 
@@ -113,7 +117,7 @@ class ServiceProviderProfile {
       _verificationNormalized != 'rejected';
 
   /// Admin Approve/Reject actions are allowed only after Didit reports Approved.
-  bool get canAdminReviewVerification => isAwaitingAdminApproval;
+  bool get canAdminReviewVerification => diditStatus.trim().isNotEmpty;
 
   /// User is in the hosted Didit flow or Didit is reviewing.
   bool get isVerificationInReview =>
@@ -162,7 +166,7 @@ class ServiceProviderProfile {
           .map(
             (e) => approved.contains(e.id) && e.id.isNotEmpty
                 ? e.copyWith(status: CertificationVerificationStatus.approved)
-                : e,
+                : e.isApproved ? e.copyWith(status: CertificationVerificationStatus.pending) : e,
           )
           .toList();
     }
@@ -171,7 +175,7 @@ class ServiceProviderProfile {
 
   bool get hasCertifications => effectiveCertificationHistory.isNotEmpty;
 
-  /// At least one certificate authenticated by the Verification Agency.
+  /// At least one certificate authenticated by the System Administrator.
   bool get hasApprovedCertifications {
     final approved = approvedCertificationIds.toSet();
     return effectiveCertificationHistory.any((e) => e.id.isNotEmpty && approved.contains(e.id));
@@ -223,6 +227,7 @@ class ServiceProviderProfile {
       linkedAccounts: _linkedAccountsMap(data['linkedAccounts']),
       profileTraits: _stringList(data['profileTraits']),
       weeklyAvailability: _weeklyAvailability(data['weeklyAvailability']),
+      eligibleServiceIds: data.containsKey('eligibleServiceIds') ? _stringList(data['eligibleServiceIds']) : null,
     );
   }
 

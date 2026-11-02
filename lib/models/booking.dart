@@ -27,6 +27,7 @@ class Booking {
     this.cancellationReason,
     this.cancelledAt,
     this.cancelledByRole,
+    this.rescheduleDate,
   });
 
   final String bookingId;
@@ -59,6 +60,7 @@ class Booking {
   final Timestamp? cancelledAt;
   /// `customer` or `provider`
   final String? cancelledByRole;
+  final DateTime? rescheduleDate;
 
   factory Booking.fromFirestore(String id, Map<String, dynamic> data) {
     return Booking(
@@ -86,6 +88,7 @@ class Booking {
       cancellationReason: data['cancellationReason'] as String?,
       cancelledAt: data['cancelledAt'] as Timestamp?,
       cancelledByRole: data['cancelledByRole'] as String?,
+      rescheduleDate: ((data['rescheduleRequest'] as Map?)?['scheduledDate'] as Timestamp?)?.toDate(),
     );
   }
 

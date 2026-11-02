@@ -107,7 +107,7 @@ class _ProviderDashboardTabState extends State<ProviderDashboardTab> {
   int _completedThisMonth(List<Booking> bookings) {
     final now = DateTime.now();
     return bookings.where((b) {
-      if (b.status.toLowerCase() != 'completed') return false;
+      if (!b.isCompleted) return false;
       final d = b.updatedAt.toDate();
       return d.year == now.year && d.month == now.month;
     }).length;
@@ -116,7 +116,7 @@ class _ProviderDashboardTabState extends State<ProviderDashboardTab> {
   int _completedLastMonth(List<Booking> bookings) {
     final lm = DateTime(DateTime.now().year, DateTime.now().month - 1);
     return bookings.where((b) {
-      if (b.status.toLowerCase() != 'completed') return false;
+      if (!b.isCompleted) return false;
       final d = b.updatedAt.toDate();
       return d.year == lm.year && d.month == lm.month;
     }).length;
@@ -170,7 +170,7 @@ class _ProviderDashboardTabState extends State<ProviderDashboardTab> {
                             final activeServices = services.where((s) => s.isActive).length;
                             final pending = bookings.where((b) => b.status.toLowerCase() == 'pending').length;
                             final completedJobs = profile?.completedBookings ??
-                                bookings.where((b) => b.status.toLowerCase() == 'completed').length;
+                                bookings.where((b) => b.isCompleted).length;
                             final thisMonth = _completedThisMonth(bookings);
                             final lastMonth = _completedLastMonth(bookings);
                             final delta = thisMonth - lastMonth;

@@ -174,7 +174,7 @@ class _ProviderServicesTabState extends State<ProviderServicesTab> {
                               return s == 'pending' || s == 'accepted' || s == 'in progress';
                             })
                             .length;
-                        final completed = bookings.where((b) => b.status.toLowerCase() == 'completed').length;
+                        final completed = bookings.where((b) => b.isCompleted).length;
                         final views = (thisMonth * 8 + allServices.length * 12).clamp(0, 9999);
                         final conversion = inquiries > 0 ? (completed / inquiries) * 100 : 0.0;
                         final trend = performanceTrendLabel();

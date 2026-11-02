@@ -50,7 +50,7 @@ class IdentityVerification {
       (_diditNormalized == 'approved' || _diditNormalized == 'active') &&
       _verificationNormalized != 'rejected';
 
-  bool get canAdminReview => isAwaitingAdminApproval;
+  bool get canAdminReview => hasStarted;
 
   bool get isInReview =>
       !isVerifiedOnPlatform &&

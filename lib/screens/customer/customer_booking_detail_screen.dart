@@ -1,3 +1,4 @@
+import '../../widgets/booking_reschedule_card.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -78,6 +79,7 @@ class CustomerBookingDetailScreen extends StatelessWidget {
                                   final profile = profileSnap.data;
 
                                   final mainChildren = <Widget>[
+                                    BookingRescheduleCard(booking: b, asCustomer: true),
                                     _headerCard(context, service, dateFmt, b),
                                     const SizedBox(height: 20),
                                     BookingStatusTracker(

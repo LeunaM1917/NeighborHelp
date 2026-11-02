@@ -1,3 +1,4 @@
+import '../../../services/export_service.dart';
 import 'package:flutter/material.dart';
 
 import '../../../figma_ui/figma_colors.dart';
@@ -118,10 +119,10 @@ class _AdminServicesPageState extends State<AdminServicesPage> {
           SnackBar(content: Text('${service.serviceTitle} is now live on the marketplace.')),
         );
       }
-    } catch (_) {
+    } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not approve listing.')),
+          SnackBar(content: Text(e is StateError ? e.message.toString() : 'Could not approve listing.')),
         );
       }
     }
@@ -195,9 +196,7 @@ class _AdminServicesPageState extends State<AdminServicesPage> {
       case 'show':
         _toggleActive(context, firestore, row.service, action == 'show');
       case 'export':
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Export services — coming soon.')),
-        );
+        ExportService.exportCollection(context, 'services');
     }
   }
 
@@ -352,9 +351,7 @@ class _AdminServicesPageState extends State<AdminServicesPage> {
                             () => _selectedId = selected ? r.service.serviceId : null,
                           ),
                           onExport: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Export services — coming soon.')),
-                            );
+                            ExportService.exportCollection(context, 'services');
                           },
                           onHide: (r) => _toggleActive(context, firestore, r.service, !r.service.isActive),
                           page: page,

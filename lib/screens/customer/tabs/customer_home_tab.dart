@@ -47,95 +47,6 @@ bool _providerWasHired(ServiceProviderProfile profile, Set<String> hiredIds) {
   return hiredIds.contains(profile.providerId) || hiredIds.contains(profile.userId);
 }
 
-/// Demo cards for the home "Available Services" carousel (UI preview).
-const _demoHomeServices = [
-  _DemoHomeService(
-    title: 'House Cleaning',
-    category: 'Cleaning',
-    categoryId: 'cleaning',
-    providerName: 'Maria Santos',
-    rating: 4.9,
-    reviews: 18,
-    pricePhp: 400,
-    providerInitial: 'M',
-    providerAvatarColor: Color(0xFF16A34A),
-  ),
-  _DemoHomeService(
-    title: 'Aircon Cleaning',
-    category: 'Repair and Technical Services',
-    categoryId: 'repair_technical',
-    providerName: 'Kent Repair Services',
-    rating: 5.0,
-    reviews: 20,
-    pricePhp: 350,
-    providerPhotoUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=100&q=80',
-  ),
-  _DemoHomeService(
-    title: 'Laundry Assistance',
-    category: 'Cleaning',
-    categoryId: 'cleaning',
-    providerName: 'Care Assist PH',
-    rating: 4.8,
-    reviews: 14,
-    pricePhp: 240,
-    providerInitial: 'C',
-    providerAvatarColor: Color(0xFF16A34A),
-  ),
-  _DemoHomeService(
-    title: 'Moving Help',
-    category: 'Moving and Errands',
-    categoryId: 'moving_errands',
-    providerName: 'Juan Dela Cruz',
-    rating: 4.8,
-    reviews: 15,
-    pricePhp: 600,
-    providerInitial: 'J',
-    providerAvatarColor: Color(0xFF86EFAC),
-  ),
-  _DemoHomeService(
-    title: 'Math Tutoring',
-    category: 'Tutoring and Lessons',
-    categoryId: 'tutoring',
-    providerName: 'Teacher Ana',
-    rating: 5.0,
-    reviews: 9,
-    pricePhp: 350,
-    providerPhotoUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=100&q=80',
-  ),
-];
-
-class _DemoHomeService {
-  const _DemoHomeService({
-    required this.title,
-    required this.category,
-    required this.categoryId,
-    required this.providerName,
-    required this.rating,
-    required this.reviews,
-    required this.pricePhp,
-    this.providerPhotoUrl,
-    this.providerInitial,
-    this.providerAvatarColor,
-  });
-
-  final String title;
-  final String category;
-  final String categoryId;
-  final String providerName;
-  final double rating;
-  final int reviews;
-  final int pricePhp;
-  final String? providerPhotoUrl;
-  final String? providerInitial;
-  final Color? providerAvatarColor;
-
-  String get imageUrl => MarketingServiceImages.urlFor(
-        serviceName: title,
-        categoryId: categoryId,
-      );
-}
-
-/// Display model for live + demo carousel entries.
 class _CarouselServiceDisplay {
   const _CarouselServiceDisplay({
     required this.title,
@@ -146,10 +57,7 @@ class _CarouselServiceDisplay {
     required this.rating,
     required this.reviews,
     this.providerPhotoUrl,
-    this.providerInitial,
-    this.providerAvatarColor,
     this.listing,
-    this.isDemo = false,
     this.profileAverage = 0,
     this.profileReviewCount = 0,
   });
@@ -162,10 +70,10 @@ class _CarouselServiceDisplay {
   final double rating;
   final int reviews;
   final String? providerPhotoUrl;
-  final String? providerInitial;
-  final Color? providerAvatarColor;
+  String? get providerInitial => null;
+  Color? get providerAvatarColor => null;
   final ServiceListing? listing;
-  final bool isDemo;
+  bool get isDemo => false;
   final double profileAverage;
   final int profileReviewCount;
 
@@ -199,21 +107,7 @@ class _CarouselServiceDisplay {
     );
   }
 
-  factory _CarouselServiceDisplay.fromDemo(_DemoHomeService demo) {
-    return _CarouselServiceDisplay(
-      title: demo.title,
-      category: demo.category,
-      imageUrl: demo.imageUrl,
-      providerName: demo.providerName,
-      price: demo.pricePhp.toDouble(),
-      rating: demo.rating,
-      reviews: demo.reviews,
-      providerPhotoUrl: demo.providerPhotoUrl,
-      providerInitial: demo.providerInitial,
-      providerAvatarColor: demo.providerAvatarColor,
-      isDemo: true,
-    );
-  }
+
 }
 
 List<_CarouselServiceDisplay> _buildHomeCarouselServices({
@@ -237,30 +131,23 @@ List<_CarouselServiceDisplay> _buildHomeCarouselServices({
   }
 
   final items = <_CarouselServiceDisplay>[];
-  final usedTitles = <String>{};
 
   for (final listing in live) {
     final profile = profileFor(listing);
     final user = userFor(listing);
+    if (profile == null || !profile.isVerifiedProvider || !profile.canOfferService(listing.serviceId) || user == null || user.accountStatus.isBlocked) continue;
     items.add(
       _CarouselServiceDisplay.fromListing(
         listing: listing,
-        providerName: user?.fullName.isNotEmpty == true ? user!.fullName : 'Local provider',
-        providerPhotoUrl: user?.profilePhotoUrl,
+        providerName: user.fullName.isNotEmpty ? user.fullName : 'Local provider',
+        providerPhotoUrl: user.profilePhotoUrl,
         // Live service-scoped rating is resolved in the card (not Bayesian profile avg).
         rating: 0,
         reviewCount: 0,
-        profileAverage: profile?.averageRating ?? 0,
-        profileReviewCount: profile?.reviewCount ?? 0,
+        profileAverage: profile.averageRating,
+        profileReviewCount: profile.reviewCount,
       ),
     );
-    usedTitles.add(listing.serviceTitle.trim().toLowerCase());
-  }
-
-  for (final demo in _demoHomeServices) {
-    if (usedTitles.contains(demo.title.trim().toLowerCase())) continue;
-    items.add(_CarouselServiceDisplay.fromDemo(demo));
-    usedTitles.add(demo.title.trim().toLowerCase());
   }
 
   return items;

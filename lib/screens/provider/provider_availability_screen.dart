@@ -411,7 +411,7 @@ class _TimeDropdown extends StatelessWidget {
     final safeValue = options.contains(value) ? value : options.first;
 
     return DropdownButtonFormField<String>(
-      value: safeValue,
+      initialValue: safeValue,
       isExpanded: true,
       decoration: InputDecoration(
         labelText: label,

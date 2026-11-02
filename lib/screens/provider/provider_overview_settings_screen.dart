@@ -1,3 +1,4 @@
+import '../../widgets/enable_notifications_button.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -215,6 +216,7 @@ class _ProviderOverviewSettingsScreenState extends State<ProviderOverviewSetting
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+              const EnableNotificationsButton(),
           if (!widget.inDialog)
             AppPageHeader(
               title: 'Profile settings',
