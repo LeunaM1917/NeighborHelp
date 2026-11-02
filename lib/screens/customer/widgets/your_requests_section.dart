@@ -1,3 +1,4 @@
+import '../../../widgets/data_stream_builder.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -44,6 +45,7 @@ class _YourRequestsSectionState extends State<YourRequestsSection> {
   Map<String, AppUser?> _providers = {};
   Map<String, ServiceProviderProfile?> _providerProfiles = {};
   String? _hydratedForKey;
+  Future<void>? _hydration;
 
   @override
   Widget build(BuildContext context) {
@@ -70,7 +72,8 @@ class _YourRequestsSectionState extends State<YourRequestsSection> {
           ],
         ),
         const SizedBox(height: 12),
-        StreamBuilder<List<Booking>>(
+        DataStreamBuilder<List<Booking>>(
+ label: 'bookings', onRetry: () => FirestoreService().retryDataLoads(),
           stream: _firestore.bookingsForUser(widget.appUser.userId, asCustomer: true),
           builder: (context, snap) {
             if (isStreamWaiting(snap)) {
@@ -83,6 +86,10 @@ class _YourRequestsSectionState extends State<YourRequestsSection> {
             return FutureBuilder<void>(
               future: _hydrate(bookings),
               builder: (context, hydrateSnap) {
+                if (hydrateSnap.hasError) {
+                  return DataLoadFailure(label: 'request details', error: hydrateSnap.error,
+                    onRetry: () async { await _firestore.retryDataLoads(); if (mounted) setState(() => _hydration = null); });
+                }
                 if (hydrateSnap.connectionState != ConnectionState.done && bookings.isNotEmpty) {
                   return const Padding(
                     padding: EdgeInsets.symmetric(vertical: 24),
@@ -153,17 +160,18 @@ class _YourRequestsSectionState extends State<YourRequestsSection> {
     );
   }
 
-  Future<void> _hydrate(List<Booking> bookings) async {
+  Future<void> _hydrate(List<Booking> bookings) {
     final key = bookings.map((b) => b.bookingId).join(',');
-    if (_hydratedForKey == key) return;
+    if (_hydratedForKey == key && _hydration != null) return _hydration!;
+    _hydratedForKey = key;
+    return _hydration = _loadDetails(bookings, key);
+  }
+
+  Future<void> _loadDetails(List<Booking> bookings, String key) async {
     if (bookings.isEmpty) {
-      if (!mounted) return;
-      setState(() {
-        _hydratedForKey = '';
-        _services = {};
-        _providers = {};
-        _providerProfiles = {};
-      });
+      _services = {};
+      _providers = {};
+      _providerProfiles = {};
       return;
     }
     final services = <String, ServiceListing?>{};
@@ -174,13 +182,10 @@ class _YourRequestsSectionState extends State<YourRequestsSection> {
       providers[b.providerId] ??= await _firestore.getUser(b.providerId);
       profiles[b.providerId] ??= await _firestore.getProviderProfile(b.providerId);
     }
-    if (!mounted) return;
-    setState(() {
-      _hydratedForKey = key;
+    if (!mounted || _hydratedForKey != key) return;
       _services = services;
       _providers = providers;
       _providerProfiles = profiles;
-    });
   }
 }
 

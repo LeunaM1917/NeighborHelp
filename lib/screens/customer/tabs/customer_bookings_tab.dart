@@ -1,3 +1,4 @@
+import '../../../widgets/data_stream_builder.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
@@ -57,6 +58,7 @@ class _CustomerBookingsTabState extends State<CustomerBookingsTab> {
   Map<String, AppUser?> _providers = {};
   Map<String, ServiceProviderProfile?> _profiles = {};
   String? _hydratedKey;
+  Future<void>? _hydration;
 
   static const _sidebarWidth = 320.0;
   static const _columnGap = 28.0;
@@ -68,17 +70,18 @@ class _CustomerBookingsTabState extends State<CustomerBookingsTab> {
     super.dispose();
   }
 
-  Future<void> _hydrate(List<Booking> bookings) async {
+  Future<void> _hydrate(List<Booking> bookings) {
     final key = bookings.map((b) => b.bookingId).join(',');
-    if (_hydratedKey == key) return;
+    if (_hydratedKey == key && _hydration != null) return _hydration!;
+    _hydratedKey = key;
+    return _hydration = _loadDetails(bookings, key);
+  }
+
+  Future<void> _loadDetails(List<Booking> bookings, String key) async {
     if (bookings.isEmpty) {
-      if (!mounted) return;
-      setState(() {
-        _hydratedKey = '';
-        _services = {};
-        _providers = {};
-        _profiles = {};
-      });
+      _services = {};
+      _providers = {};
+      _profiles = {};
       return;
     }
     final services = <String, ServiceListing?>{};
@@ -90,13 +93,10 @@ class _CustomerBookingsTabState extends State<CustomerBookingsTab> {
       providers[b.providerId] ??= await _firestore.getUser(b.providerId);
       profiles[b.providerId] ??= await _firestore.getProviderProfile(b.providerId);
     }
-    if (!mounted) return;
-    setState(() {
-      _hydratedKey = key;
+    if (!mounted || _hydratedKey != key) return;
       _services = services;
       _providers = providers;
       _profiles = profiles;
-    });
   }
 
   _BookingBucket _bucket(Booking b) {
@@ -207,7 +207,8 @@ class _CustomerBookingsTabState extends State<CustomerBookingsTab> {
                   0,
                   MobileLayout.pageBottomPadding(context),
                 ),
-                child: StreamBuilder<List<Booking>>(
+                child: DataStreamBuilder<List<Booking>>(
+ label: 'bookings', onRetry: () => FirestoreService().retryDataLoads(),
                   stream: _firestore.bookingsForUser(widget.appUser.userId, asCustomer: true),
                   builder: (context, snap) {
                     if (isStreamWaiting(snap)) {
@@ -225,6 +226,10 @@ class _CustomerBookingsTabState extends State<CustomerBookingsTab> {
                     return FutureBuilder<void>(
                       future: _hydrate(bookings),
                       builder: (context, hydrateSnap) {
+                        if (hydrateSnap.hasError) {
+                          return DataLoadFailure(label: 'booking details', error: hydrateSnap.error,
+                            onRetry: () async { await _firestore.retryDataLoads(); if (mounted) setState(() => _hydration = null); });
+                        }
                         if (hydrateSnap.connectionState != ConnectionState.done && bookings.isNotEmpty) {
                           return const Padding(
                             padding: EdgeInsets.symmetric(vertical: 48),

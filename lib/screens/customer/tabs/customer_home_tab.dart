@@ -1,3 +1,4 @@
+import '../../../widgets/data_stream_builder.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -719,7 +720,8 @@ class _AvailableServicesCarouselState extends State<_AvailableServicesCarousel> 
           ],
         ),
         const SizedBox(height: 12),
-        StreamBuilder<List<ServiceListing>>(
+        DataStreamBuilder<List<ServiceListing>>(
+ label: 'services', onRetry: () => FirestoreService().retryDataLoads(),
           stream: widget.firestore.activeServicesStream(),
           builder: (context, serviceSnap) {
             if (isStreamWaiting(serviceSnap)) {
@@ -737,10 +739,12 @@ class _AvailableServicesCarouselState extends State<_AvailableServicesCarousel> 
             }
             final services = serviceSnap.data ?? [];
 
-            return StreamBuilder<List<ServiceProviderProfile>>(
+            return DataStreamBuilder<List<ServiceProviderProfile>>(
+ label: 'providers', onRetry: () => FirestoreService().retryDataLoads(),
               stream: widget.firestore.serviceProvidersStream(),
               builder: (context, providerSnap) {
-                return StreamBuilder<List<AppUser>>(
+                return DataStreamBuilder<List<AppUser>>(
+ label: 'profiles', onRetry: () => FirestoreService().retryDataLoads(),
                   stream: widget.firestore.allUsersStream(),
                   builder: (context, userSnap) {
                     final profiles = providerSnap.data ?? [];
@@ -1005,7 +1009,8 @@ class _CarouselRatingLabel extends StatelessWidget {
     }
 
     final firestore = FirestoreService();
-    return StreamBuilder<List<ServiceListing>>(
+    return DataStreamBuilder<List<ServiceListing>>(
+ label: 'services', onRetry: () => FirestoreService().retryDataLoads(),
       stream: firestore.servicesForProvider(listing.providerId),
       builder: (context, servicesSnap) {
         final serviceIds = serviceIdsMatchingListing(
@@ -1218,7 +1223,8 @@ class _NearbyProvidersCard extends StatelessWidget {
               style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray500),
             ),
             const SizedBox(height: 20),
-            StreamBuilder<List<ServiceProviderProfile>>(
+            DataStreamBuilder<List<ServiceProviderProfile>>(
+ label: 'providers', onRetry: () => FirestoreService().retryDataLoads(),
               stream: firestore.serviceProvidersStream(),
               builder: (context, providerSnap) {
                 if (isStreamWaiting(providerSnap)) {
@@ -1227,10 +1233,12 @@ class _NearbyProvidersCard extends StatelessWidget {
                     child: LoadingIndicator(message: 'Loading providers…'),
                   );
                 }
-                return StreamBuilder<List<AppUser>>(
+                return DataStreamBuilder<List<AppUser>>(
+ label: 'profiles', onRetry: () => FirestoreService().retryDataLoads(),
                   stream: firestore.allUsersStream(),
                   builder: (context, userSnap) {
-                    return StreamBuilder<List<Booking>>(
+                    return DataStreamBuilder<List<Booking>>(
+ label: 'bookings', onRetry: () => FirestoreService().retryDataLoads(),
                       stream: firestore.bookingsForUser(appUser.userId, asCustomer: true),
                       builder: (context, bookingSnap) {
                         final Map<String, AppUser> users = {

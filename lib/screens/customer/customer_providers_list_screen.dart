@@ -1,3 +1,4 @@
+import '../../widgets/data_stream_builder.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -63,13 +64,15 @@ class _CustomerProvidersListScreenState extends State<CustomerProvidersListScree
                 onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
               ),
               const SizedBox(height: 24),
-              StreamBuilder<List<ServiceProviderProfile>>(
+              DataStreamBuilder<List<ServiceProviderProfile>>(
+ label: 'providers', onRetry: () => FirestoreService().retryDataLoads(),
                 stream: firestore.serviceProvidersStream(),
                 builder: (context, providerSnap) {
                   if (providerSnap.connectionState == ConnectionState.waiting) {
                     return const LoadingIndicator(message: 'Loading providers…');
                   }
-                  return StreamBuilder<List<AppUser>>(
+                  return DataStreamBuilder<List<AppUser>>(
+ label: 'profiles', onRetry: () => FirestoreService().retryDataLoads(),
                     stream: firestore.allUsersStream(),
                     builder: (context, userSnap) {
                       final users = {

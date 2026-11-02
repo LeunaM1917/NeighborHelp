@@ -22,6 +22,7 @@ import '../models/user_role.dart';
 import '../constants/functions_config.dart';
 import '../utils/message_thread.dart';
 import '../utils/service_certification_policy.dart';
+import '../utils/session_data_cache.dart';
 
 /// Shared Firestore access for the app session.
 ///
@@ -42,7 +43,20 @@ class FirestoreService {
   }
 
   final FirebaseFirestore _db;
-  final Map<String, _ReplayStream<dynamic>> _streams = {};
+  final Map<String, ReplayDataStream<dynamic>> _streams = {};
+  final _reads = SessionFutureCache();
+  String _sessionKey(String key) => '${FirebaseAuth.instance.currentUser?.uid ?? 'guest'}:$key';
+
+  Future<T> _read<T>(String key, Future<T> Function() load) =>
+      _reads.get(_sessionKey(key), load);
+
+  /// Retry in place: mounted pages keep their stream and last loaded content.
+  Future<void> retryDataLoads() async {
+    _reads.clear();
+    final prefix = _sessionKey('');
+    await Future.wait(_streams.entries.where((e) => e.key.startsWith(prefix))
+        .map((e) => e.value.retry()));
+  }
 
   /// Memoized stream that **replays the latest event** to every new listener.
   ///
@@ -53,16 +67,17 @@ class FirestoreService {
   /// [_ReplayStream] hands every new subscriber the cached latest value (or
   /// error) immediately, then forwards live updates.
   Stream<T> _cache<T>(String key, Stream<T> Function() create) {
-    key = '${FirebaseAuth.instance.currentUser?.uid ?? 'guest'}:$key';
+    key = _sessionKey(key);
     final existing = _streams[key];
-    if (existing != null) return (existing as _ReplayStream<T>).stream;
+    if (existing != null) return (existing as ReplayDataStream<T>).stream;
 
-    final replay = _ReplayStream<T>(create());
+    final replay = ReplayDataStream<T>(create);
     _streams[key] = replay;
     return replay.stream;
   }
 
   Future<void> clearSession() async {
+    _reads.clear();
     final entries = _streams.values.toList();
     _streams.clear();
     await Future.wait(entries.map((entry) => entry.dispose()));
@@ -72,11 +87,11 @@ class FirestoreService {
     return _db.collection(FirestoreCollections.users).doc(userId);
   }
 
-  Future<bool> _isAdministrator() async {
+  Future<bool> _isAdministrator() => _read('isAdministrator', () async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return false;
     return (await userDoc(uid).get()).data()?['role'] == 'Administrator';
-  }
+  });
 
   AppUser _publicUser(String id, Map<String, dynamic> row) {
     final data = Map<String, dynamic>.from(row);
@@ -86,7 +101,44 @@ class FirestoreService {
     return AppUser.fromFirestore(id, data);
   }
 
-  Future<List<AppUser>> _publicDirectory({String? userId}) async {
+  /// Existing public projections can render even if the bootstrap callable is
+  /// temporarily unavailable. Never report a failed bootstrap as an empty list.
+  Stream<List<T>> _publicRecords<T>({required Query<Map<String, dynamic>> query,
+    required Future<List<T>> Function() bootstrap,
+    required T Function(String, Map<String, dynamic>) parse,
+    required String Function(T) id}) => Stream<List<T>>.multi((controller) {
+    final records = <String, T>{};
+    final removed = <String>{};
+    var ready = false;
+    var cancelled = false;
+    final sub = query.snapshots().listen((snapshot) {
+      if (cancelled) return;
+      for (final change in snapshot.docChanges) {
+        if (change.type == DocumentChangeType.removed) {
+          records.remove(change.doc.id);
+          removed.add(change.doc.id);
+        } else {
+          removed.remove(change.doc.id);
+          records[change.doc.id] = parse(change.doc.id, change.doc.data()!);
+        }
+      }
+      if (records.isNotEmpty || ready) controller.add(records.values.toList());
+    }, onError: controller.addError);
+    unawaited(bootstrap().then((initial) {
+      if (cancelled) return;
+      for (final record in initial) {
+        if (!removed.contains(id(record))) records.putIfAbsent(id(record), () => record);
+      }
+      ready = true;
+      controller.add(records.values.toList());
+    }, onError: (Object error, StackTrace stack) {
+      if (cancelled) return;
+      if (records.isEmpty) controller.addError(error, stack);
+    }));
+    controller.onCancel = () { cancelled = true; return sub.cancel(); };
+  });
+
+  Future<List<AppUser>> _publicDirectory({String? userId}) => _read('directory:${userId ?? 'all'}', () async {
     final result = <AppUser>[];
     String? after;
     do {
@@ -100,16 +152,16 @@ class FirestoreService {
       after = data['after'] as String?;
     } while (after != null);
     return result;
-  }
+  });
 
   Stream<AppUser?> userStream(String userId) => _cache('user:$userId', () async* {
     if (FirebaseAuth.instance.currentUser?.uid == userId || await _isAdministrator()) {
       yield* userDoc(userId).snapshots().map((d) => d.exists ? AppUser.fromFirestore(d.id, d.data()!) : null);
     } else {
-      final initial = await _publicDirectory(userId: userId);
-      yield initial.firstOrNull;
-      yield* _db.collection('publicProfiles').doc(userId).snapshots().map((d) =>
-          d.exists ? _publicUser(d.id, d.data()!) : initial.firstOrNull);
+      yield* _publicRecords<AppUser>(
+        query: _db.collection('publicProfiles').where(FieldPath.documentId, isEqualTo: userId),
+        bootstrap: () => _publicDirectory(userId: userId), parse: _publicUser,
+        id: (u) => u.userId).map((users) => users.firstOrNull);
     }
   });
 
@@ -132,7 +184,7 @@ class FirestoreService {
     return ServiceProviderProfile.fromFirestore(data['providerId'] as String, data);
   }
 
-  Future<List<ServiceProviderProfile>> _publicProviders({String? userId}) async {
+  Future<List<ServiceProviderProfile>> _publicProviders({String? userId}) => _read('publicProviders:${userId ?? 'all'}', () async {
     final result = <ServiceProviderProfile>[];
     String? after;
     do {
@@ -142,18 +194,15 @@ class FirestoreService {
       after = data['after'] as String?;
     } while (after != null);
     return result;
-  }
+  });
 
   Stream<List<ServiceProviderProfile>> serviceProvidersStream() => _cache('serviceProviders', () async* {
     if (await _isAdministrator()) {
       yield* _db.collection(FirestoreCollections.serviceProviders).snapshots().map((s) => s.docs.map((d) => ServiceProviderProfile.fromFirestore(d.id, d.data())).toList());
     } else {
-      final profiles = {for (final p in await _publicProviders()) p.providerId: p};
-      yield profiles.values.toList();
-      yield* _db.collection('publicProviders').snapshots().map((s) {
-        for (final c in s.docChanges) { if (c.type == DocumentChangeType.removed) { profiles.remove(c.doc.id); } else { profiles[c.doc.id] = _publicProvider(c.doc.data()!); } }
-        return profiles.values.toList();
-      });
+      yield* _publicRecords<ServiceProviderProfile>(query: _db.collection('publicProviders'),
+        bootstrap: () => _publicProviders(), parse: (_, row) => _publicProvider(row),
+        id: (p) => p.providerId);
     }
   });
 
@@ -264,34 +313,20 @@ class FirestoreService {
     return list;
   }
 
-  /// Emits [seed] immediately so [StreamBuilder] leaves `waiting` without waiting
-  /// for Firestore, then forwards [source].
-  Stream<T> _withSeed<T>(T seed, Stream<T> source) {
-    return Stream.multi((controller) {
-      controller.add(seed);
-      final sub = source.listen(
-        controller.add,
-        onError: controller.addError,
-        onDone: controller.close,
-        cancelOnError: false,
-      );
-      controller.onCancel = sub.cancel;
-    });
-  }
-
   Stream<ServiceProviderProfile?> providerProfileForUser(String userId) => _cache('providerProfileForUser:$userId', () async* {
     if (FirebaseAuth.instance.currentUser?.uid == userId || await _isAdministrator()) {
       yield* _db.collection(FirestoreCollections.serviceProviders).doc(userId).snapshots().map((d) => d.exists ? ServiceProviderProfile.fromFirestore(d.id, d.data()!) : null);
     } else {
-      final initial = await _publicProviders(userId: userId);
-      yield initial.firstOrNull;
-      yield* _db.collection('publicProviders').doc(userId).snapshots().map((d) => d.exists ? _publicProvider(d.data()!) : initial.firstOrNull);
+      yield* _publicRecords<ServiceProviderProfile>(
+        query: _db.collection('publicProviders').where(FieldPath.documentId, isEqualTo: userId),
+        bootstrap: () => _publicProviders(userId: userId), parse: (_, row) => _publicProvider(row),
+        id: (p) => p.providerId).map((profiles) => profiles.firstOrNull);
     }
   });
 
   Stream<List<Booking>> bookingsForProviderUser(String userId) {
     return _cache('bookingsForProviderUser:$userId', () {
-      return _withSeed<List<Booking>>(const [], _providerBookingsStream(userId));
+      return _providerBookingsStream(userId);
     });
   }
 
@@ -349,7 +384,7 @@ class FirestoreService {
   /// Services owned by this provider account (auth uid and provider document id).
   Stream<List<ServiceListing>> servicesForProviderUser(String userId) {
     return _cache('servicesForProviderUser:$userId', () {
-      return _withSeed<List<ServiceListing>>(const [], _providerServicesStream(userId));
+      return _providerServicesStream(userId);
     });
   }
 
@@ -402,15 +437,17 @@ class FirestoreService {
     });
   }
 
-  Future<ServiceListing?> getService(String serviceId) async {
-    final snap = await _db.collection(FirestoreCollections.services).doc(serviceId).get();
-    if (!snap.exists || snap.data() == null) return null;
-    return ServiceListing.fromFirestore(snap.id, snap.data()!);
-  }
+  Stream<ServiceListing?> serviceStream(String serviceId) => _cache('service:$serviceId', () =>
+      _db.collection(FirestoreCollections.services).doc(serviceId).snapshots().map((snap) =>
+          snap.exists && snap.data() != null ? ServiceListing.fromFirestore(snap.id, snap.data()!) : null));
+
+  Future<ServiceListing?> getService(String serviceId) =>
+      _read('service:$serviceId', () => serviceStream(serviceId).first);
 
   /// Service titles keyed by listing id (for review job labels on profiles).
-  Future<Map<String, String>> serviceTitlesByIds(Iterable<String> serviceIds) async {
-    final unique = serviceIds.map((id) => id.trim()).where((id) => id.isNotEmpty).toSet();
+  Future<Map<String, String>> serviceTitlesByIds(Iterable<String> serviceIds) {
+    final unique = serviceIds.map((id) => id.trim()).where((id) => id.isNotEmpty).toSet().toList()..sort();
+    return _read('serviceTitles:${unique.join(',')}', () async {
     if (unique.isEmpty) return const {};
     final out = <String, String>{};
     await Future.wait(
@@ -421,9 +458,11 @@ class FirestoreService {
       }),
     );
     return out;
+    });
   }
 
-  Future<ServiceProviderProfile?> getProviderProfile(String userId) async => providerProfileForUser(userId).first;
+  Future<ServiceProviderProfile?> getProviderProfile(String userId) =>
+      _read('provider:$userId', () => providerProfileForUser(userId).first);
 
   Future<String> createServiceListing({
     required String providerId,
@@ -564,10 +603,10 @@ class FirestoreService {
       _bookingCommand(approve ? 'approveReschedule' : 'rejectReschedule', bookingId);
 
   Stream<ServiceContract?> contractStream(String contractId) {
-    return _db.collection(FirestoreCollections.contracts).doc(contractId).snapshots().map((snap) {
+    return _cache('contract:$contractId', () => _db.collection(FirestoreCollections.contracts).doc(contractId).snapshots().map((snap) {
       if (!snap.exists || snap.data() == null) return null;
       return ServiceContract.fromFirestore(snap.id, snap.data()!);
-    });
+    }));
   }
 
   Future<ServiceContract?> getContract(String contractId) async {
@@ -577,9 +616,11 @@ class FirestoreService {
   }
 
   Stream<List<Booking>> bookingsForContract(String contractId) {
-    return _db
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    return _cache('contractBookings:$contractId', () => _db
         .collection(FirestoreCollections.bookings)
-        .where('contractId', isEqualTo: contractId)
+        .where(Filter.and(Filter('contractId', isEqualTo: contractId),
+          Filter.or(Filter('customerId', isEqualTo: uid), Filter('providerId', isEqualTo: uid))))
         .snapshots()
         .map((s) {
       final list = s.docs.map((d) => Booking.fromFirestore(d.id, d.data())).toList();
@@ -589,7 +630,7 @@ class FirestoreService {
         return ma.compareTo(mb);
       });
       return list;
-    });
+    }));
   }
 
   Future<void> endContract({
@@ -809,14 +850,11 @@ class FirestoreService {
   Stream<List<Booking>> bookingsForUser(String userId, {bool asCustomer = true}) {
     final field = asCustomer ? 'customerId' : 'providerId';
     return _cache('bookings:$field:$userId', () {
-      return _withSeed(
-        const <Booking>[],
-        _db.collection(FirestoreCollections.bookings).where(field, isEqualTo: userId).snapshots().map((s) {
+      return _db.collection(FirestoreCollections.bookings).where(field, isEqualTo: userId).snapshots().map((s) {
           final list = s.docs.map((d) => Booking.fromFirestore(d.id, d.data())).toList();
           list.sort((a, b) => b.scheduledDate.compareTo(a.scheduledDate));
           return list;
-        }),
-      );
+        });
     });
   }
 
@@ -839,7 +877,10 @@ class FirestoreService {
     return _cache('messages:$bookingId', () {
       return _db
           .collection(FirestoreCollections.messages)
-          .where('bookingId', isEqualTo: bookingId)
+          .where(Filter.and(Filter('bookingId', isEqualTo: bookingId), Filter.or(
+            Filter('senderId', isEqualTo: FirebaseAuth.instance.currentUser?.uid),
+            Filter('receiverId', isEqualTo: FirebaseAuth.instance.currentUser?.uid),
+          )))
           .snapshots()
           .map(_mapAndSortMessages);
     });
@@ -852,11 +893,14 @@ class FirestoreService {
     required List<String> bookingIds,
   }) {
     final threadId = messageThreadId(customerId, providerId);
-    final idsKey = bookingIds.isEmpty ? 'none' : bookingIds.join(',');
+    final sortedIds = bookingIds.toSet().toList()..sort();
+    final idsKey = sortedIds.isEmpty ? 'none' : sortedIds.join(',');
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final participantFilter = Filter.or(Filter('senderId', isEqualTo: uid), Filter('receiverId', isEqualTo: uid));
     return _cache('messagesThread:$threadId:$idsKey', () {
       final threadStream = _db
           .collection(FirestoreCollections.messages)
-          .where('threadId', isEqualTo: threadId)
+          .where(Filter.and(Filter('threadId', isEqualTo: threadId), participantFilter))
           .snapshots();
 
       if (bookingIds.isEmpty) {
@@ -870,7 +914,7 @@ class FirestoreService {
         legacyStreams.add(
           _db
               .collection(FirestoreCollections.messages)
-              .where('bookingId', whereIn: chunk)
+              .where(Filter.and(Filter('bookingId', whereIn: chunk), participantFilter))
               .snapshots(),
         );
       }
@@ -940,15 +984,8 @@ class FirestoreService {
     return snapshot.count ?? 0;
   }
 
-  Future<List<Review>> reviewsForProvider(String providerId) async {
-    final snap = await _db
-        .collection(FirestoreCollections.reviews)
-        .where('providerId', isEqualTo: providerId)
-        .limit(100)
-        .get();
-    final list = snap.docs.map((d) => Review.fromFirestore(d.id, d.data())).toList();
-    return list.where((r) => r.isCustomerReview).toList();
-  }
+  Future<List<Review>> reviewsForProvider(String providerId) =>
+      _read('reviewsProvider:$providerId', () => reviewsForProviderStream(providerId).first);
 
   /// Feedback from providers about this customer (for provider due diligence).
   Future<List<Review>> reviewsForCustomer(String customerId) async {
@@ -1254,15 +1291,8 @@ class FirestoreService {
         s.docs.map((d) => AppUser.fromFirestore(d.id, d.data())).toList()
           ..sort((a, b) => b.createdAt.compareTo(a.createdAt)));
     } else {
-      final profiles = {for (final u in await _publicDirectory()) u.userId: u};
-      yield profiles.values.toList();
-      yield* _db.collection('publicProfiles').snapshots().map((s) {
-        for (final change in s.docChanges) {
-          if (change.type == DocumentChangeType.removed) { profiles.remove(change.doc.id); }
-          else { profiles[change.doc.id] = _publicUser(change.doc.id, change.doc.data()!); }
-        }
-        return profiles.values.toList();
-      });
+      yield* _publicRecords<AppUser>(query: _db.collection('publicProfiles'),
+        bootstrap: () => _publicDirectory(), parse: _publicUser, id: (u) => u.userId);
     }
   });
 
@@ -1467,64 +1497,6 @@ class FirestoreService {
     });
   }
 
-  Future<AppUser?> getUser(String userId) async => userStream(userId).first;
+  Future<AppUser?> getUser(String userId) => _read('user:$userId', () => userStream(userId).first);
 
-}
-
-/// Subscribes once to [source] and replays the latest value (or error) to every
-/// new listener, then forwards live events. Unlike a broadcast controller this
-/// works no matter how many listeners are already attached, so opening a chat
-/// while a preview is still subscribed no longer hangs on "Loading…".
-class _ReplayStream<T> {
-  _ReplayStream(Stream<T> source) {
-    _subscription = source.listen(
-      (event) {
-        _hasValue = true;
-        _hasError = false;
-        _latest = event;
-        if (!_controller.isClosed) _controller.add(event);
-      },
-      onError: (Object error, StackTrace stack) {
-        _hasError = true;
-        _hasValue = false;
-        _error = error;
-        _stack = stack;
-        if (!_controller.isClosed) _controller.addError(error, stack);
-      },
-      onDone: () {
-        if (!_controller.isClosed) _controller.close();
-      },
-    );
-  }
-
-  late final StreamSubscription<T> _subscription;
-  Future<void> dispose() async { await _subscription.cancel(); await _controller.close(); _latest = null; }
-
-  final StreamController<T> _controller = StreamController<T>.broadcast();
-  bool _hasValue = false;
-  bool _hasError = false;
-  T? _latest;
-  Object? _error;
-  StackTrace? _stack;
-
-  Stream<T> get stream {
-    return Stream<T>.multi((listener) {
-      // Forward live events first so nothing emitted between the replay and the
-      // subscription can slip through unobserved.
-      final sub = _controller.stream.listen(
-        listener.add,
-        onError: listener.addError,
-        onDone: listener.close,
-      );
-      listener.onCancel = sub.cancel;
-
-      // A closed broadcast controller fires onDone to new listeners on its own,
-      // so we only need to replay the cached value/error here.
-      if (_hasError && _error != null) {
-        listener.addError(_error!, _stack ?? StackTrace.current);
-      } else if (_hasValue) {
-        listener.add(_latest as T);
-      }
-    });
-  }
 }

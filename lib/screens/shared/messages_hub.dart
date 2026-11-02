@@ -17,6 +17,7 @@ import '../../theme/role_theme.dart';
 import '../../ui/app_ui_kit.dart';
 import '../../widgets/loading_indicator.dart';
 import '../../widgets/stream_snapshot.dart';
+import '../../widgets/data_stream_builder.dart';
 import '../customer/customer_booking_detail_screen.dart';
 import '../provider/provider_booking_detail_screen.dart';
 import '../provider/provider_booking_request_review.dart';
@@ -118,16 +119,30 @@ class _MessagesHubState extends State<MessagesHub> {
   Future<void> _selectConversation(MessageConversationThread thread) async {
     final firestore = FirestoreService();
     final booking = thread.primaryBooking;
-    final other = await firestore.getUser(thread.otherUserId);
-    final service = await firestore.getService(booking.serviceId);
-    if (!mounted) return;
     setState(() {
       _selectedThread = thread;
       _selected = booking;
-      _otherUser = other;
-      _service = service;
+      _otherUser = null;
+      _service = null;
       _chatFilter = '';
     });
+    try {
+      final values = await Future.wait<Object?>([
+        firestore.getUser(thread.otherUserId), firestore.getService(booking.serviceId),
+      ]);
+      if (!mounted || _selectedThread?.threadId != thread.threadId) return;
+      setState(() { _otherUser = values[0] as AppUser?; _service = values[1] as ServiceListing?; });
+    } catch (_) {
+      // Booking participants can still chat when optional profile details fail.
+      if (!mounted || _selectedThread?.threadId != thread.threadId) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Text('Conversation opened. Some profile details could not load.'),
+        action: SnackBarAction(label: 'Retry', onPressed: () async {
+          await firestore.retryDataLoads();
+          if (mounted) _selectConversation(thread);
+        }),
+      ));
+    }
   }
 
   void _clearSelection() => setState(() {
@@ -152,7 +167,8 @@ class _MessagesHubState extends State<MessagesHub> {
               ),
               child: _MessagesFramedCard(
                 height: constraints.maxHeight - 40,
-                child: StreamBuilder<List<Booking>>(
+                child: DataStreamBuilder<List<Booking>>(
+                  label: 'conversations', onRetry: () => firestore.retryDataLoads(),
                   stream: firestore.bookingsForUser(widget.appUser.userId, asCustomer: widget.asCustomer),
                   builder: (context, snap) {
           if (isStreamWaiting(snap)) {
@@ -856,7 +872,8 @@ class _ChatPaneState extends State<_ChatPane> {
           ),
         ),
         Expanded(
-          child: StreamBuilder<List<ChatMessage>>(
+          child: DataStreamBuilder<List<ChatMessage>>(
+            label: 'messages', onRetry: () => FirestoreService().retryDataLoads(),
             stream: _messagesStream,
             builder: (context, snap) {
               if (snap.hasError) {
@@ -1418,14 +1435,15 @@ class _MessagesConversationPageState extends State<_MessagesConversationPage> {
   Future<void> _load() async {
     final firestore = FirestoreService();
     final otherId = widget.asCustomer ? widget.booking.providerId : widget.booking.customerId;
-    final other = await firestore.getUser(otherId);
-    final service = await firestore.getService(widget.booking.serviceId);
-    if (!mounted) return;
-    setState(() {
-      _otherUser = other;
-      _service = service;
-      _loading = false;
-    });
+    try {
+      final values = await Future.wait<Object?>([firestore.getUser(otherId), firestore.getService(widget.booking.serviceId)]);
+      if (!mounted) return;
+      setState(() { _otherUser = values[0] as AppUser?; _service = values[1] as ServiceListing?; });
+    } catch (_) {
+      // Optional metadata must not prevent the participant from opening chat.
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   Widget _buildFramedBody(BuildContext context) {

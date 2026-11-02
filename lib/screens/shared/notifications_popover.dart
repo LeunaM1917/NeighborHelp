@@ -9,6 +9,8 @@ import '../../models/app_user.dart';
 import '../../models/notification.dart' as n;
 import '../../services/firestore_service.dart';
 import '../../widgets/stream_snapshot.dart';
+import '../../widgets/managed_scrollbar.dart';
+import '../../widgets/data_stream_builder.dart';
 
 /// Notification dropdown (web) or bottom sheet (mobile / compact).
 class NotificationsPopover {
@@ -142,7 +144,8 @@ class _NotificationDropdown extends StatelessWidget {
             : BorderRadius.circular(10),
         child: Stack(
           children: [
-            StreamBuilder<List<n.AppNotification>>(
+            DataStreamBuilder<List<n.AppNotification>>(
+              label: 'notifications', onRetry: () => firestore.retryDataLoads(),
               stream: firestore.notificationsForUser(appUser.userId),
               builder: (context, snap) {
                 if (isStreamWaiting(snap)) {
@@ -157,8 +160,8 @@ class _NotificationDropdown extends StatelessWidget {
                 if (items.isEmpty) {
                   return _NotificationsEmptyState(compact: !useCardLayout);
                 }
-                final list = ListView.separated(
-                  controller: scrollController,
+                Widget buildList(ScrollController? controller) => ListView.separated(
+                  controller: controller,
                   shrinkWrap: scrollController == null,
                   padding: EdgeInsets.fromLTRB(
                     useCardLayout ? 16 : 0,
@@ -185,14 +188,14 @@ class _NotificationDropdown extends StatelessWidget {
                 );
 
                 if (scrollController != null) {
-                  return list;
+                  return buildList(scrollController);
                 }
 
                 return ConstrainedBox(
                   constraints: BoxConstraints(maxHeight: maxHeight),
-                  child: Scrollbar(
+                  child: ManagedScrollbar(
                     thumbVisibility: items.length > 5,
-                    child: list,
+                    builder: buildList,
                   ),
                 );
               },

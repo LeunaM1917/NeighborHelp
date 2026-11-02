@@ -88,12 +88,12 @@ service cloud.firestore {
     }
     // Only validated server commands may change booking money, participants or status.
     match /bookings/{id} {
-      allow read: if isAdmin() || (activeUser() && request.auth.uid in [resource.data.customerId, resource.data.providerId]);
+      allow read: if isAdmin() || (activeUser() && (resource.data.customerId == request.auth.uid || resource.data.providerId == request.auth.uid));
       allow write: if false;
     }
     match /providerSchedules/{id} { allow read, write: if false; }
     match /contracts/{id} {
-      allow read: if isAdmin() || (activeUser() && request.auth.uid in [resource.data.customerId, resource.data.providerId]);
+      allow read: if isAdmin() || (activeUser() && (resource.data.customerId == request.auth.uid || resource.data.providerId == request.auth.uid));
       allow create, delete: if false;
       allow update: if activeUser() && request.auth.uid in [resource.data.customerId, resource.data.providerId]
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'endedAt', 'endedByUserId', 'endedByRole', 'updatedAt'])
@@ -112,7 +112,7 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /messages/{id} {
-      allow read: if activeUser() && request.auth.uid in [resource.data.senderId, resource.data.receiverId];
+      allow read: if activeUser() && (resource.data.senderId == request.auth.uid || resource.data.receiverId == request.auth.uid);
       allow create: if participant(request.resource.data.bookingId)
         && request.resource.data.senderId == request.auth.uid
         && request.resource.data.receiverId in [get(bookingPath(request.resource.data.bookingId)).data.customerId, get(bookingPath(request.resource.data.bookingId)).data.providerId]

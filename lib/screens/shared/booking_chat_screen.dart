@@ -13,6 +13,7 @@ import '../../theme/role_theme.dart';
 import '../../ui/app_ui_kit.dart';
 import '../../widgets/loading_indicator.dart';
 import '../../widgets/stream_snapshot.dart';
+import '../../widgets/data_stream_builder.dart';
 
 class BookingChatScreen extends StatefulWidget {
   const BookingChatScreen({
@@ -89,7 +90,8 @@ class _BookingChatScreenState extends State<BookingChatScreen> {
               ),
             ),
             Expanded(
-              child: StreamBuilder<List<ChatMessage>>(
+              child: DataStreamBuilder<List<ChatMessage>>(
+                label: 'messages', onRetry: () => firestore.retryDataLoads(),
                 stream: firestore.messagesForConversationThread(
                   customerId: widget.booking.customerId,
                   providerId: widget.booking.providerId,

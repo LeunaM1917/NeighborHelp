@@ -7,5 +7,5 @@ import 'package:flutter/material.dart';
 /// leave spinners stuck.
 bool isStreamWaiting<T>(AsyncSnapshot<T> snap) {
   if (snap.hasError) return false;
-  return snap.connectionState == ConnectionState.waiting;
+  return snap.connectionState == ConnectionState.waiting && !snap.hasData;
 }

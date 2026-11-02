@@ -5,6 +5,7 @@ import '../../figma_ui/figma_colors.dart';
 import '../../theme/mobile_layout.dart';
 import '../../widgets/anchored_popover_geometry.dart';
 import '../../theme/role_theme.dart';
+import '../../widgets/managed_scrollbar.dart';
 
 /// Help dropdown anchored under the top-bar help icon (same pattern as notifications).
 class HelpSupportPopover {
@@ -227,9 +228,10 @@ class _HelpDropdown extends StatelessWidget {
                   )
                 else
                   Flexible(
-                    child: Scrollbar(
+                    child: ManagedScrollbar(
                       thumbVisibility: _topics.length > 3,
-                      child: ListView.separated(
+                      builder: (controller) => ListView.separated(
+                        controller: controller,
                         shrinkWrap: true,
                         padding: const EdgeInsets.only(bottom: 8),
                         itemCount: _topics.length,

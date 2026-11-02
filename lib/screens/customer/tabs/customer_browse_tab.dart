@@ -1,3 +1,4 @@
+import '../../../widgets/data_stream_builder.dart';
 import '../../../utils/service_search.dart';
 import '../../../services/provider_recommendation_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -238,7 +239,8 @@ class _CustomerBrowseTabState extends State<CustomerBrowseTab> {
                       onApply: _applyFilters,
                     ),
                     const SizedBox(height: 32),
-                    StreamBuilder<List<ServiceListing>>(
+                    DataStreamBuilder<List<ServiceListing>>(
+ label: 'services', onRetry: () => FirestoreService().retryDataLoads(),
                       stream: firestore.activeServicesStream(),
                       builder: (context, serviceSnap) {
                         if (isStreamWaiting(serviceSnap)) {
@@ -255,10 +257,12 @@ class _CustomerBrowseTabState extends State<CustomerBrowseTab> {
                           );
                         }
 
-                        return StreamBuilder<List<ServiceProviderProfile>>(
+                        return DataStreamBuilder<List<ServiceProviderProfile>>(
+ label: 'providers', onRetry: () => FirestoreService().retryDataLoads(),
                           stream: firestore.serviceProvidersStream(),
                           builder: (context, providerSnap) {
-                            return StreamBuilder<List<AppUser>>(
+                            return DataStreamBuilder<List<AppUser>>(
+ label: 'profiles', onRetry: () => FirestoreService().retryDataLoads(),
                               stream: firestore.allUsersStream(),
                               builder: (context, userSnap) {
                                 final Map<String, AppUser> users = {
