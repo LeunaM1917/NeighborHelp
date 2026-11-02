@@ -3,7 +3,21 @@
 Work branch: `codex/capstone-nine-gaps`.
 Starting commit: `49c33b64a904f3e4851d48fddcc2c75320865bde` on `ui/shared-web-sidebar`.
 
-These changes implement the nine gaps identified against the supplied capstone document. They have not been deployed, and no production records have been migrated or deleted. Changes remain uncommitted in accordance with the repository instructions.
+These changes implement the nine gaps identified against the supplied capstone document. The initial implementation was committed by the project owner as `fe43fef`. Follow-up repairs are on the same branch; no commits were created by the agent. On November 3, 2026, all 24 backend functions and the matching Firestore/Storage rules and Firestore indexes were deployed to `neighborhelp-63771`; all 12 indexes were verified READY. The updated web client was built locally; Firebase Hosting was not updated. The project owner will deploy hosting after local acceptance testing. No production records were manually migrated, approved or deleted.
+
+## Customer loading and messaging repair
+
+The client had been released locally before its new backend endpoints were deployed. `getPublicProviders`, `getPublicDirectory` and `bookingCommand` returned 404. These endpoints, session/device registration and geocoding now respond with the callable protocol and reject unauthenticated requests. The existing Didit, Maps and sentiment settings on previously deployed functions were verified as preserved.
+
+The supplied August rules were compared with the current rules. Booking, contract and message reads again use explicit participant comparisons that Firestore can prove for list queries. Chat queries also constrain sender/receiver inside a single composite AND/OR filter, including legacy booking-based messages. Current protections for private profiles, privileged roles, account restrictions, immutable message content, server-owned booking/review writes and certificate approval remain in place. Query-level emulator tests cover both participants and denied access by strangers/suspended users.
+
+Session streams now keep a stable identity, replay saved data on the first frame of a reopened page and can retry without recreating mounted pages. Account-scoped future reads are coalesced and briefly cached; failures are evicted. Directory bootstrap failures no longer prevent already available public projections from rendering. Home, Browse, provider discovery, bookings, requests and chat show recoverable errors rather than presenting failed loads as empty data. Customer booking/request detail hydration reuses one future per booking set and no longer calls `setState` from a build-time load. Session caches are cleared at sign-out.
+
+Chat opens from its booking even if optional profile/service details fail. Help and notification popup scrollbars now own the same controller as their lists, fixing the reported `scrollbar.dart:1466` assertion.
+
+A read-only compatibility check found two active legacy service records without `approvalStatus`. The client now presents missing or invalid approval values as Pending, matching the backend's explicit approval requirement. These records need administrator review; they were not automatically approved. One other approved technical listing lacks a matching approved certificate, so it remains excluded until its evidence is reviewed. Two active service listings currently satisfy the backend eligibility checks.
+
+Follow-up verification: 97 Flutter tests, 27 Firestore/Storage emulator tests and 5 backend domain tests passed; Dart analysis was clean. Web release and Android debug builds succeeded. Anonymous live probes verified the six new callable endpoints respond with `UNAUTHENTICATED` rather than 404. No messages were sent to production users and no signed-in browser walkthrough was performed.
 
 ## Implemented behavior
 
@@ -69,7 +83,7 @@ Use `--dart-define=FIREBASE_EMULATOR_HOST=10.0.2.2` for an Android emulator. Emu
 
 ## Deployment and live checks remaining
 
-Deploy only after reviewing the branch. This backend and the rules are a coordinated release: the client no longer writes booking mutations or reviews directly, and private records use public projections for display. Deploy the new callable endpoints and triggers before releasing the updated client and stricter rules; do not deploy stricter rules by themselves to an old client. Test this ordering in a staging project first. No deployment was performed during this work.
+The backend and rules were deployed during the customer loading/messaging repair described above. Future releases must remain coordinated: the client no longer writes booking mutations or reviews directly, and private records use public projections for display. Deploy callable endpoints and triggers before releasing an updated client and stricter rules; do not deploy stricter rules by themselves to an old client. Test future changes in a staging project first. Firebase Hosting was not redeployed during this repair.
 
 - Confirm the existing Didit workflow/key/webhook settings and test approval, rejection, resubmission and a superseded webhook.
 - Confirm the Maps server key has geocoding access, and that web/native maps render and the chosen pin is the actual service address.

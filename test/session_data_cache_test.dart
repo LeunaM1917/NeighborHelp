@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neighbor_help/utils/session_data_cache.dart';
+import 'package:neighbor_help/models/service_approval_status.dart';
 import 'package:neighbor_help/widgets/data_stream_builder.dart';
 import 'package:neighbor_help/widgets/managed_scrollbar.dart';
 import 'package:neighbor_help/screens/shared/help_support_popover.dart';
@@ -9,6 +10,26 @@ import 'support/ui_test_support.dart';
 
 void main() {
   setUpOfflineFonts();
+
+  test(
+    'legacy or invalid approval values require review rather than granting approval',
+    () {
+      for (final value in [null, '', 'unknown']) {
+        expect(
+          ServiceApprovalStatus.fromFirestore(value),
+          ServiceApprovalStatus.pending,
+        );
+      }
+      expect(
+        ServiceApprovalStatus.fromFirestore(' Approved '),
+        ServiceApprovalStatus.approved,
+      );
+      expect(
+        ServiceApprovalStatus.fromFirestore('Rejected'),
+        ServiceApprovalStatus.rejected,
+      );
+    },
+  );
 
   test(
     'one source serves multiple subscribers and replays to a reopened page',

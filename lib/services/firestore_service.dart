@@ -64,7 +64,7 @@ class FirestoreService {
   /// `onListen` callback only fires on the 0→1 listener transition. So a second
   /// [StreamBuilder] (e.g. opening a chat while the conversation list is still
   /// subscribed) would stay stuck on "Loading…" until the next Firestore write.
-  /// [_ReplayStream] hands every new subscriber the cached latest value (or
+  /// [ReplayDataStream] hands every new subscriber the cached latest value (or
   /// error) immediately, then forwards live updates.
   Stream<T> _cache<T>(String key, Stream<T> Function() create) {
     key = _sessionKey(key);

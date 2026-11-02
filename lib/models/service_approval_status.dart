@@ -9,10 +9,10 @@ enum ServiceApprovalStatus {
   final String firestoreValue;
 
   static ServiceApprovalStatus fromFirestore(String? value) {
-    if (value == null || value.isEmpty) return ServiceApprovalStatus.approved;
+    final normalized = value?.trim().toLowerCase();
     return ServiceApprovalStatus.values.firstWhere(
-      (e) => e.firestoreValue.toLowerCase() == value.toLowerCase(),
-      orElse: () => ServiceApprovalStatus.approved,
+      (e) => e.firestoreValue.toLowerCase() == normalized,
+      orElse: () => ServiceApprovalStatus.pending,
     );
   }
 
