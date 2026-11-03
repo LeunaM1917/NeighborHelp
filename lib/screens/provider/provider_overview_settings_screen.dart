@@ -1,3 +1,6 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../utils/geo_location.dart';
+import '../../widgets/profile_location_editor.dart';
 import '../../utils/image_upload.dart';
 import '../../widgets/profile_avatar.dart';
 import '../../widgets/enable_notifications_button.dart';
@@ -88,10 +91,12 @@ class _ProviderOverviewSettingsScreenState extends State<ProviderOverviewSetting
   String? _photoUrl;
   bool _saving = false;
   bool _uploadingPhoto = false;
+  GeoPoint? _mapLocation;
 
   @override
   void initState() {
     super.initState();
+    _mapLocation = geoPointOrNull(widget.profile.location);
     _photoUrl = widget.appUser.profilePhotoUrl;
     _name = TextEditingController(text: widget.appUser.fullName);
     _phone = TextEditingController(
@@ -176,6 +181,7 @@ class _ProviderOverviewSettingsScreenState extends State<ProviderOverviewSetting
           'fullName': _name.text.trim(),
           'contactNumber': _phone.text.trim().isEmpty ? null : _phone.text.trim(),
           'address': address.isEmpty ? null : address,
+          'location': _mapLocation,
         },
       );
       await FirestoreService().updateServiceProvider(
@@ -183,6 +189,7 @@ class _ProviderOverviewSettingsScreenState extends State<ProviderOverviewSetting
         data: {
           'bio': _bio.text.trim(),
           'serviceArea': address,
+          'location': _mapLocation,
           'serviceRadiusKm': _radiusKm,
           'profileTraits': traits,
         },
@@ -300,6 +307,10 @@ class _ProviderOverviewSettingsScreenState extends State<ProviderOverviewSetting
               decoration: _inputDecoration(context, prefixIcon: Icons.place_outlined),
             ),
           ),
+          const SizedBox(height: 18),
+          ProfileLocationEditor(address: _address, location: _mapLocation,
+            providerLocation: true,
+            onChanged: (point) => setState(() => _mapLocation = point)),
           const SizedBox(height: 18),
           _serviceRadiusField(rc),
           const SizedBox(height: 18),

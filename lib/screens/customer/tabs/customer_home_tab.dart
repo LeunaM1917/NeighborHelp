@@ -1,3 +1,6 @@
+import '../../../utils/customer_map_data.dart';
+import '../../../widgets/customer_service_card.dart';
+import '../../../widgets/profile_avatar.dart';
 import '../../../widgets/data_stream_builder.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -10,7 +13,7 @@ import '../../../theme/role_theme.dart';
 import '../../../figma_ui/figma_layout.dart';
 import '../../../theme/mobile_layout.dart';
 import '../../../figma_ui/widgets/figma_empty_state.dart';
-import '../../../figma_ui/widgets/figma_network_image.dart';
+import '../../../utils/geo_location.dart';
 import '../../../models/app_user.dart';
 import '../../../models/booking.dart';
 import '../../../models/provider.dart';
@@ -42,10 +45,6 @@ Set<String> _hiredProviderIdsFromBookings(List<Booking> bookings) {
     }
   }
   return ids;
-}
-
-bool _providerWasHired(ServiceProviderProfile profile, Set<String> hiredIds) {
-  return hiredIds.contains(profile.providerId) || hiredIds.contains(profile.userId);
 }
 
 class _CarouselServiceDisplay {
@@ -764,7 +763,7 @@ class _AvailableServicesCarouselState extends State<_AvailableServicesCarousel> 
                         const maxCardWidth = 400.0;
                         const minFillCardWidth = 180.0;
                         const nextReserve = 52.0;
-                        const listHeight = 332.0;
+                        final listHeight = CustomerServiceCard.heightFor(MediaQuery.textScalerOf(context));
                         final count = items.length;
 
                         if (count == 0) {
@@ -864,123 +863,14 @@ class _AvailableServicesCarouselState extends State<_AvailableServicesCarousel> 
   }
 }
 
-class _HomeServiceCarouselCard extends StatefulWidget {
-  const _HomeServiceCarouselCard({
-    required this.item,
-    required this.onTap,
-  });
-
+class _HomeServiceCarouselCard extends StatelessWidget {
+  const _HomeServiceCarouselCard({required this.item, required this.onTap});
   final _CarouselServiceDisplay item;
   final VoidCallback onTap;
-
   @override
-  State<_HomeServiceCarouselCard> createState() => _HomeServiceCarouselCardState();
-}
-
-class _HomeServiceCarouselCardState extends State<_HomeServiceCarouselCard> {
-  bool _hover = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final rc = context.roleColors;
-    final item = widget.item;
-    final avatarBg = item.providerAvatarColor ?? rc.tint;
-    final avatarInitial = item.providerInitial ??
-        (item.providerName.isNotEmpty ? item.providerName[0].toUpperCase() : '?');
-
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: Material(
-        color: FigmaColors.white,
-        borderRadius: BorderRadius.circular(12),
-        elevation: _hover ? 4 : 1,
-        shadowColor: Colors.black.withValues(alpha: 0.1),
-        child: InkWell(
-          onTap: widget.onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: _hover ? rc.primary : FigmaColors.gray200),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                  ClipRRect(
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
-                    child: SizedBox(
-                      height: 160,
-                      child: FigmaNetworkImage(url: item.imageUrl, fit: BoxFit.cover),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700, color: FigmaColors.gray900),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          item.category,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray500),
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            CircleAvatar(
-                              radius: 14,
-                              backgroundColor: avatarBg,
-                              backgroundImage: item.providerPhotoUrl != null ? NetworkImage(item.providerPhotoUrl!) : null,
-                              child: item.providerPhotoUrl == null
-                                  ? Text(
-                                      avatarInitial,
-                                      style: GoogleFonts.inter(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w700,
-                                        color: item.providerAvatarColor != null ? FigmaColors.white : rc.primary,
-                                      ),
-                                    )
-                                  : null,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                item.providerName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500, color: FigmaColors.gray800),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Expanded(child: _CarouselRatingLabel(item: item)),
-                            Text(
-                              '₱${item.price.toStringAsFixed(0)}',
-                              style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w700, color: rc.primary),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-    );
-  }
+  Widget build(BuildContext context) => CustomerServiceCard(title:item.title,category:item.category,
+    imageUrl:item.imageUrl,providerName:item.providerName,photoUrl:item.providerPhotoUrl,
+    price:item.price,onTap:onTap,rating:_CarouselRatingLabel(item:item));
 }
 
 class _CarouselRatingLabel extends StatelessWidget {
@@ -1035,16 +925,18 @@ class _CarouselRatingLabel extends StatelessWidget {
                     children: [
                       const Icon(Icons.star_rounded, size: 18, color: Color(0xFFEAB308)),
                       const SizedBox(width: 4),
-                      Text(
+                      Flexible(child: Text(
                         '${rating.serviceRating.toStringAsFixed(1)} (${rating.serviceReviewCount})',
+                        maxLines: 1, overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray600),
-                      ),
+                      )),
                     ],
                   ),
                   if (rating.hasOverallReviews &&
                       rating.overallReviewCount != rating.serviceReviewCount)
                     Text(
                       'Overall ${rating.overallRating.toStringAsFixed(1)}',
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.inter(fontSize: 11, color: FigmaColors.gray500),
                     ),
                 ],
@@ -1056,6 +948,7 @@ class _CarouselRatingLabel extends StatelessWidget {
               children: [
                 Text(
                   'New for this service',
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.inter(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
@@ -1065,6 +958,7 @@ class _CarouselRatingLabel extends StatelessWidget {
                 if (rating.hasOverallReviews)
                   Text(
                     'Overall ${rating.overallRating.toStringAsFixed(1)} (${rating.overallReviewCount})',
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.inter(fontSize: 11, color: FigmaColors.gray500),
                   ),
               ],
@@ -1219,7 +1113,9 @@ class _NearbyProvidersCard extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              'Ranked by recommendation score · past hires appear below',
+              geoPointOrNull(appUser.location) == null
+                  ? 'Set your location for nearby results. Showing the Panabo area for now.'
+                  : 'Providers within 15 km and service coverage. Past hires also appear below.',
               style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray500),
             ),
             const SizedBox(height: 20),
@@ -1247,33 +1143,9 @@ class _NearbyProvidersCard extends StatelessWidget {
                         final allProviders = providerSnap.data ?? const <ServiceProviderProfile>[];
                         final hiredIds = _hiredProviderIdsFromBookings(bookingSnap.data ?? const []);
 
-                        final ranked = rankProvidersByRecommendation(
-                          providers: allProviders,
-                          customerOrigin: appUser.location,
-                        );
-
-                        final discovery = <RankedProvider>[];
-                        final hired = <RankedProvider>[];
-                        for (final r in ranked) {
-                          if (_providerWasHired(r.profile, hiredIds)) {
-                            hired.add(r);
-                          } else {
-                            discovery.add(r);
-                          }
-                        }
-
-                        // Re-number discovery ranks after excluding past hires.
-                        final discoveryRanked = [
-                          for (var i = 0; i < discovery.length; i++)
-                            RankedProvider(
-                              profile: discovery[i].profile,
-                              recommendationScore: discovery[i].recommendationScore,
-                              distanceKm: discovery[i].distanceKm,
-                              rank: i + 1,
-                              isAvailable: discovery[i].isAvailable,
-                              isNewProvider: discovery[i].isNewProvider,
-                            ),
-                        ];
+                        final discovery = CustomerProviderDiscovery(providers: allProviders, origin: appUser.location);
+                        final hired = discovery.hiredBefore(hiredIds);
+                        final discoveryRanked = discovery.nearby;
 
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1284,6 +1156,11 @@ class _NearbyProvidersCard extends StatelessWidget {
                               users: users,
                               customer: appUser,
                             ),
+                            if (discovery.awaitingLocation.isNotEmpty) ...[
+                              const SizedBox(height: 16),
+                              Text('${discovery.awaitingLocation.length} provider(s) need to set their map location before nearby distance can be calculated.',
+                                style: Theme.of(context).textTheme.bodySmall),
+                            ],
                             if (hired.isNotEmpty) ...[
                               const SizedBox(height: 28),
                               Row(
@@ -1417,7 +1294,7 @@ class _NearbyProvidersListState extends State<_NearbyProvidersList> {
 
     if (rows.isEmpty) {
       return Text(
-        'No verified providers in your area yet.',
+        'No providers with a saved map location cover this area yet.',
         style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray500, height: 1.4),
       );
     }
@@ -1649,14 +1526,8 @@ class _NearbyProviderRow extends StatelessWidget {
                   ),
                 ),
               ],
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: rc.tint,
-                backgroundImage: photoUrl != null ? NetworkImage(photoUrl!) : null,
-                child: photoUrl == null
-                    ? Text(name[0].toUpperCase(), style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700, color: rc.primary))
-                    : null,
-              ),
+              ProfileAvatar(radius:24,backgroundColor:rc.tint,photoUrl:photoUrl,
+                fallback:Text(name.isEmpty?'P':name[0].toUpperCase(),style:GoogleFonts.inter(fontSize:16,fontWeight:FontWeight.w700,color:rc.primary))),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(

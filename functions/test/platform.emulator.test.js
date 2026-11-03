@@ -50,6 +50,23 @@ test('public profile projections never expose email, contact details or identity
   assert.equal(directory.records.length,3);
   for (const row of directory.records) for (const key of ['email','contactNumber','diditSessionId']) assert.equal(row[key],undefined);
 });
+
+test('customer map pins stay private while an eligible provider service base reaches its public projection', async () => {
+  const customer=(await db.doc('users/customer').get()).data();
+  const afterCustomer={...customer,location:new GeoPoint(7.3,125.6),updatedBy:'customer'};
+  await db.doc('users/customer').set(afterCustomer);
+  await ops.auditUsers.run({before:{exists:true,data:()=>customer},after:{exists:true,data:()=>afterCustomer}},
+    {params:{id:'customer'},eventId:'customer-pin'});
+  assert.equal((await db.doc('publicProfiles/customer').get()).data().location,undefined);
+  const profile={userId:'provider',isVerified:true,verificationStatus:'Approved',location:new GeoPoint(14.5995,120.9842)};
+  const updated={...profile,location:new GeoPoint(7.31,125.61),updatedBy:'provider'};
+  await db.doc('serviceProviders/provider').set(updated);
+  await db.doc('services/clean').set({providerId:'provider',serviceTitle:'House cleaning',category:'Cleaning',isActive:true,approvalStatus:'Approved'});
+  await ops.auditServiceProviders.run({before:{exists:true,data:()=>profile},after:{exists:true,data:()=>updated}},
+    {params:{id:'provider'},eventId:'provider-pin'});
+  const projection=(await db.doc('publicProviders/provider').get()).data();
+  assert.deepEqual(projection.location,{latitude:7.31,longitude:125.61});
+});
 test('a device moves to its current signed-in user and cannot be unregistered by another account', async () => {
   const data={token:'test-device-token-with-sufficient-length',platform:'web'};
   const first=await ops.registerPushDevice.run(data,auth('customer'));

@@ -1,3 +1,6 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../utils/geo_location.dart';
+import '../../widgets/profile_location_editor.dart';
 import '../../utils/image_upload.dart';
 import '../../widgets/profile_avatar.dart';
 import '../../widgets/enable_notifications_button.dart';
@@ -80,10 +83,12 @@ class _CustomerSettingsScreenState extends State<CustomerSettingsScreen> {
   String? _photoUrl;
   bool _saving = false;
   bool _uploadingPhoto = false;
+  GeoPoint? _mapLocation;
 
   @override
   void initState() {
     super.initState();
+    _mapLocation = geoPointOrNull(widget.appUser.location);
     _photoUrl = widget.appUser.profilePhotoUrl;
     _name = TextEditingController(text: widget.appUser.fullName);
     _phone = TextEditingController(
@@ -152,6 +157,7 @@ class _CustomerSettingsScreenState extends State<CustomerSettingsScreen> {
           'fullName': _name.text.trim(),
           'contactNumber': _phone.text.trim().isEmpty ? null : _phone.text.trim(),
           'address': address.isEmpty ? null : address,
+          'location': _mapLocation,
           'bio': bio.isEmpty ? null : bio,
         },
       );
@@ -288,6 +294,10 @@ class _CustomerSettingsScreenState extends State<CustomerSettingsScreen> {
             ),
           ),
           const SizedBox(height: 20),
+          ProfileLocationEditor(address: _address, location: _mapLocation,
+            providerLocation: false,
+            onChanged: (point) => setState(() => _mapLocation = point)),
+          const SizedBox(height: 18),
           _privacyCard(rc),
           const SizedBox(height: 24),
           Row(

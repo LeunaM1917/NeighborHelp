@@ -2,7 +2,7 @@ const { before, after, beforeEach, test } = require('node:test');
 const fs = require('node:fs');
 const path = require('node:path');
 const { initializeTestEnvironment, assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
-const { doc, setDoc, updateDoc, getDoc, getDocs, collection, query, where, or, and } = require('firebase/firestore');
+const { doc, setDoc, updateDoc, getDoc, getDocs, collection, query, where, or, and, GeoPoint } = require('firebase/firestore');
 const { ref, uploadBytes, getBytes } = require('firebase/storage');
 let env;
 before(async () => {
@@ -39,6 +39,15 @@ test('registration cannot create a privileged user or verified identity', async 
 test('private profiles are hidden from unrelated users', async () => {
   await assertFails(getDoc(doc(env.authenticatedContext('stranger').firestore(),'users','customer')));
   await assertSucceeds(getDoc(doc(env.authenticatedContext('admin').firestore(),'users','customer')));
+});
+
+test('customers can save their own map pin and providers can set their service base', async () => {
+  const customer=env.authenticatedContext('customer').firestore();
+  const provider=env.authenticatedContext('provider').firestore();
+  await assertSucceeds(updateDoc(doc(customer,'users','customer'),{location:new GeoPoint(7.3,125.6),updatedBy:'customer'}));
+  await assertSucceeds(updateDoc(doc(provider,'serviceProviders','provider'),{location:new GeoPoint(7.31,125.61),updatedBy:'provider'}));
+  await assertFails(updateDoc(doc(customer,'serviceProviders','provider'),{location:new GeoPoint(7.4,125.6),updatedBy:'customer'}));
+  await assertFails(updateDoc(doc(provider,'users','customer'),{location:new GeoPoint(7.4,125.6),updatedBy:'provider'}));
 });
 test('booking participants cannot alter fees, participants, status or create bookings directly', async () => {
   const db = env.authenticatedContext('customer').firestore();

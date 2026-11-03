@@ -223,7 +223,7 @@ class FirestoreService {
         'userId': userId,
         'bio': '',
         'serviceArea': '',
-        'location': const GeoPoint(14.5995, 120.9842),
+        'location': null,
         'serviceRadiusKm': 5,
         'averageRating': 0,
         'completedBookings': 0,

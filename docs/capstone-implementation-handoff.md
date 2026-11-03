@@ -5,6 +5,14 @@ Starting commit: `49c33b64a904f3e4851d48fddcc2c75320865bde` on `ui/shared-web-si
 
 These changes implement the nine gaps identified against the supplied capstone document. The initial implementation was committed by the project owner as `fe43fef`. Follow-up repairs are on the same branch; no commits were created by the agent. On November 3, 2026, all 24 backend functions and the matching Firestore/Storage rules and Firestore indexes were deployed to `neighborhelp-63771`; all 12 indexes were verified READY. The updated web client was built locally; Firebase Hosting was not updated. The project owner will deploy hosting after local acceptance testing. No production records were manually migrated, approved or deleted.
 
+## Customer maps and focused system review
+
+The subsequent map repair adds explicit saved customer/provider locations (manual map pins or device GPS after a user action), removes signup coordinate placeholders from new profiles, keeps map markers independent of profile-photo downloads, keeps previously hired providers eligible for Nearby, and fixes the customer service carousel overflow. Unknown provider locations are explained instead of fabricated. Existing provider records need their owners to select real service-base pins before the map can plot them. Customer coordinates remain private; eligible provider service-base updates reach the public projection.
+
+The project owner confirmed that disabling the browser cache and refreshing cleared the grey Google tiles. Network evidence showed HTTP 200/cached tiles, not an observed API permission/quota failure. The app also provides Reload map and safe camera bounds.
+
+Latest validation: **120 Flutter tests, 30 emulator tests, clean Dart analysis, web release build and Android debug APK build**. No cloud deployment or production-coordinate migration was performed in this repair. Read [the focused system review](customer-map-system-review.md) for acceptance steps and seven remaining findings with evidence and proposed fixes.
+
 ## Customer loading and messaging repair
 
 The client had been released locally before its new backend endpoints were deployed. `getPublicProviders`, `getPublicDirectory` and `bookingCommand` returned 404. These endpoints, session/device registration and geocoding now respond with the callable protocol and reject unauthenticated requests. The existing Didit, Maps and sentiment settings on previously deployed functions were verified as preserved.

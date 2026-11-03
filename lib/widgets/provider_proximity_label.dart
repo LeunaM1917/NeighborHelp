@@ -82,10 +82,10 @@ Future<String> _buildLabel(AppUser customer, ServiceProviderProfile profile) asy
   final providerLoc = geoPointOrNull(profile.location);
 
   if (customerLoc == null) {
-    return area.isNotEmpty ? area : 'In your community';
+    return providerLoc == null ? 'Map location not set' : (area.isNotEmpty ? area : 'Set your location for distance');
   }
   if (providerLoc == null) {
-    return area.isNotEmpty ? area : 'Nearby';
+    return 'Map location not set';
   }
 
   final straightKm = DistanceService.instance.straightLineKm(customerLoc, providerLoc);
@@ -114,7 +114,7 @@ Future<Map<String, String>> resolveProviderProximityLabels({
   if (customerLoc == null) {
     for (final p in profiles) {
       final area = p.serviceArea.trim();
-      labels[p.providerId] = area.isNotEmpty ? area : 'In your community';
+      labels[p.providerId] = geoPointOrNull(p.location) == null ? 'Map location not set' : (area.isNotEmpty ? area : 'Set your location for distance');
     }
     return labels;
   }
@@ -124,7 +124,7 @@ Future<Map<String, String>> resolveProviderProximityLabels({
     final area = p.serviceArea.trim();
     final providerLoc = geoPointOrNull(p.location);
     if (providerLoc == null) {
-      labels[p.providerId] = area.isNotEmpty ? area : 'Nearby';
+      labels[p.providerId] = 'Map location not set';
       continue;
     }
     final straightKm = DistanceService.instance.straightLineKm(customerLoc, providerLoc);
@@ -135,6 +135,7 @@ Future<Map<String, String>> resolveProviderProximityLabels({
     forDriving.add((id: p.providerId, point: providerLoc));
   }
 
+  if (forDriving.isEmpty) return labels;
   final drivingKm = await DistanceService.instance.drivingDistancesKm(
     origin: customerLoc,
     destinations: forDriving,

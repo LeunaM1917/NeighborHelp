@@ -3,6 +3,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../constants/functions_config.dart';
+import '../utils/geo_location.dart';
 
 class ServiceLocationPicker extends StatefulWidget {
   const ServiceLocationPicker({
@@ -10,9 +11,11 @@ class ServiceLocationPicker extends StatefulWidget {
     required this.address,
     required this.onSelected,
     this.origin,
+    this.pinTitle = 'Pin the service address',
   });
   final TextEditingController address;
   final GeoPoint? origin;
+  final String pinTitle;
   final ValueChanged<GeoPoint> onSelected;
   @override
   State<ServiceLocationPicker> createState() => _ServiceLocationPickerState();
@@ -37,13 +40,13 @@ class _ServiceLocationPickerState extends State<ServiceLocationPicker> {
           (data['longitude'] as num).toDouble(),
         ),
       );
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Could not locate the address. Add your barangay and city, or choose a map pin.',
-            ),
+          SnackBar(
+            content: Text(error is FirebaseFunctionsException && error.code == 'failed-precondition'
+                ? 'Address lookup is unavailable. Choose a map pin or use your current location.'
+                : 'Could not locate the address. Add your barangay and city, or choose a map pin.'),
           ),
         );
       }
@@ -53,20 +56,23 @@ class _ServiceLocationPickerState extends State<ServiceLocationPicker> {
   }
 
   Future<void> _pin() async {
+    final origin = geoPointOrNull(widget.origin);
     var selected = LatLng(
-      widget.origin?.latitude ?? 7.3081,
-      widget.origin?.longitude ?? 125.6842,
+      origin?.latitude ?? kDefaultPanaboLatLng.latitude,
+      origin?.longitude ?? kDefaultPanaboLatLng.longitude,
     );
     var chosen = false;
     final result = await showDialog<LatLng>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, update) => AlertDialog(
-          title: const Text('Pin the service address'),
+          title: Text(widget.pinTitle),
           content: SizedBox(
             width: 600,
             height: 360,
             child: GoogleMap(
+              mapType: MapType.normal,
+              minMaxZoomPreference: const MinMaxZoomPreference(6, 17),
               initialCameraPosition: CameraPosition(target: selected, zoom: 14),
               onTap: (point) => update(() {
                 selected = point;
