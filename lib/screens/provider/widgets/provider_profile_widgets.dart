@@ -1,3 +1,4 @@
+import '../../../widgets/profile_avatar.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -108,17 +109,14 @@ class ProviderProfileSummaryCard extends StatelessWidget {
         children: [
           Stack(
             children: [
-              CircleAvatar(
+              ProfileAvatar(
                 radius: 52,
                 backgroundColor: rc.tint,
-                backgroundImage:
-                    appUser.profilePhotoUrl != null ? NetworkImage(appUser.profilePhotoUrl!) : null,
-                child: appUser.profilePhotoUrl == null
-                    ? Text(
+                photoUrl: appUser.profilePhotoUrl,
+                fallback: Text(
                         _initials(appUser.fullName),
                         style: GoogleFonts.inter(fontSize: 32, fontWeight: FontWeight.w700, color: rc.primary),
-                      )
-                    : null,
+                      ),
               ),
               Positioned(
                 right: 0,

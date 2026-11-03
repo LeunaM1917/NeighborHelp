@@ -14,6 +14,7 @@ import '../../theme/role_theme.dart';
 import '../../utils/review_job_label.dart';
 import '../../utils/review_sentiment.dart';
 import '../../widgets/review_tile.dart';
+import '../profile_avatar.dart';
 
 /// Professional profile layout using NeighborHelp colors ([RoleColors], [FigmaColors]).
 abstract final class MemberProfileLayout {
@@ -242,16 +243,14 @@ class MemberProfileSidebar extends StatelessWidget {
                     clipBehavior: Clip.none,
                     alignment: Alignment.bottomRight,
                     children: [
-                      CircleAvatar(
+                      ProfileAvatar(
                         radius: 48,
                         backgroundColor: rc.tint,
-                        backgroundImage: photoUrl != null ? NetworkImage(photoUrl!) : null,
-                        child: photoUrl == null
-                            ? Text(
+                        photoUrl: photoUrl,
+                        fallback: Text(
                                 memberProfileInitials(name),
                                 style: GoogleFonts.inter(fontSize: 30, fontWeight: FontWeight.w700, color: rc.primary),
-                              )
-                            : null,
+                              ),
                       ),
                       if (onEditPhoto != null)
                         Positioned(

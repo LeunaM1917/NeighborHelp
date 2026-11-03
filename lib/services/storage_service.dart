@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
+import '../utils/image_upload.dart';
 
 class StorageService {
   StorageService({FirebaseStorage? storage})
@@ -27,26 +28,24 @@ class StorageService {
   Future<String> readableUrl(String value) => value.startsWith('gs://')
       ? _storage.refFromURL(value).getDownloadURL() : Future.value(value);
 
-  /// Returns download URL for a profile photo at `users/{uid}/profile.jpg`.
+  /// Each upload gets a new URL so an older cached photo is never reused.
   Future<String> uploadProfilePhoto({
     required String userId,
     required dynamic file,
   }) async {
-    final ref = _storage.ref().child('users').child(userId).child('profile.jpg');
     if (kIsWeb) {
       throw UnsupportedError('Use uploadProfilePhotoBytes on web.');
     }
-    final upload = await ref.putFile(file as File);
-    return upload.ref.getDownloadURL();
+    return uploadProfilePhotoBytes(userId: userId, bytes: await (file as File).readAsBytes());
   }
 
   Future<String> uploadProfilePhotoBytes({
     required String userId,
     required Uint8List bytes,
-    String contentType = 'image/jpeg',
   }) async {
-    final ref = _storage.ref().child('users').child(userId).child('profile.jpg');
-    await ref.putData(bytes, SettableMetadata(contentType: contentType));
+    final format = ImageUploadFormat.inspect(bytes);
+    final ref = _storage.ref('users/$userId/profile-${DateTime.now().microsecondsSinceEpoch}.${format.extension}');
+    await ref.putData(bytes, SettableMetadata(contentType: format.contentType));
     return ref.getDownloadURL();
   }
 

@@ -104,3 +104,14 @@ test('certificate documents are private and immutable; chat images require parti
   await assertSucceeds(getBytes(ref(env.authenticatedContext('admin').storage(), 'certificates/provider/cert/proof.png')));
   await assertFails(uploadBytes(ref(env.authenticatedContext('stranger').storage(),'messages/booking/stranger/image.png'), bytes, {contentType:'image/png'}));
 });
+
+test('profile photos allow owner image uploads but reject cross-account writes, large files and non-images', async () => {
+  const owner=env.authenticatedContext('customer').storage();
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=','base64');
+  const image=ref(owner,'users/customer/profile-test.png');
+  await assertSucceeds(uploadBytes(image,png,{contentType:'image/png'}));
+  await assertSucceeds(getBytes(image));
+  await assertFails(uploadBytes(ref(env.authenticatedContext('stranger').storage(),'users/customer/profile-test.png'),png,{contentType:'image/png'}));
+  await assertFails(uploadBytes(ref(owner,'users/customer/too-big.jpg'),new Uint8Array(5*1024*1024+1),{contentType:'image/jpeg'}));
+  await assertFails(uploadBytes(ref(owner,'users/customer/file.txt'),png,{contentType:'text/plain'}));
+});

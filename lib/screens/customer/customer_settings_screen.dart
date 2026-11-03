@@ -1,3 +1,5 @@
+import '../../utils/image_upload.dart';
+import '../../widgets/profile_avatar.dart';
 import '../../widgets/enable_notifications_button.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -110,12 +112,14 @@ class _CustomerSettingsScreenState extends State<CustomerSettingsScreen> {
     if (picked == null || !mounted) return;
 
     setState(() => _uploadingPhoto = true);
+    var uploaded = false;
     try {
       final bytes = await picked.readAsBytes();
       final url = await StorageService().uploadProfilePhotoBytes(
         userId: widget.appUser.userId,
         bytes: bytes,
       );
+      uploaded = true;
       await FirestoreService().updateUserProfile(
         userId: widget.appUser.userId,
         data: {'profilePhotoUrl': url},
@@ -125,10 +129,10 @@ class _CustomerSettingsScreenState extends State<CustomerSettingsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Profile photo updated')),
       );
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not update photo. Try again.')),
+          SnackBar(content: Text(profilePhotoError(error, uploaded: uploaded))),
         );
       }
     } finally {
@@ -365,16 +369,10 @@ class _CustomerSettingsScreenState extends State<CustomerSettingsScreen> {
               Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  CircleAvatar(
-                    radius: 40,
-                    backgroundColor: rc.tint,
-                    backgroundImage: _photoUrl != null ? NetworkImage(_photoUrl!) : null,
-                    child: _photoUrl == null
-                        ? Text(
-                            initials,
-                            style: GoogleFonts.inter(fontSize: 26, fontWeight: FontWeight.w700, color: rc.primary),
-                          )
-                        : null,
+                  ProfileAvatar(
+                    radius: 40, backgroundColor: rc.tint, photoUrl: _photoUrl,
+                    fallback: Text(initials, style: GoogleFonts.inter(
+                      fontSize: 26, fontWeight: FontWeight.w700, color: rc.primary)),
                   ),
                   Positioned(
                     right: -2,

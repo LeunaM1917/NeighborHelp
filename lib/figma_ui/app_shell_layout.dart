@@ -14,6 +14,7 @@ import 'figma_colors.dart';
 import 'figma_marketing_assets.dart';
 import '../widgets/app_scroll_chrome.dart';
 import '../widgets/app_footer.dart';
+import '../widgets/profile_avatar.dart';
 import '../widgets/workspace_page_frame.dart';
 import 'widgets/figma_brand_row.dart';
 
@@ -572,22 +573,18 @@ class _UserMenu extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CircleAvatar(
+            ProfileAvatar(
               radius: compact ? 13 : 16,
               backgroundColor: role.tint,
-              backgroundImage: appUser.profilePhotoUrl != null
-                  ? NetworkImage(appUser.profilePhotoUrl!)
-                  : null,
-              child: appUser.profilePhotoUrl == null
-                  ? Text(
+              photoUrl: appUser.profilePhotoUrl,
+              fallback: Text(
                       initials,
                       style: GoogleFonts.inter(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                         color: role.primary,
                       ),
-                    )
-                  : null,
+                    ),
             ),
             if (!compact) ...[
               const SizedBox(width: 8),
