@@ -1,3 +1,4 @@
+import '../../widgets/service_agreement_card.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -78,29 +79,41 @@ class ProviderBookingRequestReviewBody extends StatefulWidget {
   final ScrollController? scrollController;
 
   @override
-  State<ProviderBookingRequestReviewBody> createState() => _ProviderBookingRequestReviewBodyState();
+  State<ProviderBookingRequestReviewBody> createState() =>
+      _ProviderBookingRequestReviewBodyState();
 }
 
-class _ProviderBookingRequestReviewBodyState extends State<ProviderBookingRequestReviewBody> {
+class _ProviderBookingRequestReviewBodyState
+    extends State<ProviderBookingRequestReviewBody> {
   bool _busy = false;
 
   Future<void> _respond({required bool accept}) async {
     setState(() => _busy = true);
     try {
-      await FirestoreService().providerRespondToBooking(
-        bookingId: widget.booking.bookingId,
+      final responded = await reviewAndRespondToOffer(
+        context,
+        booking: widget.booking,
         providerId: widget.appUser.userId,
         accept: accept,
       );
+      if (!responded) return;
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(accept ? 'Booking accepted' : 'Booking declined')),
+        SnackBar(
+          content: Text(accept ? 'Booking accepted' : 'Booking declined'),
+        ),
       );
       Navigator.pop(context);
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not update booking. Try again.')),
+          SnackBar(
+            content: Text(
+              e is StateError
+                  ? e.message.toString()
+                  : 'Could not update booking. Please retry.',
+            ),
+          ),
         );
       }
     } finally {
@@ -142,7 +155,8 @@ class _ProviderBookingRequestReviewBodyState extends State<ProviderBookingReques
 
                   final service = serviceSnap.data;
                   final customer = customerSnap.data;
-                  final customerName = (customer?.fullName ?? '').trim().isNotEmpty
+                  final customerName =
+                      (customer?.fullName ?? '').trim().isNotEmpty
                       ? customer!.fullName
                       : 'Customer';
 
@@ -168,13 +182,18 @@ class _ProviderBookingRequestReviewBodyState extends State<ProviderBookingReques
                                   const SizedBox(height: 4),
                                   Text(
                                     'Review details before you accept or decline',
-                                    style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray600),
+                                    style: GoogleFonts.inter(
+                                      fontSize: 13,
+                                      color: FigmaColors.gray600,
+                                    ),
                                   ),
                                 ],
                               ),
                             ),
                             IconButton(
-                              onPressed: _busy ? null : () => Navigator.pop(context),
+                              onPressed: _busy
+                                  ? null
+                                  : () => Navigator.pop(context),
                               icon: const Icon(Icons.close),
                               tooltip: 'Close',
                             ),
@@ -192,7 +211,8 @@ class _ProviderBookingRequestReviewBodyState extends State<ProviderBookingReques
                               _headerBlock(context, b, service, customerName),
                               const SizedBox(height: 16),
                               _summaryCard(b, service, customerName),
-                              if (b.notes != null && b.notes!.trim().isNotEmpty) ...[
+                              if (b.notes != null &&
+                                  b.notes!.trim().isNotEmpty) ...[
                                 const SizedBox(height: 16),
                                 AppSection(
                                   title: 'Customer notes',
@@ -241,7 +261,9 @@ class _ProviderBookingRequestReviewBodyState extends State<ProviderBookingReques
                                       style: OutlinedButton.styleFrom(
                                         minimumSize: const Size.fromHeight(48),
                                         shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(10),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
                                         ),
                                       ),
                                       child: Text(
@@ -295,7 +317,10 @@ class _ProviderBookingRequestReviewBodyState extends State<ProviderBookingReques
           Container(
             width: 48,
             height: 48,
-            decoration: BoxDecoration(color: rc.tint, borderRadius: BorderRadius.circular(10)),
+            decoration: BoxDecoration(
+              color: rc.tint,
+              borderRadius: BorderRadius.circular(10),
+            ),
             child: Icon(
               service != null
                   ? serviceCategoryIcon(service.category, service.serviceTitle)
@@ -310,17 +335,26 @@ class _ProviderBookingRequestReviewBodyState extends State<ProviderBookingReques
               children: [
                 Text(
                   service?.serviceTitle ?? 'Service',
-                  style: GoogleFonts.inter(fontSize: 17, fontWeight: FontWeight.w700),
+                  style: GoogleFonts.inter(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 if (service?.category.isNotEmpty == true)
                   Text(
                     service!.category,
-                    style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray500),
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      color: FigmaColors.gray500,
+                    ),
                   ),
                 const SizedBox(height: 4),
                 Text(
                   customerName,
-                  style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray600),
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    color: FigmaColors.gray600,
+                  ),
                 ),
               ],
             ),
@@ -357,7 +391,10 @@ class _ProviderBookingRequestReviewBodyState extends State<ProviderBookingReques
               ),
             ],
             const Divider(height: 1, color: FigmaColors.gray100),
-            _summaryRow('Requested', DateFormat('MMM d, yyyy • h:mm a').format(b.createdAt.toDate())),
+            _summaryRow(
+              'Requested',
+              DateFormat('MMM d, yyyy • h:mm a').format(b.createdAt.toDate()),
+            ),
           ],
         ),
       ),
@@ -372,12 +409,22 @@ class _ProviderBookingRequestReviewBodyState extends State<ProviderBookingReques
         children: [
           SizedBox(
             width: 110,
-            child: Text(label, style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray500)),
+            child: Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: FigmaColors.gray500,
+              ),
+            ),
           ),
           Expanded(
             child: Text(
               value,
-              style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: FigmaColors.gray900),
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: FigmaColors.gray900,
+              ),
             ),
           ),
         ],

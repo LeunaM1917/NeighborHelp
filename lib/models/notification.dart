@@ -8,6 +8,7 @@ class AppNotification {
     required this.message,
     required this.notificationType,
     this.relatedBookingId,
+    this.relatedInquiryId,
     required this.isRead,
     required this.createdAt,
   });
@@ -18,6 +19,7 @@ class AppNotification {
   final String message;
   final String notificationType;
   final String? relatedBookingId;
+  final String? relatedInquiryId;
   final bool isRead;
   final Timestamp createdAt;
 
@@ -29,6 +31,7 @@ class AppNotification {
       message: data['message'] as String? ?? '',
       notificationType: data['notificationType'] as String? ?? '',
       relatedBookingId: data['relatedBookingId'] as String?,
+      relatedInquiryId: data['relatedInquiryId'] as String?,
       isRead: data['isRead'] as bool? ?? false,
       createdAt: data['createdAt'] as Timestamp? ?? Timestamp.now(),
     );
@@ -41,6 +44,7 @@ class AppNotification {
       'message': message,
       'notificationType': notificationType,
       'relatedBookingId': relatedBookingId,
+      'relatedInquiryId': relatedInquiryId,
       'isRead': isRead,
       'createdAt': createdAt,
     };

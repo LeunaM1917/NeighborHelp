@@ -28,6 +28,16 @@ class Booking {
     this.cancelledAt,
     this.cancelledByRole,
     this.rescheduleDate,
+    this.inquiryId,
+    this.dailyRate,
+    this.numberOfDays,
+    this.hoursPerDay,
+    this.agreement,
+    this.customerAcceptedAt,
+    this.providerAcceptedAt,
+    this.customerAcceptedHash,
+    this.providerAcceptedHash,
+    this.changeRequest,
   });
 
   final String bookingId;
@@ -37,11 +47,13 @@ class Booking {
   final String serviceLocation;
   final GeoPoint location;
   final Timestamp scheduledDate;
+
   /// Inclusive end of the requested service window (start + [durationHours] when set).
   final Timestamp? scheduledEndDate;
   final String status;
   final double? totalFee;
-  /// `hourly` or `fixed` — how the customer proposed to pay.
+
+  /// New offers use `fixed` or `daily`; `hourly` remains for historical records.
   final String? pricingType;
   final double? hourlyRate;
   final double? durationHours;
@@ -49,18 +61,32 @@ class Booking {
   final Timestamp createdAt;
   final Timestamp updatedAt;
   final Timestamp? acceptedAt;
+
   /// When the provider tapped "Start the job" (actual on-site start).
   final Timestamp? startedAt;
   final Timestamp? completedAt;
+
   /// Active [ServiceContract] this booking belongs to (set when provider accepts).
   final String? contractId;
+
   /// Milestone index on the contract (1, 2, 3…).
   final int? milestoneNumber;
   final String? cancellationReason;
   final Timestamp? cancelledAt;
+
   /// `customer` or `provider`
   final String? cancelledByRole;
   final DateTime? rescheduleDate;
+  final String? inquiryId;
+  final double? dailyRate;
+  final int? numberOfDays;
+  final double? hoursPerDay;
+  final Map<String, dynamic>? agreement;
+  final Timestamp? customerAcceptedAt;
+  final Timestamp? providerAcceptedAt;
+  final String? customerAcceptedHash;
+  final String? providerAcceptedHash;
+  final String? changeRequest;
 
   factory Booking.fromFirestore(String id, Map<String, dynamic> data) {
     return Booking(
@@ -88,7 +114,21 @@ class Booking {
       cancellationReason: data['cancellationReason'] as String?,
       cancelledAt: data['cancelledAt'] as Timestamp?,
       cancelledByRole: data['cancelledByRole'] as String?,
-      rescheduleDate: ((data['rescheduleRequest'] as Map?)?['scheduledDate'] as Timestamp?)?.toDate(),
+      rescheduleDate:
+          ((data['rescheduleRequest'] as Map?)?['scheduledDate'] as Timestamp?)
+              ?.toDate(),
+      inquiryId: data['inquiryId'] as String?,
+      dailyRate: (data['proposedRate'] as num?)?.toDouble(),
+      numberOfDays: (data['numberOfDays'] as num?)?.toInt(),
+      hoursPerDay: (data['hoursPerDay'] as num?)?.toDouble(),
+      agreement: data['agreement'] is Map
+          ? Map<String, dynamic>.from(data['agreement'] as Map)
+          : null,
+      customerAcceptedAt: data['customerAcceptedAt'] as Timestamp?,
+      providerAcceptedAt: data['providerAcceptedAt'] as Timestamp?,
+      customerAcceptedHash: data['customerAcceptedHash'] as String?,
+      providerAcceptedHash: data['providerAcceptedHash'] as String?,
+      changeRequest: data['changeRequest'] as String?,
     );
   }
 
@@ -97,13 +137,18 @@ class Booking {
   bool get isPending => statusNormalized == 'pending';
   bool get isAccepted => statusNormalized == 'accepted';
   bool get isInProgress => statusNormalized == 'in progress';
-  bool get isCancelled => statusNormalized == 'cancelled' || statusNormalized == 'canceled';
-  bool get wasCancelledByProvider => cancelledByRole?.toLowerCase() == 'provider';
-  bool get wasCancelledByCustomer => cancelledByRole?.toLowerCase() == 'customer';
+  bool get isCancelled =>
+      statusNormalized == 'cancelled' || statusNormalized == 'canceled';
+  bool get wasCancelledByProvider =>
+      cancelledByRole?.toLowerCase() == 'provider';
+  bool get wasCancelledByCustomer =>
+      cancelledByRole?.toLowerCase() == 'customer';
   bool get canProviderCancel => (isAccepted || isInProgress) && !isCancelled;
-  bool get canCustomerCancel => canProviderCancel;
+  bool get canCustomerCancel =>
+      canProviderCancel || isPending || statusNormalized == 'changes requested';
   bool get isMilestoneComplete =>
-      statusNormalized == 'milestone complete' || statusNormalized == 'completed';
+      statusNormalized == 'milestone complete' ||
+      statusNormalized == 'completed';
   bool get isCompleted => isMilestoneComplete;
 
   String get milestoneLabel =>
@@ -121,6 +166,7 @@ class Booking {
   }
 
   DateTime? get workEndsAt {
+    if (agreement != null && startedAt != null) return scheduledEnd;
     final start = startedAt?.toDate();
     if (start == null) return null;
     return start.add(
@@ -169,7 +215,10 @@ class Booking {
     if (end == null) {
       return DateFormat('MMM d, yyyy • h:mm a').format(start);
     }
-    final sameDay = start.year == end.year && start.month == end.month && start.day == end.day;
+    final sameDay =
+        start.year == end.year &&
+        start.month == end.month &&
+        start.day == end.day;
     if (sameDay) {
       return '${dateFmt.format(start)} • ${timeFmt.format(start)} – ${timeFmt.format(end)}';
     }
@@ -178,7 +227,12 @@ class Booking {
 
   /// Human-readable pricing line for booking detail screens.
   String? get pricingSummary {
-    if (pricingType == 'hourly' && hourlyRate != null && durationHours != null) {
+    if (pricingType == 'daily' && dailyRate != null && numberOfDays != null) {
+      return '₱${dailyRate!.toStringAsFixed(2)}/day × $numberOfDays day(s)';
+    }
+    if (pricingType == 'hourly' &&
+        hourlyRate != null &&
+        durationHours != null) {
       return '₱${hourlyRate!.toStringAsFixed(0)}/hr × ${_durationHoursLabel(durationHours!)}';
     }
     if (pricingType == 'fixed') {
@@ -212,6 +266,18 @@ class Booking {
       if (completedAt != null) 'completedAt': completedAt,
       if (contractId != null) 'contractId': contractId,
       if (milestoneNumber != null) 'milestoneNumber': milestoneNumber,
+      if (inquiryId != null) 'inquiryId': inquiryId,
+      if (dailyRate != null) 'proposedRate': dailyRate,
+      if (numberOfDays != null) 'numberOfDays': numberOfDays,
+      if (hoursPerDay != null) 'hoursPerDay': hoursPerDay,
+      if (agreement != null) 'agreement': agreement,
+      if (customerAcceptedAt != null) 'customerAcceptedAt': customerAcceptedAt,
+      if (providerAcceptedAt != null) 'providerAcceptedAt': providerAcceptedAt,
+      if (customerAcceptedHash != null)
+        'customerAcceptedHash': customerAcceptedHash,
+      if (providerAcceptedHash != null)
+        'providerAcceptedHash': providerAcceptedHash,
+      if (changeRequest != null) 'changeRequest': changeRequest,
     };
   }
 }

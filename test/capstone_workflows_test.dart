@@ -1,4 +1,5 @@
-import 'package:neighbor_help/screens/admin/widgets/admin_bookings_widgets.dart' show bookingStatusBucket;
+import 'package:neighbor_help/screens/admin/widgets/admin_bookings_widgets.dart'
+    show bookingStatusBucket;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -22,6 +23,12 @@ void main() {
           {
             'id': 'cert',
             'name': 'Carpentry NC II',
+            'provider': 'TESDA',
+            'status': 'Approved',
+            'certificationId': 'NC-TEST',
+            'verificationSource': 'TESDA Registry of Certified Workers',
+            'reviewedBy': 'admin',
+            'reviewedAt': Timestamp.now(),
             'url': 'gs://test/proof.pdf',
             'expirationDate': '2027-01-01',
           },
@@ -87,20 +94,43 @@ void main() {
       isTrue,
     );
   });
-  test('completed and milestone bookings share the completed reporting bucket', () {
-    expect(bookingStatusBucket('Completed'), 0);
-    expect(bookingStatusBucket('Milestone Complete'), 0);
-    expect(bookingStatusBucket('Declined'), 2);
-  });
+  test(
+    'completed and milestone bookings share the completed reporting bucket',
+    () {
+      expect(bookingStatusBucket('Completed'), 0);
+      expect(bookingStatusBucket('Milestone Complete'), 0);
+      expect(bookingStatusBucket('Declined'), 2);
+    },
+  );
   test('this week availability does not include next week', () {
-    expect(matchesServiceFilters(price: 100, rating: 4, area: 'Panabo City', profile: provider(), availability: 'This week', now: DateTime(2026, 11, 8)), isFalse);
+    expect(
+      matchesServiceFilters(
+        price: 100,
+        rating: 4,
+        area: 'Panabo City',
+        profile: provider(),
+        availability: 'This week',
+        now: DateTime(2026, 11, 8),
+      ),
+      isFalse,
+    );
   });
 
-  test('public discovery hides services that are no longer eligible for that provider', () {
-    final profile = ServiceProviderProfile.fromFirestore('p', {'isVerified': true, 'eligibleServiceIds': ['cleaning']});
-    expect(profile.canOfferService('cleaning'), isTrue);
-    expect(profile.canOfferService('expired-technical-service'), isFalse);
-  });
+  test(
+    'public discovery hides services that are no longer eligible for that provider',
+    () {
+      final profile = ServiceProviderProfile.fromFirestore('p', {
+        'isVerified': true,
+        'eligibleServiceIds': ['cleaning'],
+        'marketplacePolicyVersion': 2,
+        'eligibleServiceExpiries': {
+          'cleaning': DateTime(2099).millisecondsSinceEpoch,
+        },
+      });
+      expect(profile.canOfferService('cleaning'), isTrue);
+      expect(profile.canOfferService('expired-technical-service'), isFalse);
+    },
+  );
 
   test('matching certificate qualifies carpentry but not plumbing', () {
     expect(

@@ -1125,8 +1125,8 @@ exports.onBookingCreated = functions.firestore
 
     return db.collection('notifications').doc(`booking_request_${snap.id}`).create({
       userId,
-      title: 'New booking request',
-      message: 'A customer submitted a new booking request.',
+      title: booking.agreement ? 'New contract offer' : 'New booking request',
+      message: booking.agreement ? 'Review the customer’s proposed scope, price and agreement before accepting.' : 'A customer submitted a new booking request.',
       notificationType: 'Booking Request',
       relatedBookingId: snap.id,
       isRead: false,

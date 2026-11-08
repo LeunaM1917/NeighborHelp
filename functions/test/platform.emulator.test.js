@@ -1,3 +1,4 @@
+const {credentials}=require('./marketplace_fixtures');
 const { Timestamp, GeoPoint, getFirestore } = require('firebase-admin/firestore');
 const {before, after, beforeEach, test} = require('node:test');
 const assert = require('node:assert/strict');
@@ -58,7 +59,7 @@ test('customer map pins stay private while an eligible provider service base rea
   await ops.auditUsers.run({before:{exists:true,data:()=>customer},after:{exists:true,data:()=>afterCustomer}},
     {params:{id:'customer'},eventId:'customer-pin'});
   assert.equal((await db.doc('publicProfiles/customer').get()).data().location,undefined);
-  const profile={userId:'provider',isVerified:true,verificationStatus:'Approved',location:new GeoPoint(14.5995,120.9842)};
+  const profile={...credentials(),userId:'provider',isVerified:true,verificationStatus:'Approved',location:new GeoPoint(14.5995,120.9842)};
   const updated={...profile,location:new GeoPoint(7.31,125.61),updatedBy:'provider'};
   await db.doc('serviceProviders/provider').set(updated);
   await db.doc('services/clean').set({providerId:'provider',serviceTitle:'House cleaning',category:'Cleaning',isActive:true,approvalStatus:'Approved'});
@@ -77,7 +78,7 @@ test('a device moves to its current signed-in user and cannot be unregistered by
   assert.equal((await db.doc(`users/provider/devices/${first.id}`).get()).exists,true);
 });
 test('provider discovery returns only eligible services and omits verification evidence', async () => {
-  await db.doc('serviceProviders/provider').set({userId:'provider',isVerified:true,verificationStatus:'Approved',diditSessionId:'private',governmentIdTypeCode:'ID',location:new GeoPoint(7.3,125.6),serviceArea:'Panabo City',serviceRadiusKm:5});
+  await db.doc('serviceProviders/provider').set({...credentials(),userId:'provider',isVerified:true,verificationStatus:'Approved',diditSessionId:'private',governmentIdTypeCode:'ID',location:new GeoPoint(7.3,125.6),serviceArea:'Panabo City',serviceRadiusKm:5});
   await db.doc('services/service').set({providerId:'provider',serviceTitle:'House cleaning',category:'Cleaning',isActive:true,approvalStatus:'Approved'});
   const result=await ops.getPublicProviders.run({},auth('customer'));
   assert.equal(result.records.length,1);
@@ -86,6 +87,20 @@ test('provider discovery returns only eligible services and omits verification e
   assert.equal(result.records[0].governmentIdTypeCode,undefined);
   await db.doc('users/provider').update({accountStatus:'Suspended'});
   assert.equal((await ops.getPublicProviders.run({},auth('customer'))).records.length,0);
+});
+test('policy maintenance hides unsupported listings and refreshes expiry-bound projections without deleting history',async()=>{
+  await db.doc('serviceProviders/provider').set({...credentials(),userId:'provider',isVerified:true,verificationStatus:'Approved'});
+  await db.doc('services/valid').set({providerId:'provider',category:'Cleaning',serviceTitle:'House Cleaning',isActive:true,approvalStatus:'Approved'});
+  await db.doc('services/unsupported').set({providerId:'provider',category:'Tutoring',serviceTitle:'Math Tutoring',isActive:true,approvalStatus:'Approved'});
+  await db.doc('bookings/history').set({providerId:'provider',customerId:'customer',serviceId:'unsupported',status:'Completed',totalFee:500});
+  await ops.enforceMarketplacePolicy.run({});
+  assert.equal((await db.doc('services/unsupported').get()).data().isActive,false);
+  assert.equal((await db.doc('bookings/history').get()).data().totalFee,500);
+  const projection=(await db.doc('publicProviders/provider').get()).data();
+  assert.equal(projection.marketplacePolicyVersion,2);assert.deepEqual(projection.eligibleServiceIds,['valid']);assert.ok(projection.eligibleServiceExpiries.valid>Date.now());
+  await db.doc('serviceProviders/provider').update({approvedCertificationIds:[]});
+  await ops.enforceMarketplacePolicy.run({});
+  assert.equal((await db.doc('services/valid').get()).data().isActive,false);assert.equal((await db.doc('publicProviders/provider').get()).exists,false);
 });
 test('scheduled announcements are limited to the chosen active audience and sent once', async () => {
   const scheduled = await ops.queueAnnouncement.run({title:'Pilot update',message:'Please check your bookings.',audience:'Customers only',scheduledAt:Date.now()+60000},auth('admin'));

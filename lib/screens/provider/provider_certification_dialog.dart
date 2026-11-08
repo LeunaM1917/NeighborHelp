@@ -1,3 +1,4 @@
+import '../../utils/approved_service_catalog.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../services/storage_service.dart';
 import 'package:flutter/material.dart';
@@ -51,8 +52,13 @@ class ProviderCertificationDialog extends StatefulWidget {
                 foregroundColor: FigmaColors.gray900,
                 elevation: 0,
                 title: Text(
-                  initial != null && !initial.isEmpty ? 'Edit certification' : 'Add certification',
-                  style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700),
+                  initial != null && !initial.isEmpty
+                      ? 'Edit certification'
+                      : 'Add certification',
+                  style: GoogleFonts.inter(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
               body: body,
@@ -68,8 +74,13 @@ class ProviderCertificationDialog extends StatefulWidget {
       builder: (ctx) => providerThemed(
         Dialog(
           backgroundColor: FigmaColors.white,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 24,
+            vertical: 32,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 560, maxHeight: 720),
             child: body,
@@ -80,10 +91,12 @@ class ProviderCertificationDialog extends StatefulWidget {
   }
 
   @override
-  State<ProviderCertificationDialog> createState() => _ProviderCertificationDialogState();
+  State<ProviderCertificationDialog> createState() =>
+      _ProviderCertificationDialogState();
 }
 
-class _ProviderCertificationDialogState extends State<ProviderCertificationDialog> {
+class _ProviderCertificationDialogState
+    extends State<ProviderCertificationDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _name;
   late final TextEditingController _provider;
@@ -101,45 +114,82 @@ class _ProviderCertificationDialogState extends State<ProviderCertificationDialo
     super.initState();
     final e = widget.initial;
     _name = TextEditingController(text: e?.name ?? '');
-    _provider = TextEditingController(text: e?.provider ?? '');
+    _provider = TextEditingController(text: 'TESDA');
     _description = TextEditingController(text: e?.description ?? '');
     _certId = TextEditingController(text: e?.certificationId ?? '');
     _url = TextEditingController(text: e?.url ?? '');
     _issueDate = e?.issueDate.isNotEmpty == true ? e!.issueDate : null;
-    _expirationDate = e?.expirationDate.isNotEmpty == true ? e!.expirationDate : null;
+    _expirationDate = e?.expirationDate.isNotEmpty == true
+        ? e!.expirationDate
+        : null;
     _issueDisplay = TextEditingController(
-      text: _issueDate != null ? ProviderCertificationEntry.formatForPicker(_issueDate!) : '',
+      text: _issueDate != null
+          ? ProviderCertificationEntry.formatForPicker(_issueDate!)
+          : '',
     );
     _expirationDisplay = TextEditingController(
-      text: _expirationDate != null ? ProviderCertificationEntry.formatForPicker(_expirationDate!) : '',
+      text: _expirationDate != null
+          ? ProviderCertificationEntry.formatForPicker(_expirationDate!)
+          : '',
     );
     _name.addListener(_onFieldsChanged);
     _provider.addListener(_onFieldsChanged);
     _description.addListener(_onFieldsChanged);
+    _certId.addListener(_onFieldsChanged);
+    _url.addListener(_onFieldsChanged);
   }
 
   Future<void> _uploadCertificate() async {
     setState(() => _saving = true);
     try {
-      final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'], withData: true);
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+        withData: true,
+      );
       if (result == null) return;
       final file = result.files.single;
-      if (file.bytes == null || file.size > 5 * 1024 * 1024) throw StateError('Choose a file up to 5 MB.');
-      final url = await StorageService().uploadCertificate(providerId: widget.providerId,
-        certificateId: widget.initial?.id.isNotEmpty == true ? widget.initial!.id : ProviderCertificationEntry.newId(),
-        bytes: file.bytes!, extension: (file.extension ?? '').toLowerCase());
+      if (file.bytes == null || file.size > 5 * 1024 * 1024) {
+        throw StateError('Choose a file up to 5 MB.');
+      }
+      final url = await StorageService().uploadCertificate(
+        providerId: widget.providerId,
+        certificateId: widget.initial?.id.isNotEmpty == true
+            ? widget.initial!.id
+            : ProviderCertificationEntry.newId(),
+        bytes: file.bytes!,
+        extension: (file.extension ?? '').toLowerCase(),
+      );
       if (mounted) setState(() => _url.text = url);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e is StateError ? e.message.toString() : 'Could not upload the certificate. Please retry.')));
-    } finally { if (mounted) setState(() => _saving = false); }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              e is StateError
+                  ? e.message.toString()
+                  : 'Could not upload the certificate. Please retry.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   void _onFieldsChanged() => setState(() {});
 
   bool get _canSave =>
-      _name.text.trim().isNotEmpty && _provider.text.trim().isNotEmpty && (_issueDate?.isNotEmpty ?? false);
+      _name.text.trim().isNotEmpty &&
+      _certId.text.trim().isNotEmpty &&
+      _url.text.trim().isNotEmpty &&
+      (_expirationDate?.isNotEmpty ?? false) &&
+      (_issueDate?.isNotEmpty ?? false);
 
-  int get _descLeft => ProviderCertificationEntry.maxDescriptionLength - _description.text.length;
+  int get _descLeft =>
+      ProviderCertificationEntry.maxDescriptionLength -
+      _description.text.length;
 
   @override
   void dispose() {
@@ -205,8 +255,12 @@ class _ProviderCertificationDialogState extends State<ProviderCertificationDialo
         status: CertificationVerificationStatus.pending,
       );
 
-      final profile = await FirestoreService().getProviderProfile(widget.providerId);
-      final updated = List<ProviderCertificationEntry>.from(profile?.certificationHistory ?? []);
+      final profile = await FirestoreService().getProviderProfile(
+        widget.providerId,
+      );
+      final updated = List<ProviderCertificationEntry>.from(
+        profile?.certificationHistory ?? [],
+      );
       if (updated.isEmpty && (profile?.certifications.isNotEmpty ?? false)) {
         for (final line in profile!.certifications) {
           updated.add(
@@ -219,13 +273,16 @@ class _ProviderCertificationDialogState extends State<ProviderCertificationDialo
         }
       }
 
-      if (widget.editIndex != null && widget.editIndex! >= 0 && widget.editIndex! < updated.length) {
+      if (widget.editIndex != null &&
+          widget.editIndex! >= 0 &&
+          widget.editIndex! < updated.length) {
         updated[widget.editIndex!] = entry;
       } else if (widget.initial != null) {
         final idx = updated.indexWhere(
           (c) =>
               (c.id.isNotEmpty && c.id == widget.initial!.id) ||
-              (c.name == widget.initial!.name && c.provider == widget.initial!.provider),
+              (c.name == widget.initial!.name &&
+                  c.provider == widget.initial!.provider),
         );
         if (idx >= 0) {
           updated[idx] = entry;
@@ -237,12 +294,17 @@ class _ProviderCertificationDialogState extends State<ProviderCertificationDialo
       }
 
       // Provider may only remove (not add) approved ids — editing clears prior approval.
-      final approvedIds = <String>[]; // Any change requires renewed review of the submitted certificate set.
+      final approvedIds =
+          <
+            String
+          >[]; // Any change requires renewed review of the submitted certificate set.
 
       await FirestoreService().updateServiceProvider(
         providerId: profile?.providerId ?? widget.providerId,
         data: {
-          'certificationHistory': ProviderCertificationEntry.listToFirestore(updated),
+          'certificationHistory': ProviderCertificationEntry.listToFirestore(
+            updated,
+          ),
           'certifications': updated.map((e) => e.displayLine).toList(),
           'approvedCertificationIds': approvedIds,
         },
@@ -252,7 +314,9 @@ class _ProviderCertificationDialogState extends State<ProviderCertificationDialo
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not save certification. Try again.')),
+          const SnackBar(
+            content: Text('Could not save certification. Try again.'),
+          ),
         );
       }
     } finally {
@@ -272,29 +336,58 @@ class _ProviderCertificationDialogState extends State<ProviderCertificationDialo
         children: [
           _labeledField(
             label: 'Certification name',
-            field: TextFormField(
-              controller: _name,
-              validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter a certification name' : null,
-              decoration: _inputDecoration(hint: 'Ex: Certified ScrumMaster (CSM)'),
+            field: DropdownButtonFormField<String>(
+              initialValue:
+                  approvedQualifications.values
+                      .expand((v) => v)
+                      .contains(_name.text)
+                  ? _name.text
+                  : null,
+              isExpanded: true,
+              items: [
+                for (final name in approvedQualifications.values.expand(
+                  (v) => v,
+                ))
+                  DropdownMenuItem(
+                    value: name,
+                    child: Text(name, overflow: TextOverflow.ellipsis),
+                  ),
+              ],
+              onChanged: (v) => setState(() => _name.text = v ?? ''),
+              validator: (v) => v == null
+                  ? 'Choose the qualification shown on your certificate'
+                  : null,
+              decoration: _inputDecoration(),
             ),
           ),
           const SizedBox(height: 18),
           _labeledField(
-            label: 'Provider',
+            label: 'Issuing authority',
             field: TextFormField(
               controller: _provider,
-              validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter the certification provider' : null,
-              decoration: _inputDecoration(hint: 'Ex: Scrum Alliance'),
+              readOnly: true,
+              validator: (v) => (v == null || v.trim().isEmpty)
+                  ? 'Enter the certification provider'
+                  : null,
+              decoration: _inputDecoration(hint: 'TESDA'),
             ),
           ),
           const SizedBox(height: 18),
           Row(
             children: [
-              Expanded(child: _dateField(label: 'Issue date', value: _issueDate, required: true, onTap: () => _pickDate(expiration: false))),
+              Expanded(
+                child: _dateField(
+                  label: 'Issue date',
+                  value: _issueDate,
+                  required: true,
+                  onTap: () => _pickDate(expiration: false),
+                ),
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: _dateField(
-                  label: 'Expiration date (Optional)',
+                  label: 'Expiration date',
+                  required: true,
                   value: _expirationDate,
                   onTap: () => _pickDate(expiration: true),
                 ),
@@ -308,28 +401,50 @@ class _ProviderCertificationDialogState extends State<ProviderCertificationDialo
               controller: _description,
               maxLines: 5,
               maxLength: ProviderCertificationEntry.maxDescriptionLength,
-              buildCounter: (_, {required currentLength, required isFocused, maxLength}) =>
-                  Align(alignment: Alignment.centerRight, child: Text('$_descLeft characters left', style: _counterStyle)),
+              buildCounter:
+                  (
+                    _, {
+                    required currentLength,
+                    required isFocused,
+                    maxLength,
+                  }) => Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      '$_descLeft characters left',
+                      style: _counterStyle,
+                    ),
+                  ),
               decoration: _inputDecoration(),
             ),
           ),
           const SizedBox(height: 18),
           _labeledField(
-            label: 'Certification ID (Optional)',
-            field: TextFormField(controller: _certId, decoration: _inputDecoration()),
+            label: 'Certificate number',
+            field: TextFormField(
+              controller: _certId,
+              decoration: _inputDecoration(),
+            ),
           ),
           const SizedBox(height: 18),
           _labeledField(
-            label: 'Certificate document or verification URL',
+            label: 'Certificate document',
             field: TextFormField(
               controller: _url,
+              readOnly: true,
               keyboardType: TextInputType.url,
               decoration: _inputDecoration(),
             ),
           ),
           const SizedBox(height: 8),
-          OutlinedButton.icon(onPressed: _saving ? null : _uploadCertificate, icon: const Icon(Icons.upload_file), label: const Text('Upload PDF or image (up to 5 MB)')),
-          const Text('Changing certificates sends the certificate set back for administrator review.', style: TextStyle(fontSize: 12)),
+          OutlinedButton.icon(
+            onPressed: _saving ? null : _uploadCertificate,
+            icon: const Icon(Icons.upload_file),
+            label: const Text('Upload PDF or image (up to 5 MB)'),
+          ),
+          const Text(
+            'Changing certificates sends the certificate set back for administrator review.',
+            style: TextStyle(fontSize: 12),
+          ),
         ],
       ),
     );
@@ -344,9 +459,17 @@ class _ProviderCertificationDialogState extends State<ProviderCertificationDialo
               foregroundColor: FigmaColors.gray800,
               side: const BorderSide(color: FigmaColors.gray300),
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
             ),
-            child: Text('Back', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)),
+            child: Text(
+              'Back',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
           const Spacer(),
           FilledButton(
@@ -357,17 +480,25 @@ class _ProviderCertificationDialogState extends State<ProviderCertificationDialo
               disabledBackgroundColor: FigmaColors.gray300,
               disabledForegroundColor: FigmaColors.white,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
             ),
             child: _saving
                 ? const SizedBox(
                     width: 20,
                     height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: FigmaColors.white),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: FigmaColors.white,
+                    ),
                   )
                 : Text(
                     widget.isEditing ? 'Save' : 'Add certification',
-                    style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600),
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
           ),
         ],
@@ -380,7 +511,10 @@ class _ProviderCertificationDialogState extends State<ProviderCertificationDialo
         children: [
           Expanded(
             child: AppScrollChrome(
-              child: SingleChildScrollView(padding: const EdgeInsets.fromLTRB(20, 8, 20, 8), child: form),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+                child: form,
+              ),
             ),
           ),
           footer,
@@ -397,7 +531,14 @@ class _ProviderCertificationDialogState extends State<ProviderCertificationDialo
           child: Row(
             children: [
               Expanded(
-                child: Text(title, style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700, color: FigmaColors.gray900)),
+                child: Text(
+                  title,
+                  style: GoogleFonts.inter(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: FigmaColors.gray900,
+                  ),
+                ),
               ),
               IconButton(
                 onPressed: () => Navigator.pop(context),
@@ -408,7 +549,10 @@ class _ProviderCertificationDialogState extends State<ProviderCertificationDialo
           ),
         ),
         Flexible(
-          child: SingleChildScrollView(padding: const EdgeInsets.fromLTRB(20, 16, 20, 8), child: form),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+            child: form,
+          ),
         ),
         footer,
       ],
@@ -419,7 +563,14 @@ class _ProviderCertificationDialogState extends State<ProviderCertificationDialo
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: FigmaColors.gray800)),
+        Text(
+          label,
+          style: GoogleFonts.inter(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: FigmaColors.gray800,
+          ),
+        ),
         const SizedBox(height: 8),
         field,
       ],
@@ -435,19 +586,32 @@ class _ProviderCertificationDialogState extends State<ProviderCertificationDialo
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: FigmaColors.gray800)),
+        Text(
+          label,
+          style: GoogleFonts.inter(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: FigmaColors.gray800,
+          ),
+        ),
         const SizedBox(height: 8),
         TextFormField(
           readOnly: true,
           onTap: onTap,
           controller: required ? _issueDisplay : _expirationDisplay,
           validator: required
-              ? (_) => (_issueDate == null || _issueDate!.isEmpty) ? 'Select an issue date' : null
+              ? (_) => (_issueDate == null || _issueDate!.isEmpty)
+                    ? 'Select an issue date'
+                    : null
               : null,
           decoration: _inputDecoration(hint: 'mm/dd/yyyy').copyWith(
             suffixIcon: IconButton(
               onPressed: onTap,
-              icon: const Icon(Icons.calendar_today_outlined, size: 20, color: FigmaColors.gray500),
+              icon: const Icon(
+                Icons.calendar_today_outlined,
+                size: 20,
+                color: FigmaColors.gray500,
+              ),
             ),
           ),
         ),
@@ -455,7 +619,8 @@ class _ProviderCertificationDialogState extends State<ProviderCertificationDialo
     );
   }
 
-  TextStyle get _counterStyle => GoogleFonts.inter(fontSize: 12, color: FigmaColors.gray500);
+  TextStyle get _counterStyle =>
+      GoogleFonts.inter(fontSize: 12, color: FigmaColors.gray500);
 
   InputDecoration _inputDecoration({String? hint}) {
     return InputDecoration(

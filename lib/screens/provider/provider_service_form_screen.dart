@@ -54,7 +54,10 @@ class ProviderServiceFormScreen extends StatefulWidget {
       builder: (ctx) => providerThemed(
         Dialog(
           backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 24,
+          ),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 1120, maxHeight: 900),
             child: ProviderServiceFormScreen(
@@ -69,7 +72,8 @@ class ProviderServiceFormScreen extends StatefulWidget {
   }
 
   @override
-  State<ProviderServiceFormScreen> createState() => _ProviderServiceFormScreenState();
+  State<ProviderServiceFormScreen> createState() =>
+      _ProviderServiceFormScreenState();
 }
 
 class _LocalServiceImage {
@@ -86,7 +90,7 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
   final _price = TextEditingController();
 
   String? _category;
-  String _priceType = 'per hour';
+  String _priceType = 'negotiable';
   String? _duration;
   bool _isActive = true;
   bool _saving = false;
@@ -95,7 +99,7 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
   final List<_LocalServiceImage> _localImages = [];
   final _picker = ImagePicker();
 
-  static const _priceTypes = ['per hour', 'fixed', 'negotiable'];
+  static const _priceTypes = ['fixed', 'daily', 'negotiable'];
   static const _durations = [
     '30 minutes',
     '1 hour',
@@ -117,10 +121,16 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
       _title.text = e.serviceTitle;
       _description.text = e.description;
       _price.text = e.estimatedPrice.toStringAsFixed(0);
-      _category = e.category;
-      _priceType = e.priceType;
+      _category = ServiceCategories.categoryNames.contains(e.category)
+          ? e.category
+          : null;
+      _priceType = _priceTypes.contains(e.priceType)
+          ? e.priceType
+          : 'negotiable';
       _isActive = e.isActive;
-      _duration = _durations.contains(e.estimatedDuration) ? e.estimatedDuration : e.estimatedDuration;
+      _duration = _durations.contains(e.estimatedDuration)
+          ? e.estimatedDuration
+          : e.estimatedDuration;
       _imageUrls.addAll(e.serviceImages);
     } else {
       _category = ServiceCategories.categoryNames.isNotEmpty
@@ -146,11 +156,13 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
     super.dispose();
   }
 
-  MarketingServiceCategory? get _marketingCategory =>
-      _category != null ? MarketingServiceCatalog.categoryByName(_category!) : null;
+  MarketingServiceCategory? get _marketingCategory => _category != null
+      ? MarketingServiceCatalog.categoryByName(_category!)
+      : null;
 
-  List<String> get _templates =>
-      _category != null ? ServiceCategories.serviceNamesForCategory(_category!) : const [];
+  List<String> get _templates => _category != null
+      ? ServiceCategories.serviceNamesForCategory(_category!)
+      : const [];
 
   void _applyTemplate(String serviceName) {
     final cat = _marketingCategory;
@@ -245,19 +257,36 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
     final firestore = FirestoreService();
     final price = double.tryParse(_price.text.trim()) ?? 0;
 
+    if (!isSupportedService(category, _title.text.trim())) {
+      if (mounted) {
+        setState(() => _saving = false);
+        _snack('Choose a supported service from the catalog.');
+      }
+      return;
+    }
     if (publish) {
       final profile = await firestore.getProviderProfile(widget.appUser.userId);
       if (!(profile?.isVerifiedProvider ?? false)) {
         if (mounted) {
           setState(() => _saving = false);
-          _snack('Complete identity verification (System Administrator approval) before publishing.');
+          _snack(
+            'Complete identity verification (System Administrator approval) before publishing.',
+          );
         }
         return;
       }
       final title = _title.text.trim();
       // Only services that need credentials are gated — not the whole provider.
-      if (serviceRequiresCertification(category: category, serviceTitle: title) &&
-          !(profile != null && hasMatchingServiceCertificate(profile, category: category, serviceTitle: title))) {
+      if (serviceRequiresCertification(
+            category: category,
+            serviceTitle: title,
+          ) &&
+          !(profile != null &&
+              hasMatchingServiceCertificate(
+                profile,
+                category: category,
+                serviceTitle: title,
+              ))) {
         if (mounted) {
           setState(() => _saving = false);
           _snack(
@@ -295,7 +324,8 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
           'requiresCertification': needsCert,
         };
         if (publish || _materialChanged(existing)) {
-          updates['approvalStatus'] = ServiceApprovalStatus.pending.firestoreValue;
+          updates['approvalStatus'] =
+              ServiceApprovalStatus.pending.firestoreValue;
           updates['isActive'] = false;
           updates['rejectionReason'] = '';
         } else if (existing.approvalStatus.isApproved) {
@@ -325,7 +355,9 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
       }
       if (!mounted) return;
       if (publish) {
-        _snack('Listing submitted for admin review. You will be notified when it is approved.');
+        _snack(
+          'Listing submitted for admin review. You will be notified when it is approved.',
+        );
       }
       Navigator.pop(context, true);
     } catch (_) {
@@ -345,7 +377,6 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
     final n = double.tryParse(_price.text.trim());
     if (n == null || n <= 0) return '₱---';
     final pt = _priceType.toLowerCase();
-    if (pt.contains('hour')) return '₱${n.toStringAsFixed(0)} per hour';
     if (pt == 'fixed') return '₱${n.toStringAsFixed(0)} fixed';
     return '₱${n.toStringAsFixed(0)} $_priceType';
   }
@@ -427,13 +458,21 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
               children: [
                 Text(
                   widget.isEditing ? 'Edit service' : 'Add service',
-                  style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.w700, color: FigmaColors.gray900),
+                  style: GoogleFonts.inter(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: FigmaColors.gray900,
+                  ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'List a service so customers can browse and send booking requests.',
-                  style: GoogleFonts.inter(fontSize: 14, color: FigmaColors.gray600, height: 1.4),
+                  'List a certified service so customers can message you and propose a fixed or daily contract.',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    color: FigmaColors.gray600,
+                    height: 1.4,
+                  ),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -503,7 +542,9 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
               },
               menuStyle: MenuStyle(
                 alignment: Alignment.bottomLeft,
-                maximumSize: WidgetStatePropertyAll(Size(constraints.maxWidth, 320)),
+                maximumSize: WidgetStatePropertyAll(
+                  Size(constraints.maxWidth, 320),
+                ),
               ),
             );
           },
@@ -523,12 +564,20 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
           const SizedBox(height: 20),
           Text(
             'Quick fill from catalog (optional)',
-            style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: FigmaColors.gray800),
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: FigmaColors.gray800,
+            ),
           ),
           const SizedBox(height: 6),
           Text(
-            'Pick a suggested title or type your own custom service name below.',
-            style: GoogleFonts.inter(fontSize: 12, color: FigmaColors.gray500, height: 1.35),
+            'Choose a supported service. A matching TESDA certificate is required.',
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              color: FigmaColors.gray500,
+              height: 1.35,
+            ),
           ),
           const SizedBox(height: 10),
           Wrap(
@@ -543,18 +592,30 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
           const SizedBox(height: 20),
           Text(
             'Custom service',
-            style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: FigmaColors.gray800),
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: FigmaColors.gray800,
+            ),
           ),
           const SizedBox(height: 6),
           Text(
             'Enter any service title that fits your skills. The Administrator will review it before customers can see it.',
-            style: GoogleFonts.inter(fontSize: 12, color: FigmaColors.gray500, height: 1.35),
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              color: FigmaColors.gray500,
+              height: 1.35,
+            ),
           ),
         ],
         const SizedBox(height: 20),
         Text(
           'Upload service photos (optional)',
-          style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: FigmaColors.gray800),
+          style: GoogleFonts.inter(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: FigmaColors.gray800,
+          ),
         ),
         const SizedBox(height: 10),
         _PhotoStrip(
@@ -569,9 +630,12 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
           controller: _title,
           decoration: const InputDecoration(
             labelText: 'Service title *',
-            hintText: 'Catalog suggestion or your own custom service name',
+            hintText: 'Choose a supported catalog service above',
           ),
-          validator: (v) => v == null || v.trim().isEmpty ? 'Enter a title' : null,
+          readOnly: true,
+          validator: (v) => !isSupportedService(_category ?? '', v ?? '')
+              ? 'Choose a supported catalog service'
+              : null,
         ),
         const SizedBox(height: 16),
         TextFormField(
@@ -580,12 +644,14 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
           maxLength: _maxDescription,
           decoration: const InputDecoration(
             labelText: 'Description *',
-            hintText: 'Describe what you offer, what is included, and any requirements…',
+            hintText:
+                'Describe what you offer, what is included, and any requirements…',
             alignLabelWithHint: true,
             counterText: '',
           ),
-          validator: (v) =>
-              v == null || v.trim().length < 10 ? 'Add at least 10 characters' : null,
+          validator: (v) => v == null || v.trim().length < 10
+              ? 'Add at least 10 characters'
+              : null,
         ),
         Align(
           alignment: Alignment.centerRight,
@@ -618,7 +684,9 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
               child: DropdownButtonFormField<String>(
                 // ignore: deprecated_member_use
                 value: _priceType,
-                decoration: const InputDecoration(labelText: 'Price type *'),
+                decoration: const InputDecoration(
+                  labelText: 'Indicative basis',
+                ),
                 items: [
                   for (final p in _priceTypes)
                     DropdownMenuItem(value: p, child: Text(p)),
@@ -649,15 +717,23 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
           const SizedBox(height: 16),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: Text('Listing visible', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+            title: Text(
+              'Listing visible',
+              style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+            ),
             subtitle: Text(
               'Turn off to pause this approved listing on the marketplace.',
-              style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray500),
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: FigmaColors.gray500,
+              ),
             ),
             value: _isActive,
             activeTrackColor: FigmaColors.tintBlue,
             thumbColor: WidgetStateProperty.resolveWith(
-              (states) => states.contains(WidgetState.selected) ? FigmaColors.navy : null,
+              (states) => states.contains(WidgetState.selected)
+                  ? FigmaColors.navy
+                  : null,
             ),
             onChanged: (v) => setState(() => _isActive = v),
           ),
@@ -679,7 +755,9 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
   }
 
   Widget _buildSideColumn(BuildContext context) {
-    final title = _title.text.trim().isEmpty ? 'Service title' : _title.text.trim();
+    final title = _title.text.trim().isEmpty
+        ? 'Service title'
+        : _title.text.trim();
     final desc = _description.text.trim().isEmpty
         ? 'Your description will appear here.'
         : _description.text.trim();
@@ -688,20 +766,24 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
     final previewUrl = _imageUrls.isNotEmpty
         ? _imageUrls.first
         : (_localImages.isNotEmpty
-            ? null
-            : (_category != null
-                ? MarketingServiceImages.urlFor(
-                    serviceName: title,
-                    categoryName: _category!,
-                  )
-                : null));
+              ? null
+              : (_category != null
+                    ? MarketingServiceImages.urlFor(
+                        serviceName: title,
+                        categoryName: _category!,
+                      )
+                    : null));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
           'Live preview',
-          style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700, color: FigmaColors.gray900),
+          style: GoogleFonts.inter(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: FigmaColors.gray900,
+          ),
         ),
         const SizedBox(height: 4),
         Text(
@@ -723,11 +805,18 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
                 child: previewUrl != null
                     ? FigmaNetworkImage(url: previewUrl, fit: BoxFit.cover)
                     : (_localImages.isNotEmpty
-                        ? Image.memory(_localImages.first.bytes, fit: BoxFit.cover)
-                        : Container(
-                            color: FigmaColors.gray100,
-                            child: const Icon(Icons.image_outlined, size: 48, color: FigmaColors.gray300),
-                          )),
+                          ? Image.memory(
+                              _localImages.first.bytes,
+                              fit: BoxFit.cover,
+                            )
+                          : Container(
+                              color: FigmaColors.gray100,
+                              child: const Icon(
+                                Icons.image_outlined,
+                                size: 48,
+                                color: FigmaColors.gray300,
+                              ),
+                            )),
               ),
               Padding(
                 padding: const EdgeInsets.all(14),
@@ -736,7 +825,10 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
                   children: [
                     Text(
                       title,
-                      style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700),
+                      style: GoogleFonts.inter(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     const SizedBox(height: 6),
                     Row(
@@ -747,7 +839,13 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
                           color: cat?.fg ?? FigmaColors.gray600,
                         ),
                         const SizedBox(width: 6),
-                        Text(category, style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray600)),
+                        Text(
+                          category,
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            color: FigmaColors.gray600,
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 8),
@@ -762,11 +860,18 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
                     const SizedBox(height: 6),
                     Row(
                       children: [
-                        const Icon(Icons.schedule, size: 14, color: FigmaColors.gray500),
+                        const Icon(
+                          Icons.schedule,
+                          size: 14,
+                          color: FigmaColors.gray500,
+                        ),
                         const SizedBox(width: 6),
                         Text(
                           _duration ?? '1–2 hours',
-                          style: GoogleFonts.inter(fontSize: 12, color: FigmaColors.gray600),
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: FigmaColors.gray600,
+                          ),
                         ),
                       ],
                     ),
@@ -775,7 +880,11 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
                       desc,
                       maxLines: 4,
                       overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray600, height: 1.4),
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: FigmaColors.gray600,
+                        height: 1.4,
+                      ),
                     ),
                   ],
                 ),
@@ -796,11 +905,18 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.lightbulb_outline, color: FigmaColors.orange600, size: 22),
+                  const Icon(
+                    Icons.lightbulb_outline,
+                    color: FigmaColors.orange600,
+                    size: 22,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     'Tips for a great listing',
-                    style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700),
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ],
               ),
@@ -816,12 +932,20 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.check_circle, color: FigmaColors.navy, size: 18),
+                      const Icon(
+                        Icons.check_circle,
+                        color: FigmaColors.navy,
+                        size: 18,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           tip,
-                          style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray700, height: 1.35),
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            color: FigmaColors.gray700,
+                            height: 1.35,
+                          ),
                         ),
                       ),
                     ],
@@ -843,7 +967,9 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
       child: LayoutBuilder(
         builder: (context, c) {
           final stack = c.maxWidth < 640;
-          final publishLabel = widget.isEditing ? 'Save changes' : 'Publish service';
+          final publishLabel = widget.isEditing
+              ? 'Save changes'
+              : 'Publish service';
 
           if (stack) {
             return Column(
@@ -863,7 +989,10 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
                   ],
                 ),
                 const SizedBox(height: 10),
-                _footerFilled(publishLabel, _saving ? null : () => _save(publish: true)),
+                _footerFilled(
+                  publishLabel,
+                  _saving ? null : () => _save(publish: true),
+                ),
               ],
             );
           }
@@ -892,7 +1021,11 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
     );
   }
 
-  Widget _footerOutlined(String label, VoidCallback? onPressed, {Color? textColor}) {
+  Widget _footerOutlined(
+    String label,
+    VoidCallback? onPressed, {
+    Color? textColor,
+  }) {
     return OutlinedButton(
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
@@ -918,9 +1051,18 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
           ? const SizedBox(
               height: 22,
               width: 22,
-              child: CircularProgressIndicator(strokeWidth: 2, color: FigmaColors.white),
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: FigmaColors.white,
+              ),
             )
-          : Text(label, style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600)),
+          : Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
     );
   }
 }
@@ -945,7 +1087,10 @@ class _CatalogChip extends StatelessWidget {
             borderRadius: BorderRadius.circular(24),
             border: Border.all(color: FigmaColors.gray200),
           ),
-          child: Text(label, style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500)),
+          child: Text(
+            label,
+            style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500),
+          ),
         ),
       ),
     );
@@ -972,11 +1117,19 @@ class _PhotoStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final slots = <Widget>[
-      _AddPhotoSlot(onTap: onAdd, isPrimary: imageUrls.isEmpty && localImages.isEmpty),
-      for (final url in imageUrls) _UrlPhotoSlot(url: url, onRemove: () => onRemoveUrl(url)),
+      _AddPhotoSlot(
+        onTap: onAdd,
+        isPrimary: imageUrls.isEmpty && localImages.isEmpty,
+      ),
+      for (final url in imageUrls)
+        _UrlPhotoSlot(url: url, onRemove: () => onRemoveUrl(url)),
       for (var i = 0; i < localImages.length; i++)
-        _MemoryPhotoSlot(bytes: localImages[i].bytes, onRemove: () => onRemoveLocal(i)),
-      if (imageUrls.isNotEmpty || localImages.isNotEmpty) _AddMoreSlot(onTap: onAdd),
+        _MemoryPhotoSlot(
+          bytes: localImages[i].bytes,
+          onRemove: () => onRemoveLocal(i),
+        ),
+      if (imageUrls.isNotEmpty || localImages.isNotEmpty)
+        _AddMoreSlot(onTap: onAdd),
     ];
 
     return SizedBox(
@@ -1036,7 +1189,10 @@ class _AddPhotoSlot extends StatelessWidget {
                 ),
                 Text(
                   'PNG, JPG up to 10MB',
-                  style: GoogleFonts.inter(fontSize: 9, color: FigmaColors.gray500),
+                  style: GoogleFonts.inter(
+                    fontSize: 9,
+                    color: FigmaColors.gray500,
+                  ),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -1071,9 +1227,19 @@ class _AddMoreSlot extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.add_photo_alternate_outlined, color: FigmaColors.gray500, size: 28),
+                const Icon(
+                  Icons.add_photo_alternate_outlined,
+                  color: FigmaColors.gray500,
+                  size: 28,
+                ),
                 const SizedBox(height: 4),
-                Text('Add more', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600)),
+                Text(
+                  'Add more',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ],
             ),
           ),
@@ -1148,29 +1314,29 @@ class _ListingReviewBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final (title, body, color, bg) = switch (status) {
       ServiceApprovalStatus.pending => (
-          'Pending admin review',
-          'This listing is not visible to customers until an administrator approves it.',
-          FigmaColors.orange600,
-          FigmaColors.orange50,
-        ),
+        'Pending admin review',
+        'This listing is not visible to customers until an administrator approves it.',
+        FigmaColors.orange600,
+        FigmaColors.orange50,
+      ),
       ServiceApprovalStatus.rejected => (
-          'Listing rejected',
-          'Update the listing and publish again to resubmit for review.',
-          FigmaColors.red600,
-          FigmaColors.red50,
-        ),
+        'Listing rejected',
+        'Update the listing and publish again to resubmit for review.',
+        FigmaColors.red600,
+        FigmaColors.red50,
+      ),
       ServiceApprovalStatus.draft => (
-          'Draft',
-          'Save as draft or publish to submit for admin review.',
-          FigmaColors.gray600,
-          FigmaColors.gray100,
-        ),
+        'Draft',
+        'Save as draft or publish to submit for admin review.',
+        FigmaColors.gray600,
+        FigmaColors.gray100,
+      ),
       ServiceApprovalStatus.approved => (
-          '',
-          '',
-          FigmaColors.green,
-          FigmaColors.tintGreen,
-        ),
+        '',
+        '',
+        FigmaColors.green,
+        FigmaColors.tintGreen,
+      ),
     };
     if (title.isEmpty) return const SizedBox.shrink();
 
@@ -1185,9 +1351,23 @@ class _ListingReviewBanner extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700, color: color)),
+          Text(
+            title,
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+          ),
           const SizedBox(height: 4),
-          Text(body, style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray700, height: 1.4)),
+          Text(
+            body,
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              color: FigmaColors.gray700,
+              height: 1.4,
+            ),
+          ),
         ],
       ),
     );
@@ -1215,7 +1395,9 @@ class _CertificationPolicyBanner extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
-            requiresCert ? Icons.workspace_premium_outlined : Icons.check_circle_outline,
+            requiresCert
+                ? Icons.workspace_premium_outlined
+                : Icons.check_circle_outline,
             size: 20,
             color: color,
           ),
@@ -1225,7 +1407,11 @@ class _CertificationPolicyBanner extends StatelessWidget {
               requiresCert
                   ? 'Certificate required — System Administrator must authenticate a credential on your profile before you can publish this listing. Admin still reviews the listing after that.'
                   : 'No certificate required for this service — you can publish after identity verification. Admin reviews the listing as usual.',
-              style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray700, height: 1.4),
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: FigmaColors.gray700,
+                height: 1.4,
+              ),
             ),
           ),
         ],

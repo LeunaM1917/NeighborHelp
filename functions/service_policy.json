@@ -1,0 +1,28 @@
+{
+  "Home Repair": {
+    "Basic Carpentry": "carpentry",
+    "Carpentry": "carpentry",
+    "Door Repair": "carpentry",
+    "Furniture Repair": "carpentry"
+  },
+  "Cleaning": {
+    "House Cleaning": "domestic",
+    "Apartment Cleaning": "domestic",
+    "Kitchen Cleaning": "domestic",
+    "Bathroom Cleaning": "domestic",
+    "Laundry Assistance": "domestic",
+    "Ironing Service": "domestic"
+  },
+  "Repair and Technical Services": {
+    "Computer Repair": "computer",
+    "Laptop Repair": "computer",
+    "Internet/Wi-Fi Setup": "computer",
+    "Aircon Cleaning": "rac",
+    "Aircon Repair": "rac",
+    "Refrigerator Repair": "rac"
+  },
+  "Handyman": {
+    "Furniture Assembly": "carpentry",
+    "Shelf Installation": "carpentry"
+  }
+}

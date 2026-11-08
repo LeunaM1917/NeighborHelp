@@ -11,7 +11,7 @@ import '../models/booking_user_report.dart';
 import '../models/message.dart';
 import '../models/notification.dart' as n;
 import '../models/provider.dart';
-import '../models/provider_certification.dart';
+
 import '../models/review.dart';
 import '../models/service_contract.dart';
 import '../models/account_status.dart';
@@ -31,7 +31,7 @@ import '../utils/session_data_cache.dart';
 /// loading on Flutter web).
 class FirestoreService {
   FirestoreService._internal({FirebaseFirestore? firestore})
-      : _db = firestore ?? FirebaseFirestore.instance;
+    : _db = firestore ?? FirebaseFirestore.instance;
 
   static final FirestoreService _shared = FirestoreService._internal();
 
@@ -45,7 +45,8 @@ class FirestoreService {
   final FirebaseFirestore _db;
   final Map<String, ReplayDataStream<dynamic>> _streams = {};
   final _reads = SessionFutureCache();
-  String _sessionKey(String key) => '${FirebaseAuth.instance.currentUser?.uid ?? 'guest'}:$key';
+  String _sessionKey(String key) =>
+      '${FirebaseAuth.instance.currentUser?.uid ?? 'guest'}:$key';
 
   Future<T> _read<T>(String key, Future<T> Function() load) =>
       _reads.get(_sessionKey(key), load);
@@ -54,8 +55,11 @@ class FirestoreService {
   Future<void> retryDataLoads() async {
     _reads.clear();
     final prefix = _sessionKey('');
-    await Future.wait(_streams.entries.where((e) => e.key.startsWith(prefix))
-        .map((e) => e.value.retry()));
+    await Future.wait(
+      _streams.entries
+          .where((e) => e.key.startsWith(prefix))
+          .map((e) => e.value.retry()),
+    );
   }
 
   /// Memoized stream that **replays the latest event** to every new listener.
@@ -96,17 +100,23 @@ class FirestoreService {
   AppUser _publicUser(String id, Map<String, dynamic> row) {
     final data = Map<String, dynamic>.from(row);
     for (final field in ['createdAt', 'updatedAt']) {
-      if (data[field] is num) data[field] = Timestamp.fromMillisecondsSinceEpoch((data[field] as num).toInt());
+      if (data[field] is num) {
+        data[field] = Timestamp.fromMillisecondsSinceEpoch(
+          (data[field] as num).toInt(),
+        );
+      }
     }
     return AppUser.fromFirestore(id, data);
   }
 
   /// Existing public projections can render even if the bootstrap callable is
   /// temporarily unavailable. Never report a failed bootstrap as an empty list.
-  Stream<List<T>> _publicRecords<T>({required Query<Map<String, dynamic>> query,
+  Stream<List<T>> _publicRecords<T>({
+    required Query<Map<String, dynamic>> query,
     required Future<List<T>> Function() bootstrap,
     required T Function(String, Map<String, dynamic>) parse,
-    required String Function(T) id}) => Stream<List<T>>.multi((controller) {
+    required String Function(T) id,
+  }) => Stream<List<T>>.multi((controller) {
     final records = <String, T>{};
     final removed = <String>{};
     var ready = false;
@@ -124,46 +134,72 @@ class FirestoreService {
       }
       if (records.isNotEmpty || ready) controller.add(records.values.toList());
     }, onError: controller.addError);
-    unawaited(bootstrap().then((initial) {
-      if (cancelled) return;
-      for (final record in initial) {
-        if (!removed.contains(id(record))) records.putIfAbsent(id(record), () => record);
-      }
-      ready = true;
-      controller.add(records.values.toList());
-    }, onError: (Object error, StackTrace stack) {
-      if (cancelled) return;
-      if (records.isEmpty) controller.addError(error, stack);
-    }));
-    controller.onCancel = () { cancelled = true; return sub.cancel(); };
+    unawaited(
+      bootstrap().then(
+        (initial) {
+          if (cancelled) return;
+          for (final record in initial) {
+            if (!removed.contains(id(record))) {
+              records.putIfAbsent(id(record), () => record);
+            }
+          }
+          ready = true;
+          controller.add(records.values.toList());
+        },
+        onError: (Object error, StackTrace stack) {
+          if (cancelled) return;
+          if (records.isEmpty) controller.addError(error, stack);
+        },
+      ),
+    );
+    controller.onCancel = () {
+      cancelled = true;
+      return sub.cancel();
+    };
   });
 
-  Future<List<AppUser>> _publicDirectory({String? userId}) => _read('directory:${userId ?? 'all'}', () async {
-    final result = <AppUser>[];
-    String? after;
-    do {
-      final response = await FirebaseFunctions.instanceFor(region: kNeighborHelpFunctionsRegion)
-          .httpsCallable('getPublicDirectory').call({'userId': userId, if (after != null) 'after': after});
-      final data = Map<String, dynamic>.from(response.data as Map);
-      result.addAll((data['records'] as List).map((r) {
-        final row = Map<String, dynamic>.from(r as Map);
-        return _publicUser(row['userId'] as String, row);
-      }));
-      after = data['after'] as String?;
-    } while (after != null);
-    return result;
-  });
+  Future<List<AppUser>> _publicDirectory({String? userId}) =>
+      _read('directory:${userId ?? 'all'}', () async {
+        final result = <AppUser>[];
+        String? after;
+        do {
+          final response =
+              await FirebaseFunctions.instanceFor(
+                region: kNeighborHelpFunctionsRegion,
+              ).httpsCallable('getPublicDirectory').call({
+                'userId': userId,
+                if (after != null) 'after': after,
+              });
+          final data = Map<String, dynamic>.from(response.data as Map);
+          result.addAll(
+            (data['records'] as List).map((r) {
+              final row = Map<String, dynamic>.from(r as Map);
+              return _publicUser(row['userId'] as String, row);
+            }),
+          );
+          after = data['after'] as String?;
+        } while (after != null);
+        return result;
+      });
 
-  Stream<AppUser?> userStream(String userId) => _cache('user:$userId', () async* {
-    if (FirebaseAuth.instance.currentUser?.uid == userId || await _isAdministrator()) {
-      yield* userDoc(userId).snapshots().map((d) => d.exists ? AppUser.fromFirestore(d.id, d.data()!) : null);
-    } else {
-      yield* _publicRecords<AppUser>(
-        query: _db.collection('publicProfiles').where(FieldPath.documentId, isEqualTo: userId),
-        bootstrap: () => _publicDirectory(userId: userId), parse: _publicUser,
-        id: (u) => u.userId).map((users) => users.firstOrNull);
-    }
-  });
+  Stream<AppUser?> userStream(String userId) =>
+      _cache('user:$userId', () async* {
+        if (FirebaseAuth.instance.currentUser?.uid == userId ||
+            await _isAdministrator()) {
+          yield* userDoc(userId).snapshots().map(
+            (d) => d.exists ? AppUser.fromFirestore(d.id, d.data()!) : null,
+          );
+        } else {
+          yield* _publicRecords<AppUser>(
+            query: _db
+                .collection('publicProfiles')
+                .where(FieldPath.documentId, isEqualTo: userId),
+            bootstrap: () => _publicDirectory(userId: userId),
+            parse: _publicUser,
+            id: (u) => u.userId,
+          ).map((users) => users.firstOrNull);
+        }
+      });
 
   Future<void> updateUserProfile({
     required String userId,
@@ -179,35 +215,83 @@ class FirestoreService {
   ServiceProviderProfile _publicProvider(Map<String, dynamic> row) {
     final data = Map<String, dynamic>.from(row);
     final location = data['location'];
-    if (location is Map) data['location'] = GeoPoint((location['latitude'] as num).toDouble(), (location['longitude'] as num).toDouble());
-    for (final field in ['createdAt', 'updatedAt']) { if (data[field] is num) data[field] = Timestamp.fromMillisecondsSinceEpoch((data[field] as num).toInt()); }
-    return ServiceProviderProfile.fromFirestore(data['providerId'] as String, data);
+    if (location is Map) {
+      data['location'] = GeoPoint(
+        (location['latitude'] as num).toDouble(),
+        (location['longitude'] as num).toDouble(),
+      );
+    }
+    for (final field in ['createdAt', 'updatedAt']) {
+      if (data[field] is num) {
+        data[field] = Timestamp.fromMillisecondsSinceEpoch(
+          (data[field] as num).toInt(),
+        );
+      }
+    }
+    return ServiceProviderProfile.fromFirestore(
+      data['providerId'] as String,
+      data,
+    );
   }
 
-  Future<List<ServiceProviderProfile>> _publicProviders({String? userId}) => _read('publicProviders:${userId ?? 'all'}', () async {
-    final result = <ServiceProviderProfile>[];
-    String? after;
-    do {
-      final response = await FirebaseFunctions.instanceFor(region: kNeighborHelpFunctionsRegion).httpsCallable('getPublicProviders').call({'userId': userId, if (after != null) 'after': after});
-      final data = Map<String, dynamic>.from(response.data as Map);
-      result.addAll((data['records'] as List).map((r) => _publicProvider(Map<String, dynamic>.from(r as Map))));
-      after = data['after'] as String?;
-    } while (after != null);
-    return result;
-  });
+  Future<List<ServiceProviderProfile>> _publicProviders({String? userId}) =>
+      _read('publicProviders:${userId ?? 'all'}', () async {
+        final result = <ServiceProviderProfile>[];
+        String? after;
+        do {
+          final response =
+              await FirebaseFunctions.instanceFor(
+                region: kNeighborHelpFunctionsRegion,
+              ).httpsCallable('getPublicProviders').call({
+                'userId': userId,
+                if (after != null) 'after': after,
+              });
+          final data = Map<String, dynamic>.from(response.data as Map);
+          result.addAll(
+            (data['records'] as List).map(
+              (r) => _publicProvider(Map<String, dynamic>.from(r as Map)),
+            ),
+          );
+          after = data['after'] as String?;
+        } while (after != null);
+        return result;
+      });
 
-  Stream<List<ServiceProviderProfile>> serviceProvidersStream() => _cache('serviceProviders', () async* {
-    if (await _isAdministrator()) {
-      yield* _db.collection(FirestoreCollections.serviceProviders).snapshots().map((s) => s.docs.map((d) => ServiceProviderProfile.fromFirestore(d.id, d.data())).toList());
-    } else {
-      yield* _publicRecords<ServiceProviderProfile>(query: _db.collection('publicProviders'),
-        bootstrap: () => _publicProviders(), parse: (_, row) => _publicProvider(row),
-        id: (p) => p.providerId);
-    }
-  });
+  Stream<List<ServiceProviderProfile>> serviceProvidersStream() =>
+      _cache('serviceProviders', () async* {
+        if (await _isAdministrator()) {
+          yield* _db
+              .collection(FirestoreCollections.serviceProviders)
+              .snapshots()
+              .map(
+                (s) => s.docs
+                    .map(
+                      (d) =>
+                          ServiceProviderProfile.fromFirestore(d.id, d.data()),
+                    )
+                    .toList(),
+              );
+        } else {
+          yield* _publicRecords<ServiceProviderProfile>(
+            query: _db.collection('publicProviders'),
+            bootstrap: () => _publicProviders(),
+            parse: (_, row) => _publicProvider(row),
+            id: (p) => p.providerId,
+          ).map(
+            (list) => list
+                .where(
+                  (p) => p.eligibleServiceIds?.any(p.canOfferService) ?? false,
+                )
+                .toList(),
+          );
+        }
+      });
 
   Future<String> resolveProviderDocumentId(String userOrProviderId) async {
-    final direct = await _db.collection(FirestoreCollections.serviceProviders).doc(userOrProviderId).get();
+    final direct = await _db
+        .collection(FirestoreCollections.serviceProviders)
+        .doc(userOrProviderId)
+        .get();
     if (direct.exists) return userOrProviderId;
 
     final query = await _db
@@ -219,26 +303,29 @@ class FirestoreService {
     return userOrProviderId;
   }
 
-  static Map<String, dynamic> _defaultProviderFields(String userId, Timestamp now) => {
-        'userId': userId,
-        'bio': '',
-        'serviceArea': '',
-        'location': null,
-        'serviceRadiusKm': 5,
-        'averageRating': 0,
-        'completedBookings': 0,
-        'reviewCount': 0,
-        'acceptedBookings': 0,
-        'isVerified': false,
-        'verificationStatus': 'Pending',
-        'diditStatus': '',
-        'diditSessionId': '',
-        'verificationProvider': '',
-        'governmentIdTypeCode': '',
-        'governmentIdTypeLabel': '',
-        'createdAt': now,
-        'updatedAt': now,
-      };
+  static Map<String, dynamic> _defaultProviderFields(
+    String userId,
+    Timestamp now,
+  ) => {
+    'userId': userId,
+    'bio': '',
+    'serviceArea': '',
+    'location': null,
+    'serviceRadiusKm': 5,
+    'averageRating': 0,
+    'completedBookings': 0,
+    'reviewCount': 0,
+    'acceptedBookings': 0,
+    'isVerified': false,
+    'verificationStatus': 'Pending',
+    'diditStatus': '',
+    'diditSessionId': '',
+    'verificationProvider': '',
+    'governmentIdTypeCode': '',
+    'governmentIdTypeLabel': '',
+    'createdAt': now,
+    'updatedAt': now,
+  };
 
   /// Backfills verification guard fields on older provider docs so security rules allow updates.
   /// Creates `serviceProviders/{userId}` when missing so section editors can save.
@@ -254,7 +341,9 @@ class FirestoreService {
       }
     }
 
-    final ref = _db.collection(FirestoreCollections.serviceProviders).doc(userId);
+    final ref = _db
+        .collection(FirestoreCollections.serviceProviders)
+        .doc(userId);
     final snap = await ref.get();
     if (!snap.exists) {
       final now = Timestamp.now();
@@ -265,7 +354,8 @@ class FirestoreService {
 
   /// Historical stray profiles are preserved. Explicit roles determine access;
   /// any cleanup requires an administrator's retention review.
-  Future<bool> removeMistakenProviderProfileIfCustomer(String userId) async => false;
+  Future<bool> removeMistakenProviderProfileIfCustomer(String userId) async =>
+      false;
 
   Future<void> updateServiceProvider({
     required String providerId,
@@ -273,11 +363,14 @@ class FirestoreService {
   }) async {
     // Rules require the document path id to match request.auth.uid.
     await ensureServiceProviderProfile(providerId);
-    await _db.collection(FirestoreCollections.serviceProviders).doc(providerId).update({
-      ...data,
-      'updatedAt': FieldValue.serverTimestamp(),
-      'updatedBy': FirebaseAuth.instance.currentUser?.uid,
-    });
+    await _db
+        .collection(FirestoreCollections.serviceProviders)
+        .doc(providerId)
+        .update({
+          ...data,
+          'updatedAt': FieldValue.serverTimestamp(),
+          'updatedBy': FirebaseAuth.instance.currentUser?.uid,
+        });
   }
 
   Stream<List<ServiceListing>> servicesForProvider(String providerId) {
@@ -286,7 +379,11 @@ class FirestoreService {
           .collection(FirestoreCollections.services)
           .where('providerId', isEqualTo: providerId)
           .snapshots()
-          .map((s) => s.docs.map((d) => ServiceListing.fromFirestore(d.id, d.data())).toList());
+          .map(
+            (s) => s.docs
+                .map((d) => ServiceListing.fromFirestore(d.id, d.data()))
+                .toList(),
+          );
     });
   }
 
@@ -313,16 +410,30 @@ class FirestoreService {
     return list;
   }
 
-  Stream<ServiceProviderProfile?> providerProfileForUser(String userId) => _cache('providerProfileForUser:$userId', () async* {
-    if (FirebaseAuth.instance.currentUser?.uid == userId || await _isAdministrator()) {
-      yield* _db.collection(FirestoreCollections.serviceProviders).doc(userId).snapshots().map((d) => d.exists ? ServiceProviderProfile.fromFirestore(d.id, d.data()!) : null);
-    } else {
-      yield* _publicRecords<ServiceProviderProfile>(
-        query: _db.collection('publicProviders').where(FieldPath.documentId, isEqualTo: userId),
-        bootstrap: () => _publicProviders(userId: userId), parse: (_, row) => _publicProvider(row),
-        id: (p) => p.providerId).map((profiles) => profiles.firstOrNull);
-    }
-  });
+  Stream<ServiceProviderProfile?> providerProfileForUser(String userId) =>
+      _cache('providerProfileForUser:$userId', () async* {
+        if (FirebaseAuth.instance.currentUser?.uid == userId ||
+            await _isAdministrator()) {
+          yield* _db
+              .collection(FirestoreCollections.serviceProviders)
+              .doc(userId)
+              .snapshots()
+              .map(
+                (d) => d.exists
+                    ? ServiceProviderProfile.fromFirestore(d.id, d.data()!)
+                    : null,
+              );
+        } else {
+          yield* _publicRecords<ServiceProviderProfile>(
+            query: _db
+                .collection('publicProviders')
+                .where(FieldPath.documentId, isEqualTo: userId),
+            bootstrap: () => _publicProviders(userId: userId),
+            parse: (_, row) => _publicProvider(row),
+            id: (p) => p.providerId,
+          ).map((profiles) => profiles.firstOrNull);
+        }
+      });
 
   Stream<List<Booking>> bookingsForProviderUser(String userId) {
     return _cache('bookingsForProviderUser:$userId', () {
@@ -350,17 +461,14 @@ class FirestoreService {
               .collection(FirestoreCollections.bookings)
               .where('providerId', isEqualTo: providerId)
               .snapshots()
-              .listen(
-            (snap) {
-              seen.removeWhere((_, b) => b.providerId == providerId);
-              for (final doc in snap.docs) {
-                final booking = Booking.fromFirestore(doc.id, doc.data());
-                seen[booking.bookingId] = booking;
-              }
-              publish();
-            },
-            onError: controller.addError,
-          ),
+              .listen((snap) {
+                seen.removeWhere((_, b) => b.providerId == providerId);
+                for (final doc in snap.docs) {
+                  final booking = Booking.fromFirestore(doc.id, doc.data());
+                  seen[booking.bookingId] = booking;
+                }
+                publish();
+              }, onError: controller.addError),
         );
       }
 
@@ -406,17 +514,17 @@ class FirestoreService {
               .collection(FirestoreCollections.services)
               .where('providerId', isEqualTo: providerId)
               .snapshots()
-              .listen(
-            (snap) {
-              seen.removeWhere((_, s) => s.providerId == providerId);
-              for (final doc in snap.docs) {
-                final service = ServiceListing.fromFirestore(doc.id, doc.data());
-                seen[service.serviceId] = service;
-              }
-              publish();
-            },
-            onError: controller.addError,
-          ),
+              .listen((snap) {
+                seen.removeWhere((_, s) => s.providerId == providerId);
+                for (final doc in snap.docs) {
+                  final service = ServiceListing.fromFirestore(
+                    doc.id,
+                    doc.data(),
+                  );
+                  seen[service.serviceId] = service;
+                }
+                publish();
+              }, onError: controller.addError),
         );
       }
 
@@ -437,27 +545,42 @@ class FirestoreService {
     });
   }
 
-  Stream<ServiceListing?> serviceStream(String serviceId) => _cache('service:$serviceId', () =>
-      _db.collection(FirestoreCollections.services).doc(serviceId).snapshots().map((snap) =>
-          snap.exists && snap.data() != null ? ServiceListing.fromFirestore(snap.id, snap.data()!) : null));
+  Stream<ServiceListing?> serviceStream(String serviceId) => _cache(
+    'service:$serviceId',
+    () => _db
+        .collection(FirestoreCollections.services)
+        .doc(serviceId)
+        .snapshots()
+        .map(
+          (snap) => snap.exists && snap.data() != null
+              ? ServiceListing.fromFirestore(snap.id, snap.data()!)
+              : null,
+        ),
+  );
 
   Future<ServiceListing?> getService(String serviceId) =>
       _read('service:$serviceId', () => serviceStream(serviceId).first);
 
   /// Service titles keyed by listing id (for review job labels on profiles).
   Future<Map<String, String>> serviceTitlesByIds(Iterable<String> serviceIds) {
-    final unique = serviceIds.map((id) => id.trim()).where((id) => id.isNotEmpty).toSet().toList()..sort();
+    final unique =
+        serviceIds
+            .map((id) => id.trim())
+            .where((id) => id.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
     return _read('serviceTitles:${unique.join(',')}', () async {
-    if (unique.isEmpty) return const {};
-    final out = <String, String>{};
-    await Future.wait(
-      unique.map((id) async {
-        final service = await getService(id);
-        final title = service?.serviceTitle.trim() ?? '';
-        if (title.isNotEmpty) out[id] = title;
-      }),
-    );
-    return out;
+      if (unique.isEmpty) return const {};
+      final out = <String, String>{};
+      await Future.wait(
+        unique.map((id) async {
+          final service = await getService(id);
+          final title = service?.serviceTitle.trim() ?? '';
+          if (title.isNotEmpty) out[id] = title;
+        }),
+      );
+      return out;
     });
   }
 
@@ -501,11 +624,13 @@ class FirestoreService {
     ServiceListing listing,
   ) {
     final ref = _db.collection(FirestoreCollections.services).doc();
-    return ref.set({
-      ...listing.toMap(),
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    }).then((_) => ref);
+    return ref
+        .set({
+          ...listing.toMap(),
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        })
+        .then((_) => ref);
   }
 
   Future<void> updateService(String serviceId, Map<String, dynamic> data) {
@@ -530,8 +655,24 @@ class FirestoreService {
       if (listing == null) throw StateError('Service not found.');
       final profile = await getProviderProfile(listing.providerId);
       final owner = await getUser(listing.providerId);
-      if (profile == null || !profile.isVerifiedProvider || owner == null || owner.accountStatus.isBlocked || profile.serviceArea.trim().isEmpty) throw StateError('The provider needs a verified identity, active account, and service area.');
-      if (!hasMatchingServiceCertificate(profile, category: listing.category, serviceTitle: listing.serviceTitle)) throw StateError('A valid certificate matching this service is required.');
+      if (profile == null ||
+          !profile.isVerifiedProvider ||
+          owner == null ||
+          owner.accountStatus.isBlocked ||
+          profile.serviceArea.trim().isEmpty) {
+        throw StateError(
+          'The provider needs a verified identity, active account, and service area.',
+        );
+      }
+      if (!hasMatchingServiceCertificate(
+        profile,
+        category: listing.category,
+        serviceTitle: listing.serviceTitle,
+      )) {
+        throw StateError(
+          'A valid certificate matching this service is required.',
+        );
+      }
     }
     final data = <String, dynamic>{
       'approvalStatus': status.firestoreValue,
@@ -556,36 +697,54 @@ class FirestoreService {
     return updateService(serviceId, data);
   }
 
-  Future<void> _bookingCommand(String action, String bookingId, [Map<String, dynamic> data = const {}]) async {
+  Future<void> _bookingCommand(
+    String action,
+    String bookingId, [
+    Map<String, dynamic> data = const {},
+  ]) async {
     try {
       await FirebaseFunctions.instanceFor(region: kNeighborHelpFunctionsRegion)
-          .httpsCallable('bookingCommand').call({'action': action, 'bookingId': bookingId, ...data});
+          .httpsCallable('bookingCommand')
+          .call({'action': action, 'bookingId': bookingId, ...data});
     } on FirebaseFunctionsException catch (e) {
-      throw StateError(e.message ?? 'Could not update booking. Please try again.');
+      throw StateError(
+        e.message ?? 'Could not update booking. Please try again.',
+      );
     }
   }
 
-  Future<void> createBooking(Booking booking) => _bookingCommand('create', booking.bookingId, {
-    'serviceId': booking.serviceId,
-    'serviceLocation': booking.serviceLocation,
-    'location': {'latitude': booking.location.latitude, 'longitude': booking.location.longitude},
-    'scheduledDate': booking.scheduledDate.millisecondsSinceEpoch,
-    'scheduledEndDate': booking.scheduledEnd?.millisecondsSinceEpoch,
-    'notes': booking.notes,
-  });
+  Future<void> createBooking(Booking booking) =>
+      _bookingCommand('create', booking.bookingId, {
+        'serviceId': booking.serviceId,
+        'serviceLocation': booking.serviceLocation,
+        'location': {
+          'latitude': booking.location.latitude,
+          'longitude': booking.location.longitude,
+        },
+        'scheduledDate': booking.scheduledDate.millisecondsSinceEpoch,
+        'scheduledEndDate': booking.scheduledEnd?.millisecondsSinceEpoch,
+        'notes': booking.notes,
+      });
 
   Stream<Booking?> bookingStream(String bookingId) {
     return _cache('booking:$bookingId', () {
-      return _db.collection(FirestoreCollections.bookings).doc(bookingId).snapshots().map((snap) {
-        if (!snap.exists || snap.data() == null) return null;
-        return Booking.fromFirestore(snap.id, snap.data()!);
-      });
+      return _db
+          .collection(FirestoreCollections.bookings)
+          .doc(bookingId)
+          .snapshots()
+          .map((snap) {
+            if (!snap.exists || snap.data() == null) return null;
+            return Booking.fromFirestore(snap.id, snap.data()!);
+          });
     });
   }
 
   Future<Booking?> getBooking(String bookingId) async {
     if (bookingId.isEmpty) return null;
-    final snap = await _db.collection(FirestoreCollections.bookings).doc(bookingId).get();
+    final snap = await _db
+        .collection(FirestoreCollections.bookings)
+        .doc(bookingId)
+        .get();
     if (!snap.exists || snap.data() == null) return null;
     return Booking.fromFirestore(snap.id, snap.data()!);
   }
@@ -593,44 +752,81 @@ class FirestoreService {
   Future<void> updateBookingStatus(String bookingId, String status) =>
       _bookingCommand('adminStatus', bookingId, {'status': status});
 
-  Future<void> providerRespondToBooking({required String bookingId, required String providerId, required bool accept}) =>
-      _bookingCommand(accept ? 'accept' : 'decline', bookingId);
+  Future<void> providerRespondToBooking({
+    required String bookingId,
+    required String providerId,
+    required bool accept,
+    String? agreementHash,
+  }) => _bookingCommand(accept ? 'accept' : 'decline', bookingId, {
+    'acceptAgreement': accept,
+    'agreementHash': agreementHash,
+  });
+
+  Future<void> requestOfferChanges(String bookingId, String reason) =>
+      _bookingCommand('requestChanges', bookingId, {'reason': reason});
 
   Future<void> requestReschedule(String bookingId, DateTime when) =>
-      _bookingCommand('requestReschedule', bookingId, {'scheduledDate': when.millisecondsSinceEpoch});
+      _bookingCommand('requestReschedule', bookingId, {
+        'scheduledDate': when.millisecondsSinceEpoch,
+      });
 
   Future<void> respondToReschedule(String bookingId, {required bool approve}) =>
-      _bookingCommand(approve ? 'approveReschedule' : 'rejectReschedule', bookingId);
+      _bookingCommand(
+        approve ? 'approveReschedule' : 'rejectReschedule',
+        bookingId,
+      );
 
   Stream<ServiceContract?> contractStream(String contractId) {
-    return _cache('contract:$contractId', () => _db.collection(FirestoreCollections.contracts).doc(contractId).snapshots().map((snap) {
-      if (!snap.exists || snap.data() == null) return null;
-      return ServiceContract.fromFirestore(snap.id, snap.data()!);
-    }));
+    return _cache(
+      'contract:$contractId',
+      () => _db
+          .collection(FirestoreCollections.contracts)
+          .doc(contractId)
+          .snapshots()
+          .map((snap) {
+            if (!snap.exists || snap.data() == null) return null;
+            return ServiceContract.fromFirestore(snap.id, snap.data()!);
+          }),
+    );
   }
 
   Future<ServiceContract?> getContract(String contractId) async {
-    final snap = await _db.collection(FirestoreCollections.contracts).doc(contractId).get();
+    final snap = await _db
+        .collection(FirestoreCollections.contracts)
+        .doc(contractId)
+        .get();
     if (!snap.exists || snap.data() == null) return null;
     return ServiceContract.fromFirestore(snap.id, snap.data()!);
   }
 
   Stream<List<Booking>> bookingsForContract(String contractId) {
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    return _cache('contractBookings:$contractId', () => _db
-        .collection(FirestoreCollections.bookings)
-        .where(Filter.and(Filter('contractId', isEqualTo: contractId),
-          Filter.or(Filter('customerId', isEqualTo: uid), Filter('providerId', isEqualTo: uid))))
-        .snapshots()
-        .map((s) {
-      final list = s.docs.map((d) => Booking.fromFirestore(d.id, d.data())).toList();
-      list.sort((a, b) {
-        final ma = a.milestoneNumber ?? 0;
-        final mb = b.milestoneNumber ?? 0;
-        return ma.compareTo(mb);
-      });
-      return list;
-    }));
+    return _cache(
+      'contractBookings:$contractId',
+      () => _db
+          .collection(FirestoreCollections.bookings)
+          .where(
+            Filter.and(
+              Filter('contractId', isEqualTo: contractId),
+              Filter.or(
+                Filter('customerId', isEqualTo: uid),
+                Filter('providerId', isEqualTo: uid),
+              ),
+            ),
+          )
+          .snapshots()
+          .map((s) {
+            final list = s.docs
+                .map((d) => Booking.fromFirestore(d.id, d.data()))
+                .toList();
+            list.sort((a, b) {
+              final ma = a.milestoneNumber ?? 0;
+              final mb = b.milestoneNumber ?? 0;
+              return ma.compareTo(mb);
+            });
+            return list;
+          }),
+    );
   }
 
   Future<void> endContract({
@@ -638,38 +834,36 @@ class FirestoreService {
     required String endedByUserId,
     required String endedByRole,
   }) async {
-    final ref = _db.collection(FirestoreCollections.contracts).doc(contractId);
-    final snap = await ref.get();
-    if (!snap.exists) throw StateError('Contract not found');
-    final data = snap.data()!;
-    final customerId = data['customerId'] as String? ?? '';
-    final providerId = data['providerId'] as String? ?? '';
-    if (endedByUserId != customerId && endedByUserId != providerId) {
-      throw StateError('Only the customer or provider can end this contract');
+    try {
+      await FirebaseFunctions.instanceFor(
+        region: kNeighborHelpFunctionsRegion,
+      ).httpsCallable('contractCommand').call({'contractId': contractId});
+    } on FirebaseFunctionsException catch (e) {
+      throw StateError(e.message ?? 'Could not close this contract.');
     }
-    if ((data['status'] as String? ?? '').toLowerCase() == 'ended') {
-      return;
-    }
-    await ref.update({
-      'status': 'ended',
-      'endedAt': FieldValue.serverTimestamp(),
-      'endedByUserId': endedByUserId,
-      'endedByRole': endedByRole,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
   }
 
-  Future<void> customerCancelBooking({required String bookingId, required String customerId, required String reason}) =>
-      _bookingCommand('cancel', bookingId, {'reason': reason});
+  Future<void> customerCancelBooking({
+    required String bookingId,
+    required String customerId,
+    required String reason,
+  }) => _bookingCommand('cancel', bookingId, {'reason': reason});
 
-  Future<void> providerCancelBooking({required String bookingId, required String providerId, required String reason}) =>
-      _bookingCommand('cancel', bookingId, {'reason': reason});
+  Future<void> providerCancelBooking({
+    required String bookingId,
+    required String providerId,
+    required String reason,
+  }) => _bookingCommand('cancel', bookingId, {'reason': reason});
 
-  Future<void> providerStartBooking({required String bookingId, required String providerId}) =>
-      _bookingCommand('start', bookingId);
+  Future<void> providerStartBooking({
+    required String bookingId,
+    required String providerId,
+  }) => _bookingCommand('start', bookingId);
 
-  Future<void> providerCompleteBooking({required String bookingId, required String providerId}) =>
-      _bookingCommand('complete', bookingId);
+  Future<void> providerCompleteBooking({
+    required String bookingId,
+    required String providerId,
+  }) => _bookingCommand('complete', bookingId);
 
   /// Submit a moderation report for the other party in a booking.
   ///
@@ -691,7 +885,9 @@ class FirestoreService {
     final trimmedDetails = details.trim();
 
     final reportId = '${bookingId}_${reporterId}_$reportedUserId';
-    final ref = _db.collection(FirestoreCollections.bookingUserReports).doc(reportId);
+    final ref = _db
+        .collection(FirestoreCollections.bookingUserReports)
+        .doc(reportId);
 
     final existing = await ref.get();
     if (existing.exists) {
@@ -717,11 +913,17 @@ class FirestoreService {
   /// Admin: stream all booking user reports (newest first).
   Stream<List<BookingUserReport>> allBookingUserReportsStream() {
     return _cache('allBookingUserReports', () {
-      return _db.collection(FirestoreCollections.bookingUserReports).limit(250).snapshots().map((s) {
-        final list = s.docs.map((d) => BookingUserReport.fromFirestore(d.id, d.data())).toList();
-        list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        return list;
-      });
+      return _db
+          .collection(FirestoreCollections.bookingUserReports)
+          .limit(250)
+          .snapshots()
+          .map((s) {
+            final list = s.docs
+                .map((d) => BookingUserReport.fromFirestore(d.id, d.data()))
+                .toList();
+            list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+            return list;
+          });
     });
   }
 
@@ -737,13 +939,16 @@ class FirestoreService {
       throw StateError('Invalid report status.');
     }
 
-    await _db.collection(FirestoreCollections.bookingUserReports).doc(reportId).update({
-      'status': normalized,
-      'adminNotes': adminNotes.trim(),
-      'resolvedAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-      'updatedBy': FirebaseAuth.instance.currentUser?.uid,
-    });
+    await _db
+        .collection(FirestoreCollections.bookingUserReports)
+        .doc(reportId)
+        .update({
+          'status': normalized,
+          'adminNotes': adminNotes.trim(),
+          'resolvedAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+          'updatedBy': FirebaseAuth.instance.currentUser?.uid,
+        });
   }
 
   Future<void> sendTextMessage({
@@ -772,12 +977,24 @@ class FirestoreService {
   }
 
   /// Marks all unread messages in a thread as read for [readerId].
-  Future<void> sendImageMessage({required String bookingId, required String customerId, required String providerId,
-    required String senderId, required String receiverId, required String mediaUrl}) async {
+  Future<void> sendImageMessage({
+    required String bookingId,
+    required String customerId,
+    required String providerId,
+    required String senderId,
+    required String receiverId,
+    required String mediaUrl,
+  }) async {
     await _db.collection(FirestoreCollections.messages).add({
-      'bookingId': bookingId, 'threadId': messageThreadId(customerId, providerId),
-      'senderId': senderId, 'receiverId': receiverId, 'messageText': '', 'mediaUrl': mediaUrl,
-      'messageType': 'Image', 'isRead': false, 'sentAt': FieldValue.serverTimestamp(),
+      'bookingId': bookingId,
+      'threadId': messageThreadId(customerId, providerId),
+      'senderId': senderId,
+      'receiverId': receiverId,
+      'messageText': '',
+      'mediaUrl': mediaUrl,
+      'messageType': 'Image',
+      'isRead': false,
+      'sentAt': FieldValue.serverTimestamp(),
     });
   }
 
@@ -803,12 +1020,44 @@ class FirestoreService {
 
   Stream<int> unreadMessageCountStream(String userId) {
     return _cache('unreadMessages:$userId', () {
-      return _db
+      final controller = StreamController<int>();
+      var bookingCount = 0, inquiryCount = 0;
+      void emit() {
+        if (!controller.isClosed) controller.add(bookingCount + inquiryCount);
+      }
+
+      final bookings = _db
           .collection(FirestoreCollections.messages)
           .where('receiverId', isEqualTo: userId)
           .where('isRead', isEqualTo: false)
           .snapshots()
-          .map((s) => s.docs.length);
+          .listen((s) {
+            bookingCount = s.docs.length;
+            emit();
+          }, onError: controller.addError);
+      final inquiries = _db
+          .collection('inquiries')
+          .where('participantIds', arrayContains: userId)
+          .snapshots()
+          .listen((s) {
+            inquiryCount = s.docs.fold(
+              0,
+              (total, d) =>
+                  total +
+                  ((d.data()[d.data()['customerId'] == userId
+                                  ? 'customerUnreadCount'
+                                  : 'providerUnreadCount']
+                              as num?)
+                          ?.toInt() ??
+                      0),
+            );
+            emit();
+          }, onError: controller.addError);
+      controller.onCancel = () async {
+        await bookings.cancel();
+        await inquiries.cancel();
+      };
+      return controller.stream;
     });
   }
 
@@ -840,21 +1089,32 @@ class FirestoreService {
           .limit(100)
           .snapshots()
           .map((s) {
-            final list = s.docs.map((d) => Review.fromFirestore(d.id, d.data())).toList();
+            final list = s.docs
+                .map((d) => Review.fromFirestore(d.id, d.data()))
+                .toList();
             list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
             return list;
           });
     });
   }
 
-  Stream<List<Booking>> bookingsForUser(String userId, {bool asCustomer = true}) {
+  Stream<List<Booking>> bookingsForUser(
+    String userId, {
+    bool asCustomer = true,
+  }) {
     final field = asCustomer ? 'customerId' : 'providerId';
     return _cache('bookings:$field:$userId', () {
-      return _db.collection(FirestoreCollections.bookings).where(field, isEqualTo: userId).snapshots().map((s) {
-          final list = s.docs.map((d) => Booking.fromFirestore(d.id, d.data())).toList();
-          list.sort((a, b) => b.scheduledDate.compareTo(a.scheduledDate));
-          return list;
-        });
+      return _db
+          .collection(FirestoreCollections.bookings)
+          .where(field, isEqualTo: userId)
+          .snapshots()
+          .map((s) {
+            final list = s.docs
+                .map((d) => Booking.fromFirestore(d.id, d.data()))
+                .toList();
+            list.sort((a, b) => b.scheduledDate.compareTo(a.scheduledDate));
+            return list;
+          });
     });
   }
 
@@ -866,7 +1126,9 @@ class FirestoreService {
           .limit(50)
           .snapshots()
           .map((s) {
-            final list = s.docs.map((d) => n.AppNotification.fromFirestore(d.id, d.data())).toList();
+            final list = s.docs
+                .map((d) => n.AppNotification.fromFirestore(d.id, d.data()))
+                .toList();
             list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
             return list;
           });
@@ -877,10 +1139,21 @@ class FirestoreService {
     return _cache('messages:$bookingId', () {
       return _db
           .collection(FirestoreCollections.messages)
-          .where(Filter.and(Filter('bookingId', isEqualTo: bookingId), Filter.or(
-            Filter('senderId', isEqualTo: FirebaseAuth.instance.currentUser?.uid),
-            Filter('receiverId', isEqualTo: FirebaseAuth.instance.currentUser?.uid),
-          )))
+          .where(
+            Filter.and(
+              Filter('bookingId', isEqualTo: bookingId),
+              Filter.or(
+                Filter(
+                  'senderId',
+                  isEqualTo: FirebaseAuth.instance.currentUser?.uid,
+                ),
+                Filter(
+                  'receiverId',
+                  isEqualTo: FirebaseAuth.instance.currentUser?.uid,
+                ),
+              ),
+            ),
+          )
           .snapshots()
           .map(_mapAndSortMessages);
     });
@@ -896,11 +1169,19 @@ class FirestoreService {
     final sortedIds = bookingIds.toSet().toList()..sort();
     final idsKey = sortedIds.isEmpty ? 'none' : sortedIds.join(',');
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    final participantFilter = Filter.or(Filter('senderId', isEqualTo: uid), Filter('receiverId', isEqualTo: uid));
+    final participantFilter = Filter.or(
+      Filter('senderId', isEqualTo: uid),
+      Filter('receiverId', isEqualTo: uid),
+    );
     return _cache('messagesThread:$threadId:$idsKey', () {
       final threadStream = _db
           .collection(FirestoreCollections.messages)
-          .where(Filter.and(Filter('threadId', isEqualTo: threadId), participantFilter))
+          .where(
+            Filter.and(
+              Filter('threadId', isEqualTo: threadId),
+              participantFilter,
+            ),
+          )
           .snapshots();
 
       if (bookingIds.isEmpty) {
@@ -914,14 +1195,22 @@ class FirestoreService {
         legacyStreams.add(
           _db
               .collection(FirestoreCollections.messages)
-              .where(Filter.and(Filter('bookingId', whereIn: chunk), participantFilter))
+              .where(
+                Filter.and(
+                  Filter('bookingId', whereIn: chunk),
+                  participantFilter,
+                ),
+              )
               .snapshots(),
         );
       }
 
       final controller = StreamController<List<ChatMessage>>.broadcast();
       QuerySnapshot<Map<String, dynamic>>? threadSnap;
-      final legacySnaps = List<QuerySnapshot<Map<String, dynamic>>?>.filled(legacyStreams.length, null);
+      final legacySnaps = List<QuerySnapshot<Map<String, dynamic>>?>.filled(
+        legacyStreams.length,
+        null,
+      );
 
       void emitMerged() {
         final byId = <String, ChatMessage>{};
@@ -936,29 +1225,25 @@ class FirestoreService {
         for (final s in legacySnaps) {
           addSnap(s);
         }
-        final list = byId.values.toList()..sort((a, b) => a.sentAt.compareTo(b.sentAt));
+        final list = byId.values.toList()
+          ..sort((a, b) => a.sentAt.compareTo(b.sentAt));
         if (!controller.isClosed) controller.add(list);
       }
 
-      final threadSub = threadStream.listen(
-        (s) {
-          threadSnap = s;
-          emitMerged();
-        },
-        onError: controller.addError,
-      );
+      final threadSub = threadStream.listen((s) {
+        threadSnap = s;
+        emitMerged();
+      }, onError: controller.addError);
 
-      final legacySubs = <StreamSubscription<QuerySnapshot<Map<String, dynamic>>>>[];
+      final legacySubs =
+          <StreamSubscription<QuerySnapshot<Map<String, dynamic>>>>[];
       for (var i = 0; i < legacyStreams.length; i++) {
         final index = i;
         legacySubs.add(
-          legacyStreams[i].listen(
-            (s) {
-              legacySnaps[index] = s;
-              emitMerged();
-            },
-            onError: controller.addError,
-          ),
+          legacyStreams[i].listen((s) {
+            legacySnaps[index] = s;
+            emitMerged();
+          }, onError: controller.addError),
         );
       }
 
@@ -973,8 +1258,12 @@ class FirestoreService {
     });
   }
 
-  static List<ChatMessage> _mapAndSortMessages(QuerySnapshot<Map<String, dynamic>> s) {
-    final list = s.docs.map((d) => ChatMessage.fromFirestore(d.id, d.data())).toList();
+  static List<ChatMessage> _mapAndSortMessages(
+    QuerySnapshot<Map<String, dynamic>> s,
+  ) {
+    final list = s.docs
+        .map((d) => ChatMessage.fromFirestore(d.id, d.data()))
+        .toList();
     list.sort((a, b) => a.sentAt.compareTo(b.sentAt));
     return list;
   }
@@ -984,8 +1273,10 @@ class FirestoreService {
     return snapshot.count ?? 0;
   }
 
-  Future<List<Review>> reviewsForProvider(String providerId) =>
-      _read('reviewsProvider:$providerId', () => reviewsForProviderStream(providerId).first);
+  Future<List<Review>> reviewsForProvider(String providerId) => _read(
+    'reviewsProvider:$providerId',
+    () => reviewsForProviderStream(providerId).first,
+  );
 
   /// Feedback from providers about this customer (for provider due diligence).
   Future<List<Review>> reviewsForCustomer(String customerId) async {
@@ -995,7 +1286,9 @@ class FirestoreService {
         .where('reviewerRole', isEqualTo: 'provider')
         .limit(100)
         .get();
-    final list = snap.docs.map((d) => Review.fromFirestore(d.id, d.data())).toList();
+    final list = snap.docs
+        .map((d) => Review.fromFirestore(d.id, d.data()))
+        .toList();
     list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return list;
   }
@@ -1006,7 +1299,9 @@ class FirestoreService {
         .where('customerId', isEqualTo: customerId)
         .limit(100)
         .get();
-    final list = snap.docs.map((d) => Review.fromFirestore(d.id, d.data())).toList();
+    final list = snap.docs
+        .map((d) => Review.fromFirestore(d.id, d.data()))
+        .toList();
     list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return list;
   }
@@ -1025,7 +1320,11 @@ class FirestoreService {
           .collection(FirestoreCollections.reviews)
           .where('bookingId', isEqualTo: bookingId)
           .snapshots()
-          .map((snap) => snap.docs.map((d) => Review.fromFirestore(d.id, d.data())).toList());
+          .map(
+            (snap) => snap.docs
+                .map((d) => Review.fromFirestore(d.id, d.data()))
+                .toList(),
+          );
     });
   }
 
@@ -1040,7 +1339,10 @@ class FirestoreService {
     required String bookingId,
     required String reviewerId,
   }) async {
-    final review = await getMilestoneReview(bookingId: bookingId, reviewerId: reviewerId);
+    final review = await getMilestoneReview(
+      bookingId: bookingId,
+      reviewerId: reviewerId,
+    );
     return review != null;
   }
 
@@ -1070,7 +1372,10 @@ class FirestoreService {
     return reviews.any((r) => r.isCustomerReview);
   }
 
-  Future<Review?> getReviewForBooking(String bookingId, {String? reviewerRole}) async {
+  Future<Review?> getReviewForBooking(
+    String bookingId, {
+    String? reviewerRole,
+  }) async {
     if (reviewerRole != null) {
       final snap = await _db
           .collection(FirestoreCollections.reviews)
@@ -1102,7 +1407,9 @@ class FirestoreService {
   }) {
     final key = 'milestoneReview:$bookingId:$reviewerId';
     return _cache(key, () {
-      return reviewsForBookingStream(bookingId).map((reviews) => _reviewByReviewer(reviews, reviewerId));
+      return reviewsForBookingStream(
+        bookingId,
+      ).map((reviews) => _reviewByReviewer(reviews, reviewerId));
     });
   }
 
@@ -1129,7 +1436,10 @@ class FirestoreService {
       throw ArgumentError('Rating must be between 1 and 5.');
     }
 
-    final snap = await _db.collection(FirestoreCollections.bookings).doc(booking.bookingId).get();
+    final snap = await _db
+        .collection(FirestoreCollections.bookings)
+        .doc(booking.bookingId)
+        .get();
     if (!snap.exists || snap.data() == null) {
       throw StateError('Booking not found. Open the booking again and retry.');
     }
@@ -1141,19 +1451,33 @@ class FirestoreService {
       );
     }
     if (role == 'customer' && fresh.customerId != authUid) {
-      throw StateError('Only the customer on this booking can leave this review.');
+      throw StateError(
+        'Only the customer on this booking can leave this review.',
+      );
     }
     if (role == 'provider' && fresh.providerId != authUid) {
-      throw StateError('Only the provider on this booking can leave this review.');
+      throw StateError(
+        'Only the provider on this booking can leave this review.',
+      );
     }
 
-    final existing = await getMilestoneReview(bookingId: fresh.bookingId, reviewerId: reviewerId);
-    if (existing != null) throw StateError('You already reviewed this milestone');
+    final existing = await getMilestoneReview(
+      bookingId: fresh.bookingId,
+      reviewerId: reviewerId,
+    );
+    if (existing != null) {
+      throw StateError('You already reviewed this milestone');
+    }
 
     final trimmedComment = comment?.trim();
 
     try {
-      await _submitMilestoneReviewCallable(bookingId: fresh.bookingId, reviewerRole: role, rating: rating, comment: trimmedComment);
+      await _submitMilestoneReviewCallable(
+        bookingId: fresh.bookingId,
+        reviewerRole: role,
+        rating: rating,
+        comment: trimmedComment,
+      );
     } on FirebaseFunctionsException catch (e) {
       throw StateError(_milestoneReviewFunctionsMessage(e));
     }
@@ -1165,7 +1489,9 @@ class FirestoreService {
     required int rating,
     String? comment,
   }) async {
-    final functions = FirebaseFunctions.instanceFor(region: kNeighborHelpFunctionsRegion);
+    final functions = FirebaseFunctions.instanceFor(
+      region: kNeighborHelpFunctionsRegion,
+    );
     final callable = functions.httpsCallable('submitMilestoneReview');
     await callable.call(<String, dynamic>{
       'bookingId': bookingId,
@@ -1182,7 +1508,8 @@ class FirestoreService {
       case 'permission-denied':
         return e.message ?? 'You cannot leave a review on this booking.';
       case 'failed-precondition':
-        return e.message ?? 'Reviews unlock after the milestone is marked complete.';
+        return e.message ??
+            'Reviews unlock after the milestone is marked complete.';
       case 'already-exists':
         return 'You already reviewed this milestone.';
       case 'not-found':
@@ -1202,7 +1529,10 @@ class FirestoreService {
     required int rating,
     String? comment,
   }) async {
-    final snap = await _db.collection(FirestoreCollections.bookings).doc(bookingId).get();
+    final snap = await _db
+        .collection(FirestoreCollections.bookings)
+        .doc(bookingId)
+        .get();
     if (!snap.exists) throw StateError('Booking not found');
     final booking = Booking.fromFirestore(snap.id, snap.data()!);
     await createMilestoneReview(
@@ -1214,7 +1544,10 @@ class FirestoreService {
     );
   }
 
-  Future<Map<String, dynamic>?> providerAvailability(String providerId) async => (await getProviderProfile(providerId))?.effectiveWeeklyAvailability.toFirestore();
+  Future<Map<String, dynamic>?> providerAvailability(String providerId) async =>
+      (await getProviderProfile(
+        providerId,
+      ))?.effectiveWeeklyAvailability.toFirestore();
 
   Future<void> updateProviderAvailability({
     required String providerId,
@@ -1228,11 +1561,17 @@ class FirestoreService {
 
   Stream<List<n.AppNotification>> allNotificationsStream() {
     return _cache('allNotifications', () {
-      return _db.collection(FirestoreCollections.notifications).limit(200).snapshots().map((s) {
-        final list = s.docs.map((d) => n.AppNotification.fromFirestore(d.id, d.data())).toList();
-        list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        return list;
-      });
+      return _db
+          .collection(FirestoreCollections.notifications)
+          .limit(200)
+          .snapshots()
+          .map((s) {
+            final list = s.docs
+                .map((d) => n.AppNotification.fromFirestore(d.id, d.data()))
+                .toList();
+            list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+            return list;
+          });
     });
   }
 
@@ -1264,9 +1603,21 @@ class FirestoreService {
     bool pushEnabled = true,
   }) async {
     final usersSnap = await _db.collection(FirestoreCollections.users).get();
-    var users = usersSnap.docs.where((d) => d.data()['accountStatus'] == 'Active' && ['Customer', 'Provider', 'Administrator'].contains(d.data()['role'])).toList();
+    var users = usersSnap.docs
+        .where(
+          (d) =>
+              d.data()['accountStatus'] == 'Active' &&
+              [
+                'Customer',
+                'Provider',
+                'Administrator',
+              ].contains(d.data()['role']),
+        )
+        .toList();
     if (roleFilter != null) {
-      users = users.where((d) => d.data()['role'] == roleFilter.firestoreValue).toList();
+      users = users
+          .where((d) => d.data()['role'] == roleFilter.firestoreValue)
+          .toList();
     }
     var sent = 0;
     for (final doc in users) {
@@ -1278,7 +1629,6 @@ class FirestoreService {
         pushEnabled: pushEnabled,
       );
       sent++;
-
     }
     return sent;
   }
@@ -1287,19 +1637,32 @@ class FirestoreService {
 
   Stream<List<AppUser>> allUsersStream() => _cache('allUsers', () async* {
     if (await _isAdministrator()) {
-      yield* _db.collection(FirestoreCollections.users).snapshots().map((s) =>
-        s.docs.map((d) => AppUser.fromFirestore(d.id, d.data())).toList()
-          ..sort((a, b) => b.createdAt.compareTo(a.createdAt)));
+      yield* _db
+          .collection(FirestoreCollections.users)
+          .snapshots()
+          .map(
+            (s) =>
+                s.docs
+                    .map((d) => AppUser.fromFirestore(d.id, d.data()))
+                    .toList()
+                  ..sort((a, b) => b.createdAt.compareTo(a.createdAt)),
+          );
     } else {
-      yield* _publicRecords<AppUser>(query: _db.collection('publicProfiles'),
-        bootstrap: () => _publicDirectory(), parse: _publicUser, id: (u) => u.userId);
+      yield* _publicRecords<AppUser>(
+        query: _db.collection('publicProfiles'),
+        bootstrap: () => _publicDirectory(),
+        parse: _publicUser,
+        id: (u) => u.userId,
+      );
     }
   });
 
   Stream<List<Booking>> allBookingsStream() {
     return _cache('allBookings', () {
       return _db.collection(FirestoreCollections.bookings).snapshots().map((s) {
-        final list = s.docs.map((d) => Booking.fromFirestore(d.id, d.data())).toList();
+        final list = s.docs
+            .map((d) => Booking.fromFirestore(d.id, d.data()))
+            .toList();
         list.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
         return list;
       });
@@ -1309,7 +1672,9 @@ class FirestoreService {
   Stream<List<ServiceListing>> allServicesStream() {
     return _cache('allServices', () {
       return _db.collection(FirestoreCollections.services).snapshots().map((s) {
-        final list = s.docs.map((d) => ServiceListing.fromFirestore(d.id, d.data())).toList();
+        final list = s.docs
+            .map((d) => ServiceListing.fromFirestore(d.id, d.data()))
+            .toList();
         list.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
         return list;
       });
@@ -1318,7 +1683,9 @@ class FirestoreService {
 
   Future<AdminDashboardStats> adminDashboardStats() async {
     final users = await _db.collection(FirestoreCollections.users).get();
-    final providers = await _db.collection(FirestoreCollections.serviceProviders).get();
+    final providers = await _db
+        .collection(FirestoreCollections.serviceProviders)
+        .get();
     final bookings = await _db.collection(FirestoreCollections.bookings).get();
     final services = await _db.collection(FirestoreCollections.services).get();
 
@@ -1371,7 +1738,15 @@ class FirestoreService {
     if (!user.canAdminReviewVerification) {
       throw StateError('Customer has not completed Didit verification.');
     }
-    if (approve && !['approved', 'active'].contains(user.identityVerification.diditStatus.toLowerCase())) throw StateError('Didit must approve the identity before it can be verified.');
+    if (approve &&
+        ![
+          'approved',
+          'active',
+        ].contains(user.identityVerification.diditStatus.toLowerCase())) {
+      throw StateError(
+        'Didit must approve the identity before it can be verified.',
+      );
+    }
     await updateUserProfile(
       userId: userId,
       data: {
@@ -1380,7 +1755,8 @@ class FirestoreService {
         'verificationManualDecision': approve ? 'Approved' : 'Rejected',
         'updatedBy': FirebaseAuth.instance.currentUser?.uid,
         'updatedByRole': 'Administrator',
-        if (reviewedByUserId != null) 'verificationReviewedBy': reviewedByUserId,
+        if (reviewedByUserId != null)
+          'verificationReviewedBy': reviewedByUserId,
         'verificationReviewedByRole': reviewedByRole,
         'verificationReviewedAt': FieldValue.serverTimestamp(),
       },
@@ -1393,16 +1769,26 @@ class FirestoreService {
     String? reviewedByUserId,
     String reviewedByRole = 'Administrator',
   }) async {
-    final ref = _db.collection(FirestoreCollections.serviceProviders).doc(providerId);
+    final ref = _db
+        .collection(FirestoreCollections.serviceProviders)
+        .doc(providerId);
     final snap = await ref.get();
     if (!snap.exists) {
       throw StateError('Provider profile not found.');
     }
-    final profile = ServiceProviderProfile.fromFirestore(snap.id, snap.data() ?? {});
+    final profile = ServiceProviderProfile.fromFirestore(
+      snap.id,
+      snap.data() ?? {},
+    );
     if (!profile.canAdminReviewVerification) {
       throw StateError('No identity verification is available for review.');
     }
-    if (approve && !['approved', 'active'].contains(profile.diditStatus.toLowerCase())) throw StateError('Didit must approve the identity before it can be verified.');
+    if (approve &&
+        !['approved', 'active'].contains(profile.diditStatus.toLowerCase())) {
+      throw StateError(
+        'Didit must approve the identity before it can be verified.',
+      );
+    }
     await updateServiceProvider(
       providerId: providerId,
       data: {
@@ -1411,68 +1797,10 @@ class FirestoreService {
         'verificationManualDecision': approve ? 'Approved' : 'Rejected',
         'updatedBy': FirebaseAuth.instance.currentUser?.uid,
         'updatedByRole': 'Administrator',
-        if (reviewedByUserId != null) 'verificationReviewedBy': reviewedByUserId,
+        if (reviewedByUserId != null)
+          'verificationReviewedBy': reviewedByUserId,
         'verificationReviewedByRole': reviewedByRole,
         'verificationReviewedAt': FieldValue.serverTimestamp(),
-      },
-    );
-  }
-
-  /// Verification Agency authenticates a submitted certification.
-  Future<void> agencyReviewCertification({
-    required String providerId,
-    required String certificationEntryId,
-    required bool approve,
-    String? reviewedByUserId,
-    String reviewedByRole = 'Administrator',
-    String rejectionReason = '',
-  }) async {
-    final ref = _db.collection(FirestoreCollections.serviceProviders).doc(providerId);
-    final snap = await ref.get();
-    if (!snap.exists) {
-      throw StateError('Provider profile not found.');
-    }
-    final profile = ServiceProviderProfile.fromFirestore(snap.id, snap.data() ?? {});
-    final history = List<ProviderCertificationEntry>.from(profile.effectiveCertificationHistory);
-    final idx = history.indexWhere((e) => e.id == certificationEntryId);
-    if (idx < 0) {
-      throw StateError('Certification not found.');
-    }
-
-    if (approve && (history[idx].url.trim().isEmpty || (DateTime.tryParse(history[idx].expirationDate)?.isBefore(DateTime.now().subtract(const Duration(days: 1))) ?? false))) {
-      throw StateError('A document or verification URL and an unexpired certificate are required.');
-    }
-    var entry = history[idx];
-    if (entry.id.isEmpty) {
-      entry = entry.copyWith(id: certificationEntryId.isNotEmpty ? certificationEntryId : ProviderCertificationEntry.newId());
-    }
-
-    history[idx] = entry.copyWith(
-      status: approve
-          ? CertificationVerificationStatus.approved
-          : CertificationVerificationStatus.rejected,
-      reviewedBy: reviewedByUserId ?? '',
-      reviewedByRole: reviewedByRole,
-      reviewedAt: Timestamp.now(),
-      rejectionReason: approve ? '' : rejectionReason,
-      clearReview: false,
-    );
-
-    final approvedIds = List<String>.from(profile.approvedCertificationIds);
-    if (approve) {
-      if (!approvedIds.contains(entry.id)) approvedIds.add(entry.id);
-    } else {
-      approvedIds.remove(entry.id);
-    }
-
-    await updateServiceProvider(
-      providerId: providerId,
-      data: {
-        'certificationHistory': ProviderCertificationEntry.listToFirestore(history),
-        'certifications': history.map((e) => e.displayLine).toList(),
-        'approvedCertificationIds': approvedIds,
-        'updatedBy': FirebaseAuth.instance.currentUser?.uid,
-        'updatedByRole': 'Administrator',
       },
     );
   }
@@ -1483,7 +1811,10 @@ class FirestoreService {
   }) {
     return updateUserProfile(
       userId: userId,
-      data: {'accountStatus': status.firestoreValue, 'updatedByRole': 'Administrator'},
+      data: {
+        'accountStatus': status.firestoreValue,
+        'updatedByRole': 'Administrator',
+      },
     );
   }
 
@@ -1492,11 +1823,12 @@ class FirestoreService {
   }
 
   Future<void> markNotificationRead(String notificationId) {
-    return _db.collection(FirestoreCollections.notifications).doc(notificationId).update({
-      'isRead': true,
-    });
+    return _db
+        .collection(FirestoreCollections.notifications)
+        .doc(notificationId)
+        .update({'isRead': true});
   }
 
-  Future<AppUser?> getUser(String userId) => _read('user:$userId', () => userStream(userId).first);
-
+  Future<AppUser?> getUser(String userId) =>
+      _read('user:$userId', () => userStream(userId).first);
 }

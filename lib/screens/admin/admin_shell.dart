@@ -22,7 +22,7 @@ import 'pages/admin_user_reports_page.dart';
 import 'pages/admin_services_page.dart';
 import 'pages/admin_notifications_page.dart';
 import 'pages/admin_settings_page.dart';
-import '../verification_agency/agency_certificates_page.dart';
+import 'pages/admin_certificate_review_page.dart';
 import 'pages/admin_recommendation_ranking_page.dart';
 import 'pages/admin_verification_page.dart';
 
@@ -146,7 +146,7 @@ class _AdminShellState extends State<AdminShell> {
                       reviewerUserId: widget.appUser.userId,
                     ),
                   ),
-                  _adminTabScope(5, AgencyCertificatesPage(reviewerUserId: widget.appUser.userId)),
+                  _adminTabScope(5, const AdminCertificateReviewPage()),
                   _adminTabScope(
                     6,
                     AdminServicesPage(auth: auth, onNavigateToTab: _selectTab),

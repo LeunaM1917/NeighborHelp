@@ -41,6 +41,8 @@ class ServiceProviderProfile {
     this.profileTraits = const [],
     this.weeklyAvailability,
     this.eligibleServiceIds,
+    this.eligibleServiceExpiries = const {},
+    this.marketplacePolicyVersion = 0,
   });
 
   final String providerId;
@@ -52,6 +54,7 @@ class ServiceProviderProfile {
   final double averageRating;
   final int completedBookings;
   final int acceptedBookings;
+
   /// Customer reviews received (denormalized from cloud function).
   final int reviewCount;
   final bool isVerified;
@@ -61,9 +64,20 @@ class ServiceProviderProfile {
 
   /// Weekly schedule used for availability scoring (A). Null → defaults.
   final ProviderWeeklyAvailability? weeklyAvailability;
+
   /// Server-computed eligibility on public projections; absent on private profiles.
   final List<String>? eligibleServiceIds;
-  bool canOfferService(String serviceId) => eligibleServiceIds?.contains(serviceId) ?? isVerifiedProvider;
+  final Map<String, dynamic> eligibleServiceExpiries;
+  final int marketplacePolicyVersion;
+  bool canOfferService(String serviceId) {
+    if (eligibleServiceIds == null) return isVerifiedProvider;
+    final expires = eligibleServiceExpiries[serviceId] as num?;
+    return isVerifiedProvider &&
+        marketplacePolicyVersion == 2 &&
+        eligibleServiceIds!.contains(serviceId) &&
+        expires != null &&
+        expires >= DateTime.now().millisecondsSinceEpoch;
+  }
 
   /// Raw Didit session status, e.g. "Approved", "In Review", "Declined".
   final String diditStatus;
@@ -85,6 +99,7 @@ class ServiceProviderProfile {
   final String videoIntroUrl;
   final List<String> certifications;
   final List<ProviderCertificationEntry> certificationHistory;
+
   /// Certificate entry ids authenticated by System Administrator (cannot be forged by provider).
   final List<String> approvedCertificationIds;
   final List<String> otherExperiences;
@@ -155,7 +170,9 @@ class ServiceProviderProfile {
   }
 
   bool get hasPortfolio =>
-      effectivePortfolioProjects.any((p) => !p.isDraft && p.thumbnailUrl.isNotEmpty) ||
+      effectivePortfolioProjects.any(
+        (p) => !p.isDraft && p.thumbnailUrl.isNotEmpty,
+      ) ||
       portfolioUrls.isNotEmpty;
 
   List<ProviderCertificationEntry> get effectiveCertificationHistory {
@@ -166,11 +183,15 @@ class ServiceProviderProfile {
           .map(
             (e) => approved.contains(e.id) && e.id.isNotEmpty
                 ? e.copyWith(status: CertificationVerificationStatus.approved)
-                : e.isApproved ? e.copyWith(status: CertificationVerificationStatus.pending) : e,
+                : e.isApproved
+                ? e.copyWith(status: CertificationVerificationStatus.pending)
+                : e,
           )
           .toList();
     }
-    return certifications.map((c) => ProviderCertificationEntry(name: c)).toList();
+    return certifications
+        .map((c) => ProviderCertificationEntry(name: c))
+        .toList();
   }
 
   bool get hasCertifications => effectiveCertificationHistory.isNotEmpty;
@@ -178,7 +199,9 @@ class ServiceProviderProfile {
   /// At least one certificate authenticated by the System Administrator.
   bool get hasApprovedCertifications {
     final approved = approvedCertificationIds.toSet();
-    return effectiveCertificationHistory.any((e) => e.id.isNotEmpty && approved.contains(e.id));
+    return effectiveCertificationHistory.any(
+      (e) => e.id.isNotEmpty && approved.contains(e.id),
+    );
   }
 
   List<ProviderCertificationEntry> get approvedCertifications =>
@@ -186,8 +209,12 @@ class ServiceProviderProfile {
 
   /// Thumbnail-first URLs for profile grid (published projects only).
   List<String> get portfolioThumbnailUrls {
-    final published = effectivePortfolioProjects.where((p) => !p.isDraft && p.thumbnailUrl.isNotEmpty);
-    if (published.isNotEmpty) return published.map((p) => p.thumbnailUrl).toList();
+    final published = effectivePortfolioProjects.where(
+      (p) => !p.isDraft && p.thumbnailUrl.isNotEmpty,
+    );
+    if (published.isNotEmpty) {
+      return published.map((p) => p.thumbnailUrl).toList();
+    }
     return portfolioUrls;
   }
 
@@ -215,30 +242,50 @@ class ServiceProviderProfile {
       governmentIdTypeCode: data['governmentIdTypeCode'] as String? ?? '',
       governmentIdTypeLabel: data['governmentIdTypeLabel'] as String? ?? '',
       education: data['education'] as String? ?? '',
-      educationHistory: ProviderEducationEntry.listFromFirestore(data['educationHistory']),
-      employmentHistory: ProviderEmploymentEntry.listFromFirestore(data['employmentHistory']),
+      educationHistory: ProviderEducationEntry.listFromFirestore(
+        data['educationHistory'],
+      ),
+      employmentHistory: ProviderEmploymentEntry.listFromFirestore(
+        data['employmentHistory'],
+      ),
       portfolioUrls: _stringList(data['portfolioUrls']),
-      portfolioProjects: ProviderPortfolioProject.listFromFirestore(data['portfolioProjects']),
+      portfolioProjects: ProviderPortfolioProject.listFromFirestore(
+        data['portfolioProjects'],
+      ),
       videoIntroUrl: data['videoIntroUrl'] as String? ?? '',
       certifications: _stringList(data['certifications']),
-      certificationHistory: ProviderCertificationEntry.listFromFirestore(data['certificationHistory']),
+      certificationHistory: ProviderCertificationEntry.listFromFirestore(
+        data['certificationHistory'],
+      ),
       approvedCertificationIds: _stringList(data['approvedCertificationIds']),
       otherExperiences: _stringList(data['otherExperiences']),
       linkedAccounts: _linkedAccountsMap(data['linkedAccounts']),
       profileTraits: _stringList(data['profileTraits']),
       weeklyAvailability: _weeklyAvailability(data['weeklyAvailability']),
-      eligibleServiceIds: data.containsKey('eligibleServiceIds') ? _stringList(data['eligibleServiceIds']) : null,
+      eligibleServiceIds: data.containsKey('eligibleServiceIds')
+          ? _stringList(data['eligibleServiceIds'])
+          : null,
+      eligibleServiceExpiries: Map<String, dynamic>.from(
+        data['eligibleServiceExpiries'] as Map? ?? {},
+      ),
+      marketplacePolicyVersion:
+          (data['marketplacePolicyVersion'] as num?)?.toInt() ?? 0,
     );
   }
 
   static ProviderWeeklyAvailability? _weeklyAvailability(dynamic raw) {
     if (raw is! Map) return null;
-    return ProviderWeeklyAvailability.fromFirestore(Map<String, dynamic>.from(raw));
+    return ProviderWeeklyAvailability.fromFirestore(
+      Map<String, dynamic>.from(raw),
+    );
   }
 
   static List<String> _stringList(dynamic raw) {
     if (raw is! List) return [];
-    return raw.map((e) => e.toString().trim()).where((s) => s.isNotEmpty).toList();
+    return raw
+        .map((e) => e.toString().trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
   }
 
   static Map<String, String> _linkedAccountsMap(dynamic raw) {
@@ -271,18 +318,27 @@ class ServiceProviderProfile {
       'governmentIdTypeCode': governmentIdTypeCode,
       'governmentIdTypeLabel': governmentIdTypeLabel,
       'education': education,
-      'educationHistory': ProviderEducationEntry.listToFirestore(educationHistory),
-      'employmentHistory': ProviderEmploymentEntry.listToFirestore(employmentHistory),
+      'educationHistory': ProviderEducationEntry.listToFirestore(
+        educationHistory,
+      ),
+      'employmentHistory': ProviderEmploymentEntry.listToFirestore(
+        employmentHistory,
+      ),
       'portfolioUrls': portfolioUrls,
-      'portfolioProjects': ProviderPortfolioProject.listToFirestore(portfolioProjects),
+      'portfolioProjects': ProviderPortfolioProject.listToFirestore(
+        portfolioProjects,
+      ),
       'videoIntroUrl': videoIntroUrl,
       'certifications': certifications,
-      'certificationHistory': ProviderCertificationEntry.listToFirestore(certificationHistory),
+      'certificationHistory': ProviderCertificationEntry.listToFirestore(
+        certificationHistory,
+      ),
       'approvedCertificationIds': approvedCertificationIds,
       'otherExperiences': otherExperiences,
       'linkedAccounts': linkedAccounts,
       'profileTraits': profileTraits,
-      if (weeklyAvailability != null) 'weeklyAvailability': weeklyAvailability!.toFirestore(),
+      if (weeklyAvailability != null)
+        'weeklyAvailability': weeklyAvailability!.toFirestore(),
     };
   }
 }

@@ -5,7 +5,6 @@ import '../../figma_ui/figma_colors.dart';
 import '../../figma_ui/marketing_service_images.dart';
 import '../../figma_ui/widgets/figma_network_image.dart';
 import '../../models/app_user.dart';
-import '../../models/booking.dart';
 import '../../models/provider.dart';
 import '../../models/review.dart';
 import '../../models/service.dart';
@@ -14,7 +13,8 @@ import '../../theme/role_theme.dart';
 import '../../utils/review_sentiment.dart';
 import '../../widgets/member_profile/member_profile_kit.dart';
 import '../customer/customer_service_detail_screen.dart';
-import 'messages_hub.dart';
+import '../../services/marketplace_service.dart';
+import 'inquiry_screen.dart';
 
 /// Public provider profile (customer viewing a provider).
 class PublicProviderProfileBody extends StatelessWidget {
@@ -114,7 +114,7 @@ class PublicProviderProfileBody extends StatelessWidget {
                     tags: profile?.profileTraits ?? const [],
                   ),
                   ..._providerProfessionalSections(profile: profile),
-                  _ServicesSection(viewer: viewer, providerId: providerId),
+                  _ServicesSection(viewer: viewer, providerId: providerId, profile: profile),
                   MemberProfileReviewsSection(
                     reviews: reviews,
                     averageRating: rating,
@@ -199,10 +199,11 @@ List<Widget> _providerProfessionalSections({required ServiceProviderProfile? pro
 }
 
 class _ServicesSection extends StatelessWidget {
-  const _ServicesSection({required this.viewer, required this.providerId});
+  const _ServicesSection({required this.viewer, required this.providerId, required this.profile});
 
   final AppUser viewer;
   final String providerId;
+  final ServiceProviderProfile? profile;
 
   @override
   Widget build(BuildContext context) {
@@ -213,7 +214,7 @@ class _ServicesSection extends StatelessWidget {
       child: StreamBuilder<List<ServiceListing>>(
         stream: firestore.servicesForProvider(providerId),
         builder: (context, snap) {
-          final services = (snap.data ?? []).where((s) => s.isMarketplaceVisible).toList();
+          final services = (snap.data ?? []).where((s) => s.isMarketplaceVisible && profile?.canOfferService(s.serviceId) == true).toList();
           if (services.isEmpty) {
             return Text(
               'No published services yet.',
@@ -318,29 +319,31 @@ class _ProviderActionsRail extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         MemberProfileSectionCard(
-          title: 'Book or contact',
+          title: 'Discuss your job',
           icon: Icons.calendar_today_outlined,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Message to check availability or book a service.',
+                'Discuss requirements, availability and price before sending a contract offer.',
                 style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray600, height: 1.45),
               ),
               const SizedBox(height: 14),
-              StreamBuilder<List<Booking>>(
-                stream: firestore.bookingsForUser(viewer.userId, asCustomer: true),
+              StreamBuilder<List<ServiceListing>>(
+                stream: firestore.servicesForProvider(providerId),
                 builder: (context, snap) {
-                  final related = (snap.data ?? []).where((b) => b.providerId == providerId).toList();
+                  final services = (snap.data ?? []).where((s) => s.isMarketplaceVisible && profile?.canOfferService(s.serviceId) == true).toList();
                   return FilledButton.icon(
-                    onPressed: () {
-                      if (related.isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Book a service first to message this provider.')),
-                        );
-                        return;
+                    onPressed: services.isEmpty ? null : () async {
+                      try {
+                        final id = await MarketplaceService.openInquiry(services.first.serviceId);
+                        if (!context.mounted) return;
+                        await Navigator.push<void>(context, MaterialPageRoute(builder: (_) => InquiryScreen(appUser: viewer, inquiryId: id)));
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e is StateError ? e.message.toString() : 'Could not open the conversation. Please retry.')));
+                        }
                       }
-                      MessagesHub.openConversation(context, appUser: viewer, booking: related.first, asCustomer: true);
                     },
                     style: FilledButton.styleFrom(
                       backgroundColor: rc.primary,
@@ -356,7 +359,7 @@ class _ProviderActionsRail extends StatelessWidget {
               StreamBuilder<List<ServiceListing>>(
                 stream: firestore.servicesForProvider(providerId),
                 builder: (context, snap) {
-                  final services = (snap.data ?? []).where((s) => s.isMarketplaceVisible).toList();
+                  final services = (snap.data ?? []).where((s) => s.isMarketplaceVisible && profile?.canOfferService(s.serviceId) == true).toList();
                   return OutlinedButton.icon(
                     onPressed: services.isEmpty
                         ? null
@@ -367,7 +370,7 @@ class _ProviderActionsRail extends StatelessWidget {
                               ),
                             ),
                     icon: const Icon(Icons.event_available_outlined, size: 18),
-                    label: const Text('Book now'),
+                    label: const Text('View service and discuss'),
                   );
                 },
               ),

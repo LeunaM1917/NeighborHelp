@@ -62,6 +62,16 @@ class _BookingRescheduleCardState extends State<BookingRescheduleCard> {
   Widget build(BuildContext context) {
     final b = widget.booking;
     if (!b.isPending && !b.isAccepted) return const SizedBox.shrink();
+    if (b.agreement != null) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Text(
+            'To change the agreed schedule, scope or price, discuss it in the inquiry, cancel the existing offer with a reason, and send a new offer for both parties to accept. Accepted terms are retained.',
+          ),
+        ),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Card(

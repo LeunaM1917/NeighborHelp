@@ -590,7 +590,7 @@ class _ServiceCardState extends State<_ServiceCard> {
                           ),
                         ),
                         Text(
-                          'From ₱${widget.data.pricePhp}/hr',
+                          'From ₱${widget.data.pricePhp} (indicative)',
                           style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600, color: FigmaColors.navy),
                         ),
                       ],

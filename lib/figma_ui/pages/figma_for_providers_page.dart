@@ -20,22 +20,21 @@ class FigmaForProvidersPage extends StatelessWidget {
     _Ben(Icons.groups_outlined, 'Reach More Customers', 'Connect with thousands of potential customers actively looking for services in your area.'),
     _Ben(Icons.attach_money, 'Grow Your Income', 'Set your own rates and increase your earnings by taking on more jobs that fit your schedule.'),
     _Ben(Icons.calendar_today_outlined, 'Flexible Schedule', 'Work on your own terms. Choose which jobs to accept and when you want to work.'),
-    _Ben(Icons.shield_outlined, 'Secure Payments', 'Get paid securely and on time through our trusted payment platform. No more chasing payments.'),
+    _Ben(Icons.shield_outlined, 'Written Agreements', 'Agree on scope, a fixed or daily price, and direct payment arrangements before starting work.'),
     _Ben(Icons.emoji_events_outlined, 'Build Your Reputation', 'Earn reviews and build a stellar reputation that helps you win more jobs in the future.'),
     _Ben(Icons.smartphone, 'Easy to Use', 'Manage your business on the go with our mobile-friendly platform. Accept jobs, chat with clients, and more.'),
   ];
 
   static const _steps = <_ProvStep>[
     _ProvStep('1', 'Create Your Profile', 'Sign up and create a professional profile showcasing your skills, experience, and services.'),
-    _ProvStep('2', 'Get Verified', 'Complete our simple verification process to build trust with potential customers.'),
-    _ProvStep('3', 'List Your Services', 'Add the services you offer so customers can find you when they browse and search.'),
-    _ProvStep('4', 'Receive Bookings & Get Paid', 'Accept booking requests from customers, complete the job, and receive secure payment.'),
+    _ProvStep('2', 'Verify Your Credentials', 'Complete identity checks and submit matching TESDA certificates for System Administrator review.'),
+    _ProvStep('3', 'List Certified Services', 'Choose supported services that match your approved qualifications.'),
+    _ProvStep('4', 'Discuss and Accept an Offer', 'Discuss the job in messages, review the fixed or daily contract, then accept before starting. Arrange payment directly with the customer.'),
   ];
 
   static const _quotes = <_Quote>[
     _Quote('John Martinez', 'Home Repair Specialist', 'NeighborHelp has transformed my business. I\'ve doubled my income and built a steady client base in just 6 months.', 5),
     _Quote('Sarah Chen', 'House Cleaning Professional', 'The platform is so easy to use, and I love having the flexibility to choose my own schedule. Highly recommend!', 5),
-    _Quote('Michael Thompson', 'Personal Trainer', 'Great way to find new clients! The secure payment system gives me peace of mind, and customers are always responsive.', 5),
   ];
 
   @override

@@ -417,7 +417,7 @@ ServiceListing? _demoService(String serviceId) {
       category: 'Tutoring and Lessons',
       description: '',
       estimatedPrice: 350,
-      priceType: 'hourly',
+      priceType: 'negotiable',
       estimatedDuration: '1 hr',
       availability: {},
       serviceImages: [MarketingServiceImages.urlFor(serviceName: 'Math Tutoring', categoryId: 'tutoring')],
@@ -1030,7 +1030,7 @@ String _displayStatus(String status) {
   if (s == 'completed') return 'Completed';
   if (s == 'cancelled' || s == 'canceled') return 'Cancelled';
   if (s == 'in progress') return 'In Progress';
-  if (s == 'pending' || s == 'accepted') return 'Upcoming';
+  if (s == 'pending' || s == 'accepted' || s == 'changes requested') return 'Upcoming';
   return status;
 }
 

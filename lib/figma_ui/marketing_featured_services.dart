@@ -1,4 +1,5 @@
 import 'marketing_service_images.dart';
+import '../utils/approved_service_catalog.dart';
 
 /// Curated cards for home / browse marketing grids.
 class MarketingFeaturedService {
@@ -134,5 +135,5 @@ abstract final class MarketingFeaturedServices {
       reviews: 142,
       pricePhp: 550,
     ),
-  ];
+  ].where((service) => isSupportedService(service.categoryName, service.title)).toList(growable: false);
 }

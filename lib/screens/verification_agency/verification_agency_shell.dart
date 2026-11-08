@@ -24,7 +24,8 @@ class VerificationAgencyShell extends StatefulWidget {
   final AuthService auth;
 
   @override
-  State<VerificationAgencyShell> createState() => _VerificationAgencyShellState();
+  State<VerificationAgencyShell> createState() =>
+      _VerificationAgencyShellState();
 }
 
 class _VerificationAgencyShellState extends State<VerificationAgencyShell> {
@@ -70,7 +71,7 @@ class _VerificationAgencyShellState extends State<VerificationAgencyShell> {
                             forAgency: true,
                             reviewerUserId: widget.appUser.userId,
                           ),
-                          AgencyCertificatesPage(reviewerUserId: widget.appUser.userId),
+                          const AdminCertificateReviewPage(),
                           const _AgencyAboutPage(),
                         ],
                       ),
@@ -103,7 +104,9 @@ class _AgencyTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final displayName = appUser.fullName.isNotEmpty ? appUser.fullName : appUser.email;
+    final displayName = appUser.fullName.isNotEmpty
+        ? appUser.fullName
+        : appUser.email;
 
     return Material(
       color: FigmaColors.white,
@@ -131,7 +134,10 @@ class _AgencyTopBar extends StatelessWidget {
                       ),
                       const SizedBox(width: 10),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
                         decoration: BoxDecoration(
                           color: FigmaColors.tintBlue,
                           borderRadius: BorderRadius.circular(999),
@@ -172,21 +178,32 @@ class _AgencyTopBar extends StatelessWidget {
                     PopupMenuButton<String>(
                       offset: const Offset(0, 8),
                       tooltip: 'Account menu',
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       onSelected: (value) {
                         if (value != 'signout') return;
-                        WidgetsBinding.instance.addPostFrameCallback((_) => onSignOut());
+                        WidgetsBinding.instance.addPostFrameCallback(
+                          (_) => onSignOut(),
+                        );
                       },
                       itemBuilder: (context) => [
                         PopupMenuItem<String>(
                           value: 'signout',
                           child: Row(
                             children: [
-                              const Icon(Icons.logout_rounded, size: 20, color: FigmaColors.gray800),
+                              const Icon(
+                                Icons.logout_rounded,
+                                size: 20,
+                                color: FigmaColors.gray800,
+                              ),
                               const SizedBox(width: 10),
                               Text(
                                 'Sign out',
-                                style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: FigmaColors.gray900),
+                                style: GoogleFonts.inter(
+                                  fontWeight: FontWeight.w600,
+                                  color: FigmaColors.gray900,
+                                ),
                               ),
                             ],
                           ),
@@ -222,10 +239,15 @@ class _AgencyTopBar extends StatelessWidget {
 }
 
 String _agencyInitials(String name) {
-  final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+  final parts = name
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((p) => p.isNotEmpty)
+      .toList();
   if (parts.isEmpty) return '?';
   if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
-  return '${parts.first.substring(0, 1)}${parts.last.substring(0, 1)}'.toUpperCase();
+  return '${parts.first.substring(0, 1)}${parts.last.substring(0, 1)}'
+      .toUpperCase();
 }
 
 class _AgencySideNav extends StatelessWidget {
@@ -265,23 +287,33 @@ class _AgencySideNav extends StatelessWidget {
           ),
           for (var i = 0; i < tabs.length; i++) ...[
             Material(
-              color: i == selectedIndex ? FigmaColors.tintBlue : Colors.transparent,
+              color: i == selectedIndex
+                  ? FigmaColors.tintBlue
+                  : Colors.transparent,
               borderRadius: BorderRadius.circular(10),
               child: ListTile(
                 dense: true,
                 leading: Icon(
                   tabs[i].icon,
-                  color: i == selectedIndex ? FigmaColors.navy : FigmaColors.gray500,
+                  color: i == selectedIndex
+                      ? FigmaColors.navy
+                      : FigmaColors.gray500,
                 ),
                 title: Text(
                   tabs[i].label,
                   style: GoogleFonts.inter(
-                    fontWeight: i == selectedIndex ? FontWeight.w700 : FontWeight.w500,
-                    color: i == selectedIndex ? FigmaColors.navy : FigmaColors.gray800,
+                    fontWeight: i == selectedIndex
+                        ? FontWeight.w700
+                        : FontWeight.w500,
+                    color: i == selectedIndex
+                        ? FigmaColors.navy
+                        : FigmaColors.gray800,
                   ),
                 ),
                 onTap: () => onSelect(i),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
             ),
             const SizedBox(height: 4),
@@ -312,32 +344,61 @@ class _AgencyAboutPage extends StatelessWidget {
           children: [
             Text(
               'Your responsibilities',
-              style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700),
+              style: GoogleFonts.inter(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
             ),
             const SizedBox(height: 12),
-            _bullet('Review government ID and Didit facial verification results.'),
-            _bullet('Approve or reject provider and customer identity requests.'),
-            _bullet('Authenticate provider-submitted certificates and licenses.'),
-            _bullet('Send results back to NeighborHelp (verified badge + cert status).'),
+            _bullet(
+              'Review government ID and Didit facial verification results.',
+            ),
+            _bullet(
+              'Approve or reject provider and customer identity requests.',
+            ),
+            _bullet(
+              'Authenticate provider-submitted certificates and licenses.',
+            ),
+            _bullet(
+              'Send results back to NeighborHelp (verified badge + cert status).',
+            ),
             const SizedBox(height: 20),
             Text(
               'What you do not approve',
-              style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700),
+              style: GoogleFonts.inter(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
             ),
             const SizedBox(height: 12),
-            _bullet('Service listings, pricing, and categories — reviewed by the Administrator.'),
-            _bullet('Booking disputes and platform moderation — Administrator.'),
+            _bullet(
+              'Service listings, pricing, and categories — reviewed by the Administrator.',
+            ),
+            _bullet(
+              'Booking disputes and platform moderation — Administrator.',
+            ),
             const SizedBox(height: 20),
             Text(
               'Workflow',
-              style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700),
+              style: GoogleFonts.inter(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
             ),
             const SizedBox(height: 12),
             _bullet('1. Provider submits ID + selfie through Didit.'),
-            _bullet('2. System Administrator reviews and approves/rejects identity.'),
-            _bullet('3. For technical jobs (e.g. Electrical / Plumbing), provider submits certificates → Agency authenticates them.'),
-            _bullet('4. Soft services (Cleaning, Tutoring, etc.) can be listed without certificates after identity approval.'),
-            _bullet('5. Provider publishes → Administrator reviews the listing. Marketplace shows approved + active services.'),
+            _bullet(
+              '2. System Administrator reviews and approves/rejects identity.',
+            ),
+            _bullet(
+              '3. For technical jobs (e.g. Electrical / Plumbing), provider submits certificates → Agency authenticates them.',
+            ),
+            _bullet(
+              '4. Soft services (Cleaning, Tutoring, etc.) can be listed without certificates after identity approval.',
+            ),
+            _bullet(
+              '5. Provider publishes → Administrator reviews the listing. Marketplace shows approved + active services.',
+            ),
           ],
         ),
       ),
@@ -352,7 +413,14 @@ class _AgencyAboutPage extends StatelessWidget {
         children: [
           const Text('•  ', style: TextStyle(fontWeight: FontWeight.w700)),
           Expanded(
-            child: Text(text, style: GoogleFonts.inter(fontSize: 14, height: 1.45, color: FigmaColors.gray700)),
+            child: Text(
+              text,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                height: 1.45,
+                color: FigmaColors.gray700,
+              ),
+            ),
           ),
         ],
       ),

@@ -10,44 +10,24 @@ function windowFor(b) {
   return { start, end };
 }
 function overlaps(a, b) {
-  const x = windowFor(a), y = windowFor(b);
-  return x.start < y.end && y.start < x.end;
+  const periods = b => {
+    const bounds=windowFor(b);
+    if (!b.agreement || !b.numberOfDays || !b.hoursPerDay) return [bounds];
+    return Array.from({length:b.numberOfDays},(_,i)=>({start:bounds.start+i*86400000,end:bounds.start+i*86400000+b.hoursPerDay*3600000}));
+  };
+  return periods(a).some(x=>periods(b).some(y=>x.start<y.end && y.start<x.end));
 }
 function validWindow(start, end, now = Date.now()) {
   return Number.isFinite(start) && Number.isFinite(end) && start > now && end > start && end - start <= 24 * 3600000;
 }
 function certificateFamily(category, title) {
-  const text = `${category} ${title}`.toLowerCase();
-  const families = {
-    electrical: /electric|wiring/,
-    plumbing: /plumb/,
-    carpentry: /carpen|woodwork/,
-    aircon: /aircon|air.condition|hvac|refrigerat|refrigerant/,
-    computer: /computer|laptop|desktop|network|ict/,
-    welding: /weld|metalwork/,
-    gas: /gas line|gas fitting/,
-    appliance: /appliance/,
-  };
-  for (const [family, pattern] of Object.entries(families)) if (pattern.test(text)) return family;
-  return /repair.*technical|technical.*service/.test(text) ? 'technical' : null;
+  return require('./marketplace_policy').serviceFamily(category, title);
 }
 function hasMatchingCertificate(profile, category, title, now = new Date()) {
   const family = certificateFamily(category, title);
-  if (!family) return true;
+  if (!family || !profile) return false;
   const approved = new Set(profile.approvedCertificationIds || []);
-  return (profile.certificationHistory || []).some(c => {
-    if (!approved.has(c.id)) return false;
-    if (c.expirationDate && new Date(`${c.expirationDate}T23:59:59+08:00`) < now) return false;
-    const text = `${c.name || ''} ${c.description || ''}`;
-    const patterns = {
-      electrical: /electric|wiring/i, plumbing: /plumb/i, carpentry: /carpen|woodwork/i,
-      aircon: /aircon|air.condition|hvac|refrigerat|rac servicing/i,
-      computer: /computer|hardware|css nc|ict|network/i, welding: /weld|metalwork/i,
-      gas: /gas|pipefitting/i, appliance: /appliance|electronic.*servic/i,
-      technical: /repair|technical|servicing/i,
-    };
-    return patterns[family].test(text) && Boolean(c.url);
-  });
+  return (profile.certificationHistory || []).some(c => require('./marketplace_policy').eligibleCertificate(c, approved, family, now));
 }
 function distanceKm(a, b) {
   const rad = x => x * Math.PI / 180;

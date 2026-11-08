@@ -16,7 +16,13 @@ module.exports = function platformOperations({ db, admin, functions, region, mes
     const services = await db.collection('services').where('providerId', '==', id).get();
     const eligible = services.docs.filter(d => { const s = d.data(); return s.isActive && s.approvalStatus === 'Approved' && hasMatchingCertificate(p, s.category, s.serviceTitle); });
     if (!eligible.length) return null;
-    const result = { providerId: id, eligibleServiceIds: eligible.map(d => d.id) };
+    const {serviceFamily,eligibleCertificate} = require('./marketplace_policy');
+    const result = { providerId: id, marketplacePolicyVersion:2, eligibleServiceIds: eligible.map(d => d.id),eligibleServiceExpiries:{} };
+    for(const doc of eligible) {
+      const s=doc.data(), family=serviceFamily(s.category,s.serviceTitle);
+      const certificates=(p.certificationHistory || []).filter(c => eligibleCertificate(c,new Set(p.approvedCertificationIds || []),family));
+      result.eligibleServiceExpiries[doc.id]=Math.max(...certificates.map(c => new Date(`${c.expirationDate}T23:59:59.999+08:00`).getTime()));
+    }
     for (const field of ['userId', 'bio', 'serviceArea', 'serviceRadiusKm', 'averageRating', 'reviewCount', 'completedBookings', 'acceptedBookings',
       'isVerified', 'verificationStatus', 'education', 'educationHistory', 'employmentHistory', 'portfolioUrls', 'portfolioProjects',
       'videoIntroUrl', 'otherExperiences', 'linkedAccounts', 'profileTraits', 'weeklyAvailability', 'approvedCertificationIds']) if (p[field] !== undefined) result[field] = p[field];
@@ -40,6 +46,23 @@ module.exports = function platformOperations({ db, admin, functions, region, mes
       notificationType: type, isRead: false, createdAt: stamp() }).catch(e => { if (e.code !== 6) throw e; });
   }
   out.bookingCommand = functions.region(region).https.onCall(require('./booking_commands')({ db, admin, functions }));
+  out.inquiryCommand = functions.region(region).https.onCall(require('./inquiry_commands')({db, functions}));
+  out.certificateCommand = functions.region(region).https.onCall(require('./certificate_commands')({db, functions}));
+  out.contractCommand = functions.region(region).https.onCall(require('./contract_commands')({db,functions}));
+  // Refresh old projections and hide expired/unsupported listings without deleting history.
+  out.enforceMarketplacePolicy = functions.region(region).pubsub.schedule('every 6 hours').onRun(async () => {
+    const providers=await db.collection('serviceProviders').get();
+    for(const doc of providers.docs) {
+      const p=doc.data(),services=await db.collection('services').where('providerId','==',doc.id).get();
+      for(const service of services.docs) {
+        const s=service.data();
+        if(s.isActive && !hasMatchingCertificate(p,s.category,s.serviceTitle)) await service.ref.update({isActive:false,approvalStatus:'Pending',rejectionReason:'A matching current TESDA registry review is required under the updated service policy.',updatedBy:'system',updatedAt:stamp()});
+      }
+      const projected=await publicProvider(doc.id,p),ref=db.doc(`publicProviders/${doc.id}`);
+      if(projected) await ref.set(projected); else await ref.delete();
+    }
+    return null;
+  });
   out.registerPushDevice = functions.region(region).https.onCall(async (data, context) => {
     if (!context.auth) fail('unauthenticated', 'Sign in required.');
     const uid = context.auth.uid, token = String(data?.token || '');
@@ -67,7 +90,7 @@ module.exports = function platformOperations({ db, admin, functions, region, mes
     const requestChanged = JSON.stringify(a.rescheduleRequest || null) !== JSON.stringify(b.rescheduleRequest || null);
     if (!statusChanged && !requestChanged && a.scheduledDate.toMillis() === b.scheduledDate.toMillis()) return null;
     const title = statusChanged ? `Booking ${b.status}` : b.rescheduleRequest ? 'Reschedule requested' : 'Reschedule response';
-    const message = statusChanged ? `Your booking is now ${b.status.toLowerCase()}.` : b.rescheduleRequest ? 'The customer proposed a new date. Open the booking to respond.' : 'Open your booking to check the agreed schedule.';
+    const message = statusChanged ? b.status === 'Changes Requested' ? `The provider requested changes: ${b.changeRequest}. Discuss the changes and send a new offer.` : `Your booking is now ${b.status.toLowerCase()}.` : b.rescheduleRequest ? 'The customer proposed a new date. Open the booking to respond.' : 'Open your booking to check the agreed schedule.';
     await Promise.all([b.customerId, b.providerId].filter(uid => uid !== b.updatedBy).map(uid => notify(context.eventId, uid, title, message, change.after.id, 'Booking Update')));
     if (complete(b) && !complete(a)) await Promise.all([b.customerId, b.providerId].map(uid => notify(`${context.eventId}:review`, uid, 'Leave a review', 'Your service is complete. Share feedback about this booking.', change.after.id, 'Review Request')));
     return null;
@@ -118,7 +141,7 @@ module.exports = function platformOperations({ db, admin, functions, region, mes
     for (let i = 0; i < devices.size; i += 500) {
       const docs = devices.docs.slice(i, i + 500);
       const result = await messaging().sendEachForMulticast({ tokens: docs.map(d => d.data().token),
-        notification: { title: n.title, body: n.message }, data: { notificationId: snap.id, bookingId: n.relatedBookingId || '' },
+        notification: { title: n.title, body: n.message }, data: { notificationId: snap.id, bookingId: n.relatedBookingId || '',inquiryId:n.relatedInquiryId || '' },
         android: { notification: { tag: snap.id } }, webpush: { notification: { tag: snap.id } } });
       await Promise.all(result.responses.map((r, index) => !r.success && ['messaging/registration-token-not-registered', 'messaging/invalid-registration-token'].includes(r.error?.code) ? docs[index].ref.delete() : Promise.resolve()));
     }

@@ -22,6 +22,7 @@ import '../customer/customer_booking_detail_screen.dart';
 import '../provider/provider_booking_detail_screen.dart';
 import '../provider/provider_booking_request_review.dart';
 import '../../utils/message_thread.dart';
+import 'inquiry_screen.dart';
 
 /// Canonical in-app messaging for **Customer** and **Provider** shells.
 ///
@@ -37,6 +38,7 @@ class MessagesHub extends StatefulWidget {
 
   final AppUser appUser;
   final bool asCustomer;
+
   /// Shell tab re-tap scroll (conversation list).
   final ScrollController? listScrollController;
 
@@ -45,7 +47,9 @@ class MessagesHub extends StatefulWidget {
   static VoidCallback? shellMessagesActivator;
 
   /// Booking the in-shell Messages tab should open as soon as it loads.
-  static final ValueNotifier<String?> pendingBookingId = ValueNotifier<String?>(null);
+  static final ValueNotifier<String?> pendingBookingId = ValueNotifier<String?>(
+    null,
+  );
 
   /// Opens a conversation. When a shell is active this jumps to the real
   /// Messages tab (so the dedicated page is used) and selects the booking.
@@ -84,6 +88,7 @@ class MessagesHub extends StatefulWidget {
 }
 
 class _MessagesHubState extends State<MessagesHub> {
+  bool _inquiries = true;
   MessageConversationThread? _selectedThread;
   Booking? _selected;
   AppUser? _otherUser;
@@ -99,6 +104,7 @@ class _MessagesHubState extends State<MessagesHub> {
     super.initState();
     _listSearchController = TextEditingController();
     _pendingOpenId = MessagesHub.pendingBookingId.value;
+    if (_pendingOpenId != null) _inquiries = false;
     MessagesHub.pendingBookingId.addListener(_onPendingChanged);
   }
 
@@ -112,7 +118,10 @@ class _MessagesHubState extends State<MessagesHub> {
   void _onPendingChanged() {
     final id = MessagesHub.pendingBookingId.value;
     if (id != null && mounted) {
-      setState(() => _pendingOpenId = id);
+      setState(() {
+        _pendingOpenId = id;
+        _inquiries = false;
+      });
     }
   }
 
@@ -128,32 +137,67 @@ class _MessagesHubState extends State<MessagesHub> {
     });
     try {
       final values = await Future.wait<Object?>([
-        firestore.getUser(thread.otherUserId), firestore.getService(booking.serviceId),
+        firestore.getUser(thread.otherUserId),
+        firestore.getService(booking.serviceId),
       ]);
       if (!mounted || _selectedThread?.threadId != thread.threadId) return;
-      setState(() { _otherUser = values[0] as AppUser?; _service = values[1] as ServiceListing?; });
+      setState(() {
+        _otherUser = values[0] as AppUser?;
+        _service = values[1] as ServiceListing?;
+      });
     } catch (_) {
       // Booking participants can still chat when optional profile details fail.
       if (!mounted || _selectedThread?.threadId != thread.threadId) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text('Conversation opened. Some profile details could not load.'),
-        action: SnackBarAction(label: 'Retry', onPressed: () async {
-          await firestore.retryDataLoads();
-          if (mounted) _selectConversation(thread);
-        }),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'Conversation opened. Some profile details could not load.',
+          ),
+          action: SnackBarAction(
+            label: 'Retry',
+            onPressed: () async {
+              await firestore.retryDataLoads();
+              if (mounted) _selectConversation(thread);
+            },
+          ),
+        ),
+      );
     }
   }
 
   void _clearSelection() => setState(() {
-        _selectedThread = null;
-        _selected = null;
-        _otherUser = null;
-        _service = null;
-      });
+    _selectedThread = null;
+    _selected = null;
+    _otherUser = null;
+    _service = null;
+  });
 
   @override
   Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(8),
+          child: SegmentedButton<bool>(
+            segments: const [
+              ButtonSegment(value: true, label: Text('Inquiries and offers')),
+              ButtonSegment(value: false, label: Text('Booking conversations')),
+            ],
+            selected: {_inquiries},
+            onSelectionChanged: (selection) =>
+                setState(() => _inquiries = selection.first),
+          ),
+        ),
+        Expanded(
+          child: _inquiries
+              ? InquiryInbox(appUser: widget.appUser)
+              : _buildBookings(context),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBookings(BuildContext context) {
     final firestore = FirestoreService();
 
     return LayoutBuilder(
@@ -168,132 +212,117 @@ class _MessagesHubState extends State<MessagesHub> {
               child: _MessagesFramedCard(
                 height: constraints.maxHeight - 40,
                 child: DataStreamBuilder<List<Booking>>(
-                  label: 'conversations', onRetry: () => firestore.retryDataLoads(),
-                  stream: firestore.bookingsForUser(widget.appUser.userId, asCustomer: widget.asCustomer),
-                  builder: (context, snap) {
-          if (isStreamWaiting(snap)) {
-            return const Center(child: LoadingIndicator(message: 'Loading messages…'));
-          }
-          var bookings = (snap.data ?? [])
-              .where((b) {
-                final s = b.status.toLowerCase();
-                return s != 'cancelled' && s != 'canceled';
-              })
-              .toList();
-
-          if (_search.isNotEmpty) {
-            final q = _search.toLowerCase();
-            bookings = bookings
-                .where((b) => b.serviceLocation.toLowerCase().contains(q) || b.status.toLowerCase().contains(q))
-                .toList();
-          }
-
-          if (bookings.isEmpty) {
-            return Center(
-              child: FigmaEmptyState(
-                icon: Icons.chat_bubble_outline,
-                title: 'No conversations yet',
-                message: widget.asCustomer
-                    ? 'Book a service to message your provider about the job.'
-                    : 'When customers book your services, conversations appear here.',
-              ),
-            );
-          }
-
-          final threads = MessageConversationThread.groupBookings(
-            bookings: bookings,
-            asCustomer: widget.asCustomer,
-          );
-
-          if (_selectedThread != null &&
-              !threads.any((t) => t.otherUserId == _selectedThread!.otherUserId)) {
-            WidgetsBinding.instance.addPostFrameCallback((_) => _clearSelection());
-          }
-
-          final pendingId = _pendingOpenId;
-          if (pendingId != null) {
-            MessageConversationThread? targetThread;
-            for (final t in threads) {
-              if (t.bookingIds.contains(pendingId)) {
-                targetThread = t;
-                break;
-              }
-            }
-            final openThread = targetThread;
-            if (openThread != null) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (!mounted) return;
-                if (_selectedThread?.otherUserId != openThread.otherUserId) {
-                  _selectConversation(openThread);
-                }
-                _pendingOpenId = null;
-                if (MessagesHub.pendingBookingId.value == pendingId) {
-                  MessagesHub.pendingBookingId.value = null;
-                }
-              });
-            }
-          }
-
-          return LayoutBuilder(
-            builder: (context, c) {
-              final w = c.maxWidth;
-              final threePane = w >= 1024;
-              final twoPane = w >= 720;
-
-              if (pendingId == null && _selectedThread == null && threads.isNotEmpty && twoPane) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted && _selectedThread == null) _selectConversation(threads.first);
-                });
-              }
-
-              if (!twoPane) {
-                if (_selected == null) {
-                  return _ConversationListPane(
-                    threads: threads,
-                    selectedOtherUserId: null,
-                    appUser: widget.appUser,
+                  label: 'conversations',
+                  onRetry: () => firestore.retryDataLoads(),
+                  stream: firestore.bookingsForUser(
+                    widget.appUser.userId,
                     asCustomer: widget.asCustomer,
-                    searchController: _listSearchController,
-                    listScrollController: widget.listScrollController,
-                    onSearchChanged: (v) => setState(() => _search = v),
-                    onSelect: _selectConversation,
-                  );
-                }
-                return _ChatPane(
-                  appUser: widget.appUser,
-                  asCustomer: widget.asCustomer,
-                  thread: _selectedThread!,
-                  booking: _selected!,
-                  otherUser: _otherUser,
-                  service: _service,
-                  chatFilter: _chatFilter,
-                  onChatFilterChanged: (v) => setState(() => _chatFilter = v),
-                  onBack: _clearSelection,
-                  onToggleInfo: () {},
-                );
-              }
-
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(
-                    width: threePane ? 340 : 300,
-                    child: _ConversationListPane(
-                      threads: threads,
-                      selectedOtherUserId: _selectedThread?.otherUserId,
-                      appUser: widget.appUser,
-                      asCustomer: widget.asCustomer,
-                      searchController: _listSearchController,
-                      listScrollController: widget.listScrollController,
-                      onSearchChanged: (v) => setState(() => _search = v),
-                      onSelect: _selectConversation,
-                    ),
                   ),
-                  const VerticalDivider(width: 1, color: FigmaColors.gray200),
-                  Expanded(
-                    child: _selected == null
-                        ? _EmptyChatPlaceholder(asCustomer: widget.asCustomer)
-                        : _ChatPane(
+                  builder: (context, snap) {
+                    if (isStreamWaiting(snap)) {
+                      return const Center(
+                        child: LoadingIndicator(message: 'Loading messages…'),
+                      );
+                    }
+                    var bookings = (snap.data ?? []).where((b) {
+                      final s = b.status.toLowerCase();
+                      return s != 'cancelled' && s != 'canceled';
+                    }).toList();
+
+                    if (_search.isNotEmpty) {
+                      final q = _search.toLowerCase();
+                      bookings = bookings
+                          .where(
+                            (b) =>
+                                b.serviceLocation.toLowerCase().contains(q) ||
+                                b.status.toLowerCase().contains(q),
+                          )
+                          .toList();
+                    }
+
+                    if (bookings.isEmpty) {
+                      return Center(
+                        child: FigmaEmptyState(
+                          icon: Icons.chat_bubble_outline,
+                          title: 'No conversations yet',
+                          message: widget.asCustomer
+                              ? 'Use Inquiries and offers to discuss a job before hiring.'
+                              : 'When customers book your services, conversations appear here.',
+                        ),
+                      );
+                    }
+
+                    final threads = MessageConversationThread.groupBookings(
+                      bookings: bookings,
+                      asCustomer: widget.asCustomer,
+                    );
+
+                    if (_selectedThread != null &&
+                        !threads.any(
+                          (t) => t.otherUserId == _selectedThread!.otherUserId,
+                        )) {
+                      WidgetsBinding.instance.addPostFrameCallback(
+                        (_) => _clearSelection(),
+                      );
+                    }
+
+                    final pendingId = _pendingOpenId;
+                    if (pendingId != null) {
+                      MessageConversationThread? targetThread;
+                      for (final t in threads) {
+                        if (t.bookingIds.contains(pendingId)) {
+                          targetThread = t;
+                          break;
+                        }
+                      }
+                      final openThread = targetThread;
+                      if (openThread != null) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (!mounted) return;
+                          if (_selectedThread?.otherUserId !=
+                              openThread.otherUserId) {
+                            _selectConversation(openThread);
+                          }
+                          _pendingOpenId = null;
+                          if (MessagesHub.pendingBookingId.value == pendingId) {
+                            MessagesHub.pendingBookingId.value = null;
+                          }
+                        });
+                      }
+                    }
+
+                    return LayoutBuilder(
+                      builder: (context, c) {
+                        final w = c.maxWidth;
+                        final threePane = w >= 1024;
+                        final twoPane = w >= 720;
+
+                        if (pendingId == null &&
+                            _selectedThread == null &&
+                            threads.isNotEmpty &&
+                            twoPane) {
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted && _selectedThread == null) {
+                              _selectConversation(threads.first);
+                            }
+                          });
+                        }
+
+                        if (!twoPane) {
+                          if (_selected == null) {
+                            return _ConversationListPane(
+                              threads: threads,
+                              selectedOtherUserId: null,
+                              appUser: widget.appUser,
+                              asCustomer: widget.asCustomer,
+                              searchController: _listSearchController,
+                              listScrollController: widget.listScrollController,
+                              onSearchChanged: (v) =>
+                                  setState(() => _search = v),
+                              onSelect: _selectConversation,
+                            );
+                          }
+                          return _ChatPane(
                             appUser: widget.appUser,
                             asCustomer: widget.asCustomer,
                             thread: _selectedThread!,
@@ -301,31 +330,85 @@ class _MessagesHubState extends State<MessagesHub> {
                             otherUser: _otherUser,
                             service: _service,
                             chatFilter: _chatFilter,
-                            onChatFilterChanged: (v) => setState(() => _chatFilter = v),
-                            showInfoInChat: twoPane && !threePane && _showInfo,
-                            onToggleInfo: () => setState(() => _showInfo = !_showInfo),
-                            infoVisible: _showInfo,
-                          ),
-                  ),
-                  if (threePane && _showInfo && _selected != null) ...[
-                    const VerticalDivider(width: 1, color: FigmaColors.gray200),
-                    SizedBox(
-                      width: 300,
-                      child: _InfoPane(
-                        appUser: widget.appUser,
-                        asCustomer: widget.asCustomer,
-                        booking: _selected!,
-                        otherUser: _otherUser,
-                        service: _service,
-                        onClose: () => setState(() => _showInfo = false),
-                        onMessageSearchChanged: (v) => setState(() => _chatFilter = v),
-                      ),
-                    ),
-                  ],
-                ],
-              );
-            },
-          );
+                            onChatFilterChanged: (v) =>
+                                setState(() => _chatFilter = v),
+                            onBack: _clearSelection,
+                            onToggleInfo: () {},
+                          );
+                        }
+
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            SizedBox(
+                              width: threePane ? 340 : 300,
+                              child: _ConversationListPane(
+                                threads: threads,
+                                selectedOtherUserId:
+                                    _selectedThread?.otherUserId,
+                                appUser: widget.appUser,
+                                asCustomer: widget.asCustomer,
+                                searchController: _listSearchController,
+                                listScrollController:
+                                    widget.listScrollController,
+                                onSearchChanged: (v) =>
+                                    setState(() => _search = v),
+                                onSelect: _selectConversation,
+                              ),
+                            ),
+                            const VerticalDivider(
+                              width: 1,
+                              color: FigmaColors.gray200,
+                            ),
+                            Expanded(
+                              child: _selected == null
+                                  ? _EmptyChatPlaceholder(
+                                      asCustomer: widget.asCustomer,
+                                    )
+                                  : _ChatPane(
+                                      appUser: widget.appUser,
+                                      asCustomer: widget.asCustomer,
+                                      thread: _selectedThread!,
+                                      booking: _selected!,
+                                      otherUser: _otherUser,
+                                      service: _service,
+                                      chatFilter: _chatFilter,
+                                      onChatFilterChanged: (v) =>
+                                          setState(() => _chatFilter = v),
+                                      showInfoInChat:
+                                          twoPane && !threePane && _showInfo,
+                                      onToggleInfo: () => setState(
+                                        () => _showInfo = !_showInfo,
+                                      ),
+                                      infoVisible: _showInfo,
+                                    ),
+                            ),
+                            if (threePane &&
+                                _showInfo &&
+                                _selected != null) ...[
+                              const VerticalDivider(
+                                width: 1,
+                                color: FigmaColors.gray200,
+                              ),
+                              SizedBox(
+                                width: 300,
+                                child: _InfoPane(
+                                  appUser: widget.appUser,
+                                  asCustomer: widget.asCustomer,
+                                  booking: _selected!,
+                                  otherUser: _otherUser,
+                                  service: _service,
+                                  onClose: () =>
+                                      setState(() => _showInfo = false),
+                                  onMessageSearchChanged: (v) =>
+                                      setState(() => _chatFilter = v),
+                                ),
+                              ),
+                            ],
+                          ],
+                        );
+                      },
+                    );
                   },
                 ),
               ),
@@ -397,7 +480,13 @@ class _ConversationListPane extends StatelessWidget {
           child: Row(
             children: [
               Expanded(
-                child: Text('Messages', style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.w700)),
+                child: Text(
+                  'Messages',
+                  style: GoogleFonts.inter(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
               IconButton(
                 onPressed: () {},
@@ -414,11 +503,22 @@ class _ConversationListPane extends StatelessWidget {
             onChanged: onSearchChanged,
             decoration: InputDecoration(
               hintText: 'Search',
-              hintStyle: GoogleFonts.inter(color: FigmaColors.gray500, fontSize: 14),
-              prefixIcon: const Icon(Icons.search, size: 20, color: FigmaColors.gray500),
+              hintStyle: GoogleFonts.inter(
+                color: FigmaColors.gray500,
+                fontSize: 14,
+              ),
+              prefixIcon: const Icon(
+                Icons.search,
+                size: 20,
+                color: FigmaColors.gray500,
+              ),
               suffixIcon: IconButton(
                 onPressed: () {},
-                icon: const Icon(Icons.tune, size: 20, color: FigmaColors.gray500),
+                icon: const Icon(
+                  Icons.tune,
+                  size: 20,
+                  color: FigmaColors.gray500,
+                ),
               ),
               filled: true,
               fillColor: FigmaColors.gray50,
@@ -481,15 +581,19 @@ class _ConversationTile extends StatelessWidget {
     return FutureBuilder<AppUser?>(
       future: firestore.getUser(thread.otherUserId),
       builder: (context, userSnap) {
-        final name = userSnap.data?.fullName ?? (asCustomer ? 'Provider' : 'Customer');
+        final name =
+            userSnap.data?.fullName ?? (asCustomer ? 'Provider' : 'Customer');
         return FutureBuilder<ServiceListing?>(
           future: firestore.getService(booking.serviceId),
           builder: (context, serviceSnap) {
-            final serviceTitle = serviceSnap.data?.serviceTitle ?? 'Service booking';
+            final serviceTitle =
+                serviceSnap.data?.serviceTitle ?? 'Service booking';
             final subtitle = thread.bookings.length > 1
                 ? '$serviceTitle · ${thread.bookings.length} bookings'
                 : serviceTitle;
-            final active = thread.bookings.any((b) => _isActiveStatus(b.status));
+            final active = thread.bookings.any(
+              (b) => _isActiveStatus(b.status),
+            );
 
             return Material(
               color: selected ? FigmaColors.gray50 : FigmaColors.white,
@@ -499,7 +603,9 @@ class _ConversationTile extends StatelessWidget {
                   decoration: BoxDecoration(
                     border: Border(
                       left: BorderSide(
-                        color: selected ? context.roleColors.primary : Colors.transparent,
+                        color: selected
+                            ? context.roleColors.primary
+                            : Colors.transparent,
                         width: 3,
                       ),
                       bottom: const BorderSide(color: FigmaColors.gray100),
@@ -509,7 +615,11 @@ class _ConversationTile extends StatelessWidget {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _AvatarWithStatus(name: name, photoUrl: userSnap.data?.profilePhotoUrl, online: active),
+                      _AvatarWithStatus(
+                        name: name,
+                        photoUrl: userSnap.data?.profilePhotoUrl,
+                        online: active,
+                      ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
@@ -519,40 +629,50 @@ class _ConversationTile extends StatelessWidget {
                               children: [
                                 Expanded(
                                   child: Text(
-                                        name,
-                                        style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
+                                    name,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
                                     ),
-                                    Text(
-                                      dateFmt.format(booking.updatedAt.toDate()),
-                                      style: GoogleFonts.inter(fontSize: 12, color: FigmaColors.gray500),
-                                    ),
-                                  ],
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
-                                const SizedBox(height: 2),
                                 Text(
-                                  subtitle,
-                                  style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: FigmaColors.gray600),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 4),
-                                _ConversationPreview(
-                                  customerId: thread.customerId,
-                                  providerId: thread.providerId,
-                                  bookingIds: thread.bookingIds,
-                                  appUserId: appUser.userId,
+                                  dateFmt.format(booking.updatedAt.toDate()),
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12,
+                                    color: FigmaColors.gray500,
+                                  ),
                                 ),
                               ],
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 2),
+                            Text(
+                              subtitle,
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: FigmaColors.gray600,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            _ConversationPreview(
+                              customerId: thread.customerId,
+                              providerId: thread.providerId,
+                              bookingIds: thread.bookingIds,
+                              appUserId: appUser.userId,
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
+                    ],
                   ),
-                );
+                ),
+              ),
+            );
           },
         );
       },
@@ -588,26 +708,48 @@ class _ConversationPreview extends StatelessWidget {
         bookingIds: bookingIds,
       ),
       builder: (context, snap) {
-        final style = GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray500);
+        final style = GoogleFonts.inter(
+          fontSize: 13,
+          color: FigmaColors.gray500,
+        );
         if (!snap.hasData) {
-          return Text('Start a conversation', style: style, maxLines: 2, overflow: TextOverflow.ellipsis);
+          return Text(
+            'Start a conversation',
+            style: style,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          );
         }
         final messages = snap.data!;
         if (messages.isEmpty) {
-          return Text('Start a conversation', style: style, maxLines: 2, overflow: TextOverflow.ellipsis);
+          return Text(
+            'Start a conversation',
+            style: style,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          );
         }
         final last = messages.last;
         var text = last.messageText ?? '';
         if (last.senderId == appUserId) text = 'You: $text';
         if (text.length > 60) text = '${text.substring(0, 60)}…';
-        return Text(text, style: style, maxLines: 2, overflow: TextOverflow.ellipsis);
+        return Text(
+          text,
+          style: style,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        );
       },
     );
   }
 }
 
 class _AvatarWithStatus extends StatelessWidget {
-  const _AvatarWithStatus({required this.name, this.photoUrl, this.online = false});
+  const _AvatarWithStatus({
+    required this.name,
+    this.photoUrl,
+    this.online = false,
+  });
 
   final String name;
   final String? photoUrl;
@@ -625,7 +767,11 @@ class _AvatarWithStatus extends StatelessWidget {
           child: photoUrl == null
               ? Text(
                   _initials(name),
-                  style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700, color: FigmaColors.gray700),
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: FigmaColors.gray700,
+                  ),
                 )
               : null,
         ),
@@ -757,8 +903,14 @@ class _ChatPaneState extends State<_ChatPane> {
   Future<void> _attach() async {
     if (_sending) return;
     setState(() => _sending = true);
-    await sendBookingImage(context, bookingId: widget.booking.bookingId, customerId: widget.thread.customerId,
-      providerId: widget.thread.providerId, senderId: widget.appUser.userId, receiverId: widget.thread.otherUserId);
+    await sendBookingImage(
+      context,
+      bookingId: widget.booking.bookingId,
+      customerId: widget.thread.customerId,
+      providerId: widget.thread.providerId,
+      senderId: widget.appUser.userId,
+      receiverId: widget.thread.otherUserId,
+    );
     if (mounted) setState(() => _sending = false);
   }
 
@@ -797,7 +949,9 @@ class _ChatPaneState extends State<_ChatPane> {
 
   @override
   Widget build(BuildContext context) {
-    final name = widget.otherUser?.fullName ?? (widget.asCustomer ? 'Provider' : 'Customer');
+    final name =
+        widget.otherUser?.fullName ??
+        (widget.asCustomer ? 'Provider' : 'Customer');
     final serviceTitle = widget.service?.serviceTitle ?? 'Service booking';
     final timeFmt = DateFormat('h:mm a • MMM d');
     final compact = widget.onBack != null || MobileLayout.isNativeApp(context);
@@ -806,7 +960,10 @@ class _ChatPaneState extends State<_ChatPane> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
-          padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 20, vertical: 12),
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 8 : 20,
+            vertical: 12,
+          ),
           decoration: const BoxDecoration(
             border: Border(bottom: BorderSide(color: FigmaColors.gray200)),
           ),
@@ -818,7 +975,10 @@ class _ChatPaneState extends State<_ChatPane> {
                   icon: const Icon(Icons.arrow_back_rounded),
                   visualDensity: VisualDensity.compact,
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                  constraints: const BoxConstraints(
+                    minWidth: 40,
+                    minHeight: 40,
+                  ),
                 ),
               ],
               Expanded(
@@ -829,16 +989,26 @@ class _ChatPaneState extends State<_ChatPane> {
                       name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(fontSize: compact ? 15 : 16, fontWeight: FontWeight.w700),
+                      style: GoogleFonts.inter(
+                        fontSize: compact ? 15 : 16,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     Row(
                       children: [
-                        const Icon(Icons.work_outline, size: 14, color: FigmaColors.gray500),
+                        const Icon(
+                          Icons.work_outline,
+                          size: 14,
+                          color: FigmaColors.gray500,
+                        ),
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
                             serviceTitle,
-                            style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray600),
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              color: FigmaColors.gray600,
+                            ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -862,10 +1032,14 @@ class _ChatPaneState extends State<_ChatPane> {
                 IconButton(
                   onPressed: widget.onToggleInfo,
                   icon: Icon(
-                    widget.infoVisible ? Icons.chevron_right : Icons.info_outline,
+                    widget.infoVisible
+                        ? Icons.chevron_right
+                        : Icons.info_outline,
                     size: 20,
                   ),
-                  tooltip: widget.infoVisible ? 'Hide conversation info' : 'Show conversation info',
+                  tooltip: widget.infoVisible
+                      ? 'Hide conversation info'
+                      : 'Show conversation info',
                 ),
               ],
             ],
@@ -873,7 +1047,8 @@ class _ChatPaneState extends State<_ChatPane> {
         ),
         Expanded(
           child: DataStreamBuilder<List<ChatMessage>>(
-            label: 'messages', onRetry: () => FirestoreService().retryDataLoads(),
+            label: 'messages',
+            onRetry: () => FirestoreService().retryDataLoads(),
             stream: _messagesStream,
             builder: (context, snap) {
               if (snap.hasError) {
@@ -889,13 +1064,17 @@ class _ChatPaneState extends State<_ChatPane> {
                 );
               }
               if (isStreamWaiting(snap)) {
-                return const Center(child: LoadingIndicator(message: 'Loading messages…'));
+                return const Center(
+                  child: LoadingIndicator(message: 'Loading messages…'),
+                );
               }
               var messages = snap.data ?? [];
               if (widget.chatFilter.isNotEmpty) {
                 final q = widget.chatFilter.toLowerCase();
                 messages = messages
-                    .where((m) => (m.messageText ?? '').toLowerCase().contains(q))
+                    .where(
+                      (m) => (m.messageText ?? '').toLowerCase().contains(q),
+                    )
                     .toList();
               }
 
@@ -999,7 +1178,13 @@ class _BookingContextCard extends StatelessWidget {
           ),
           if (booking.serviceLocation.isNotEmpty) ...[
             const SizedBox(height: 4),
-            Text(booking.serviceLocation, style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray500)),
+            Text(
+              booking.serviceLocation,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: FigmaColors.gray500,
+              ),
+            ),
           ],
           const SizedBox(height: 10),
           Align(
@@ -1010,16 +1195,26 @@ class _BookingContextCard extends StatelessWidget {
                   Navigator.push<void>(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => CustomerBookingDetailScreen(appUser: appUser, booking: booking),
+                      builder: (_) => CustomerBookingDetailScreen(
+                        appUser: appUser,
+                        booking: booking,
+                      ),
                     ),
                   );
                 } else if (booking.isPending) {
-                  showProviderBookingRequestReview(context, appUser: appUser, booking: booking);
+                  showProviderBookingRequestReview(
+                    context,
+                    appUser: appUser,
+                    booking: booking,
+                  );
                 } else {
                   Navigator.push<void>(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => ProviderBookingDetailScreen(appUser: appUser, booking: booking),
+                      builder: (_) => ProviderBookingDetailScreen(
+                        appUser: appUser,
+                        booking: booking,
+                      ),
                     ),
                   );
                 }
@@ -1030,7 +1225,10 @@ class _BookingContextCard extends StatelessWidget {
                 minimumSize: Size.zero,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
-              child: Text('View details', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+              child: Text(
+                'View details',
+                style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+              ),
             ),
           ),
         ],
@@ -1062,7 +1260,13 @@ class _MessageBlock extends StatelessWidget {
           backgroundColor: FigmaColors.gray200,
           backgroundImage: photoUrl != null ? NetworkImage(photoUrl!) : null,
           child: photoUrl == null
-              ? Text(_initials(senderName), style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w700))
+              ? Text(
+                  _initials(senderName),
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                )
               : null,
         ),
         const SizedBox(width: 12),
@@ -1072,16 +1276,33 @@ class _MessageBlock extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Text(senderName, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700)),
+                  Text(
+                    senderName,
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                   const SizedBox(width: 8),
-                  Text(timeLabel, style: GoogleFonts.inter(fontSize: 12, color: FigmaColors.gray500)),
+                  Text(
+                    timeLabel,
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: FigmaColors.gray500,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 6),
-              if (message.mediaUrl?.isNotEmpty == true) ChatImage(url: message.mediaUrl!),
+              if (message.mediaUrl?.isNotEmpty == true)
+                ChatImage(url: message.mediaUrl!),
               Text(
                 message.messageText ?? '',
-                style: GoogleFonts.inter(fontSize: 14, color: FigmaColors.gray800, height: 1.5),
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  color: FigmaColors.gray800,
+                  height: 1.5,
+                ),
               ),
             ],
           ),
@@ -1110,7 +1331,12 @@ class _MessageComposer extends StatelessWidget {
     final rc = context.roleColors;
 
     return Container(
-      padding: EdgeInsets.fromLTRB(compact ? 12 : 20, 10, compact ? 12 : 20, compact ? 12 : 16),
+      padding: EdgeInsets.fromLTRB(
+        compact ? 12 : 20,
+        10,
+        compact ? 12 : 20,
+        compact ? 12 : 16,
+      ),
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: FigmaColors.gray200)),
       ),
@@ -1139,7 +1365,14 @@ class _MessageComposer extends StatelessWidget {
             onSubmitted: (_) => onSend(),
           ),
           if (compact) ...[
-            Align(alignment: Alignment.centerLeft, child: TextButton.icon(onPressed: sending ? null : onAttach, icon: const Icon(Icons.attach_file), label: const Text('Attach image'))),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: sending ? null : onAttach,
+                icon: const Icon(Icons.attach_file),
+                label: const Text('Attach image'),
+              ),
+            ),
             const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,
@@ -1149,7 +1382,9 @@ class _MessageComposer extends StatelessWidget {
                   backgroundColor: rc.primary,
                   foregroundColor: FigmaColors.white,
                   padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
                 icon: sending
                     ? const SizedBox.shrink()
@@ -1158,35 +1393,79 @@ class _MessageComposer extends StatelessWidget {
                     ? const SizedBox(
                         width: 18,
                         height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: FigmaColors.white),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: FigmaColors.white,
+                        ),
                       )
-                    : Text('Send', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                    : Text(
+                        'Send',
+                        style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                      ),
               ),
             ),
           ] else ...[
             const SizedBox(height: 8),
             Row(
               children: [
-                IconButton(onPressed: () {}, icon: const Icon(Icons.text_fields, size: 20), color: FigmaColors.gray600),
-                IconButton(onPressed: sending ? null : onAttach, tooltip: 'Attach an image', icon: const Icon(Icons.attach_file, size: 20), color: FigmaColors.gray600),
-                IconButton(onPressed: () {}, icon: const Icon(Icons.auto_awesome_outlined, size: 20), color: FigmaColors.gray600),
-                IconButton(onPressed: () {}, icon: const Icon(Icons.emoji_emotions_outlined, size: 20), color: FigmaColors.gray600),
+                IconButton(
+                  onPressed: () {},
+                  icon: const Icon(Icons.text_fields, size: 20),
+                  color: FigmaColors.gray600,
+                ),
+                IconButton(
+                  onPressed: sending ? null : onAttach,
+                  tooltip: 'Attach an image',
+                  icon: const Icon(Icons.attach_file, size: 20),
+                  color: FigmaColors.gray600,
+                ),
+                IconButton(
+                  onPressed: () {},
+                  icon: const Icon(Icons.auto_awesome_outlined, size: 20),
+                  color: FigmaColors.gray600,
+                ),
+                IconButton(
+                  onPressed: () {},
+                  icon: const Icon(Icons.emoji_emotions_outlined, size: 20),
+                  color: FigmaColors.gray600,
+                ),
                 const Spacer(),
-                IconButton(onPressed: () {}, icon: const Icon(Icons.settings_outlined, size: 20), color: FigmaColors.gray600),
+                IconButton(
+                  onPressed: () {},
+                  icon: const Icon(Icons.settings_outlined, size: 20),
+                  color: FigmaColors.gray600,
+                ),
                 FilledButton(
                   onPressed: sending ? null : onSend,
                   style: FilledButton.styleFrom(
                     backgroundColor: rc.primary,
                     foregroundColor: FigmaColors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 10,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                   child: sending
-                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: FigmaColors.white))
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: FigmaColors.white,
+                          ),
+                        )
                       : Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text('Send', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                            Text(
+                              'Send',
+                              style: GoogleFonts.inter(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                             const SizedBox(width: 6),
                             const Icon(Icons.send_rounded, size: 18),
                           ],
@@ -1229,7 +1508,9 @@ class _InfoPane extends StatefulWidget {
 class _InfoPaneState extends State<_InfoPane> {
   @override
   Widget build(BuildContext context) {
-    final name = widget.otherUser?.fullName ?? (widget.asCustomer ? 'Provider' : 'Customer');
+    final name =
+        widget.otherUser?.fullName ??
+        (widget.asCustomer ? 'Provider' : 'Customer');
     final roleLabel = widget.asCustomer ? 'Service provider' : 'Customer';
 
     return ColoredBox(
@@ -1256,24 +1537,44 @@ class _InfoPaneState extends State<_InfoPane> {
                         ? NetworkImage(widget.otherUser!.profilePhotoUrl!)
                         : null,
                     child: widget.otherUser?.profilePhotoUrl == null
-                        ? Text(_initials(name), style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w700))
+                        ? Text(
+                            _initials(name),
+                            style: GoogleFonts.inter(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          )
                         : null,
                   ),
                 ),
                 const SizedBox(height: 12),
                 Center(
-                  child: Text(name, style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700), textAlign: TextAlign.center),
+                  child: Text(
+                    name,
+                    style: GoogleFonts.inter(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.work_outline, size: 14, color: FigmaColors.gray500),
+                    const Icon(
+                      Icons.work_outline,
+                      size: 14,
+                      color: FigmaColors.gray500,
+                    ),
                     const SizedBox(width: 4),
                     Flexible(
                       child: Text(
                         roleLabel,
-                        style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray600),
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: FigmaColors.gray600,
+                        ),
                         textAlign: TextAlign.center,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -1286,12 +1587,19 @@ class _InfoPaneState extends State<_InfoPane> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.schedule, size: 14, color: FigmaColors.gray500),
+                    const Icon(
+                      Icons.schedule,
+                      size: 14,
+                      color: FigmaColors.gray500,
+                    ),
                     const SizedBox(width: 4),
                     Flexible(
                       child: Text(
                         'Scheduled ${widget.booking.scheduledWindowLabel}',
-                        style: GoogleFonts.inter(fontSize: 12, color: FigmaColors.gray500),
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: FigmaColors.gray500,
+                        ),
                         textAlign: TextAlign.center,
                         maxLines: 3,
                         overflow: TextOverflow.ellipsis,
@@ -1376,12 +1684,21 @@ class _InfoPaneState extends State<_InfoPane> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(widget.service?.serviceTitle ?? 'Service', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                      Text(
+                        widget.service?.serviceTitle ?? 'Service',
+                        style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                      ),
                       const SizedBox(height: 6),
                       FigmaStatusChip(status: widget.booking.status),
                       if (widget.booking.serviceLocation.isNotEmpty) ...[
                         const SizedBox(height: 8),
-                        Text(widget.booking.serviceLocation, style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray600)),
+                        Text(
+                          widget.booking.serviceLocation,
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            color: FigmaColors.gray600,
+                          ),
+                        ),
                       ],
                     ],
                   ),
@@ -1391,7 +1708,10 @@ class _InfoPaneState extends State<_InfoPane> {
                   title: 'Files and links',
                   child: Text(
                     'No files shared yet.',
-                    style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray500),
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      color: FigmaColors.gray500,
+                    ),
                   ),
                 ),
               ],
@@ -1416,7 +1736,8 @@ class _MessagesConversationPage extends StatefulWidget {
   final bool asCustomer;
 
   @override
-  State<_MessagesConversationPage> createState() => _MessagesConversationPageState();
+  State<_MessagesConversationPage> createState() =>
+      _MessagesConversationPageState();
 }
 
 class _MessagesConversationPageState extends State<_MessagesConversationPage> {
@@ -1434,11 +1755,19 @@ class _MessagesConversationPageState extends State<_MessagesConversationPage> {
 
   Future<void> _load() async {
     final firestore = FirestoreService();
-    final otherId = widget.asCustomer ? widget.booking.providerId : widget.booking.customerId;
+    final otherId = widget.asCustomer
+        ? widget.booking.providerId
+        : widget.booking.customerId;
     try {
-      final values = await Future.wait<Object?>([firestore.getUser(otherId), firestore.getService(widget.booking.serviceId)]);
+      final values = await Future.wait<Object?>([
+        firestore.getUser(otherId),
+        firestore.getService(widget.booking.serviceId),
+      ]);
       if (!mounted) return;
-      setState(() { _otherUser = values[0] as AppUser?; _service = values[1] as ServiceListing?; });
+      setState(() {
+        _otherUser = values[0] as AppUser?;
+        _service = values[1] as ServiceListing?;
+      });
     } catch (_) {
       // Optional metadata must not prevent the participant from opening chat.
     } finally {
@@ -1448,10 +1777,14 @@ class _MessagesConversationPageState extends State<_MessagesConversationPage> {
 
   Widget _buildFramedBody(BuildContext context) {
     if (_loading) {
-      return const Center(child: LoadingIndicator(message: 'Loading conversation…'));
+      return const Center(
+        child: LoadingIndicator(message: 'Loading conversation…'),
+      );
     }
 
-    final otherId = widget.asCustomer ? widget.booking.providerId : widget.booking.customerId;
+    final otherId = widget.asCustomer
+        ? widget.booking.providerId
+        : widget.booking.customerId;
     final thread = MessageConversationThread(
       otherUserId: otherId,
       bookings: [widget.booking],
@@ -1492,7 +1825,8 @@ class _MessagesConversationPageState extends State<_MessagesConversationPage> {
                   otherUser: _otherUser,
                   service: _service,
                   onClose: () => setState(() => _showInfo = false),
-                  onMessageSearchChanged: (v) => setState(() => _chatFilter = v),
+                  onMessageSearchChanged: (v) =>
+                      setState(() => _chatFilter = v),
                 ),
               ),
             ],
@@ -1519,7 +1853,13 @@ class _MessagesConversationPageState extends State<_MessagesConversationPage> {
                     icon: const Icon(Icons.arrow_back_rounded),
                     tooltip: 'Back',
                   ),
-                  Text('Messages', style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.w700)),
+                  Text(
+                    'Messages',
+                    style: GoogleFonts.inter(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -1546,7 +1886,11 @@ class _MessagesConversationPageState extends State<_MessagesConversationPage> {
 }
 
 class _InfoExpansion extends StatelessWidget {
-  const _InfoExpansion({required this.icon, required this.title, required this.child});
+  const _InfoExpansion({
+    required this.icon,
+    required this.title,
+    required this.child,
+  });
 
   final IconData icon;
   final String title;
@@ -1558,7 +1902,10 @@ class _InfoExpansion extends StatelessWidget {
       data: Theme.of(context).copyWith(dividerColor: FigmaColors.gray200),
       child: ExpansionTile(
         leading: Icon(icon, size: 20, color: FigmaColors.gray700),
-        title: Text(title, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)),
+        title: Text(
+          title,
+          style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600),
+        ),
         tilePadding: EdgeInsets.zero,
         childrenPadding: const EdgeInsets.only(bottom: 12),
         children: [child],

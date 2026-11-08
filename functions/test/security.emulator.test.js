@@ -124,3 +124,37 @@ test('profile photos allow owner image uploads but reject cross-account writes, 
   await assertFails(uploadBytes(ref(owner,'users/customer/too-big.jpg'),new Uint8Array(5*1024*1024+1),{contentType:'image/jpeg'}));
   await assertFails(uploadBytes(ref(owner,'users/customer/file.txt'),png,{contentType:'text/plain'}));
 });
+
+test('inquiries, messages and attachments are private to their actual participants and cannot be forged',async()=>{
+  await env.withSecurityRulesDisabled(async c=>{
+    await setDoc(doc(c.firestore(),'inquiries','thread'),{customerId:'customer',providerId:'provider',participantIds:['customer','provider']});
+    await setDoc(doc(c.firestore(),'inquiries','thread','messages','m'),{senderId:'customer',text:'Private requirements'});
+  });
+  for(const uid of ['customer','provider']) {
+    const db=env.authenticatedContext(uid).firestore();
+    await assertSucceeds(getDoc(doc(db,'inquiries','thread')));
+    await assertSucceeds(getDocs(query(collection(db,'inquiries'),where('participantIds','array-contains',uid))));
+    await assertSucceeds(getDocs(collection(db,'inquiries','thread','messages')));
+    await assertFails(updateDoc(doc(db,'inquiries','thread'),{providerMessageCount:999}));
+    await assertFails(setDoc(doc(db,'inquiries','thread','messages','forged'),{senderId:uid,text:'Bypass discussion count'}));
+  }
+  for(const uid of ['stranger','admin','agency']) {
+    const db=env.authenticatedContext(uid).firestore();
+    await assertFails(getDoc(doc(db,'inquiries','thread')));
+    await assertFails(getDoc(doc(db,'inquiries','thread','messages','m')));
+  }
+  const bytes=new Uint8Array([137,80,78,71]);
+  await assertSucceeds(uploadBytes(ref(env.authenticatedContext('customer').storage(),'inquiries/thread/customer/photo.png'),bytes,{contentType:'image/png'}));
+  await assertSucceeds(getBytes(ref(env.authenticatedContext('provider').storage(),'inquiries/thread/customer/photo.png')));
+  await assertFails(getBytes(ref(env.authenticatedContext('stranger').storage(),'inquiries/thread/customer/photo.png')));
+  await assertFails(uploadBytes(ref(env.authenticatedContext('provider').storage(),'inquiries/thread/customer/fake.png'),bytes,{contentType:'image/png'}));
+});
+
+test('providers cannot publish custom services or reintroduce hourly listings',async()=>{
+  const db=env.authenticatedContext('provider').firestore();
+  const data={providerId:'provider',category:'Cleaning',serviceTitle:'House Cleaning',priceType:'fixed',approvalStatus:'Pending',isActive:false};
+  await assertSucceeds(setDoc(doc(db,'services','valid'),data));
+  await assertFails(setDoc(doc(db,'services','hourly'),{...data,priceType:'hourly'}));
+  await assertFails(setDoc(doc(db,'services','custom'),{...data,category:'Custom Services',serviceTitle:'Anything'}));
+  await assertFails(setDoc(doc(db,'services','electric'),{...data,category:'Repair and Technical Services',serviceTitle:'Electrical Repair'}));
+});

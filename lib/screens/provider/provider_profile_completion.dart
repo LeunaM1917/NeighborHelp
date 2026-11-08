@@ -226,8 +226,8 @@ List<ProviderProfileRequirement> buildProviderProfileRequirements({
     ),
     ProviderProfileRequirement(
       id: ProviderProfileRequirementId.certifications,
-      title: 'Certifications (for technical services)',
-      subtitle: 'Needed only for Electrical / Plumbing / Aircon-type jobs — agency authenticates',
+      title: 'TESDA certifications',
+      subtitle: 'Required for every offered service. The System Administrator checks matching TESDA credentials.',
       weightPercent: 6,
       done: hasCerts,
     ),

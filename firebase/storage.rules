@@ -34,5 +34,11 @@ service firebase.storage {
       allow create: if resource == null && participant() && request.auth.uid == senderId && image();
       allow update, delete: if false;
     }
+    match /inquiries/{inquiryId}/{senderId}/{fileName} {
+      function participant() { return active() && request.auth.uid in firestore.get(/databases/(default)/documents/inquiries/$(inquiryId)).data.participantIds; }
+      allow read: if participant();
+      allow create: if resource == null && participant() && request.auth.uid == senderId && image();
+      allow update, delete: if false;
+    }
   }
 }

@@ -1102,7 +1102,7 @@ class _CertificationCard extends StatelessWidget {
               ] else if (entry.isPending) ...[
                 const SizedBox(height: 6),
                 Text(
-                  'Awaiting Verification Agency authentication',
+                  'Awaiting System Administrator TESDA review',
                   style: GoogleFonts.inter(fontSize: 12, color: FigmaColors.orange600),
                 ),
               ],

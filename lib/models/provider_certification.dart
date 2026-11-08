@@ -36,6 +36,8 @@ class ProviderCertificationEntry {
     this.reviewedByRole = '',
     this.reviewedAt,
     this.rejectionReason = '',
+    this.verificationSource = '',
+    this.verificationNotes = '',
   });
 
   static const maxDescriptionLength = 4000;
@@ -44,6 +46,7 @@ class ProviderCertificationEntry {
   final String id;
   final String name;
   final String provider;
+
   /// ISO `yyyy-MM-dd` when set.
   final String issueDate;
   final String expirationDate;
@@ -55,6 +58,8 @@ class ProviderCertificationEntry {
   final String reviewedByRole;
   final Timestamp? reviewedAt;
   final String rejectionReason;
+  final String verificationSource;
+  final String verificationNotes;
 
   bool get isEmpty => name.trim().isEmpty;
   bool get isPending => status == CertificationVerificationStatus.pending;
@@ -93,9 +98,15 @@ class ProviderCertificationEntry {
       url: url ?? this.url,
       status: status ?? this.status,
       reviewedBy: clearReview ? '' : (reviewedBy ?? this.reviewedBy),
-      reviewedByRole: clearReview ? '' : (reviewedByRole ?? this.reviewedByRole),
+      reviewedByRole: clearReview
+          ? ''
+          : (reviewedByRole ?? this.reviewedByRole),
       reviewedAt: clearReview ? null : (reviewedAt ?? this.reviewedAt),
-      rejectionReason: clearReview ? '' : (rejectionReason ?? this.rejectionReason),
+      rejectionReason: clearReview
+          ? ''
+          : (rejectionReason ?? this.rejectionReason),
+      verificationSource: clearReview ? '' : verificationSource,
+      verificationNotes: clearReview ? '' : verificationNotes,
     );
   }
 
@@ -109,11 +120,17 @@ class ProviderCertificationEntry {
       description: data['description'] as String? ?? '',
       certificationId: data['certificationId'] as String? ?? '',
       url: data['url'] as String? ?? '',
-      status: CertificationVerificationStatus.fromFirestore(data['status'] as String?),
+      status: CertificationVerificationStatus.fromFirestore(
+        data['status'] as String?,
+      ),
       reviewedBy: data['reviewedBy'] as String? ?? '',
       reviewedByRole: data['reviewedByRole'] as String? ?? '',
-      reviewedAt: data['reviewedAt'] is Timestamp ? data['reviewedAt'] as Timestamp : null,
+      reviewedAt: data['reviewedAt'] is Timestamp
+          ? data['reviewedAt'] as Timestamp
+          : null,
       rejectionReason: data['rejectionReason'] as String? ?? '',
+      verificationSource: data['verificationSource'] as String? ?? '',
+      verificationNotes: data['verificationNotes'] as String? ?? '',
     );
   }
 
@@ -132,6 +149,9 @@ class ProviderCertificationEntry {
       if (reviewedByRole.isNotEmpty) 'reviewedByRole': reviewedByRole,
       if (reviewedAt != null) 'reviewedAt': reviewedAt,
       if (rejectionReason.isNotEmpty) 'rejectionReason': rejectionReason.trim(),
+      if (verificationSource.isNotEmpty)
+        'verificationSource': verificationSource,
+      if (verificationNotes.isNotEmpty) 'verificationNotes': verificationNotes,
     };
   }
 
@@ -183,7 +203,9 @@ class ProviderCertificationEntry {
     final out = <ProviderCertificationEntry>[];
     for (final item in raw) {
       if (item is Map) {
-        final entry = ProviderCertificationEntry.fromMap(Map<String, dynamic>.from(item));
+        final entry = ProviderCertificationEntry.fromMap(
+          Map<String, dynamic>.from(item),
+        );
         if (!entry.isEmpty) out.add(entry);
       } else {
         final text = item?.toString().trim() ?? '';
@@ -193,7 +215,9 @@ class ProviderCertificationEntry {
     return out;
   }
 
-  static List<Map<String, dynamic>> listToFirestore(List<ProviderCertificationEntry> list) {
+  static List<Map<String, dynamic>> listToFirestore(
+    List<ProviderCertificationEntry> list,
+  ) {
     return list.map((e) => e.toMap()).toList();
   }
 }

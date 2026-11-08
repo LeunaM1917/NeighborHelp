@@ -22,37 +22,40 @@ void main() {
     );
   });
 
-  test('soft services do not require certificate', () {
-    expect(
-      serviceRequiresCertification(
-        category: 'Cleaning',
-        serviceTitle: 'House Cleaning',
-      ),
-      isFalse,
-    );
-    expect(
-      serviceRequiresCertification(
-        category: 'Tutoring',
-        serviceTitle: 'Math Tutoring',
-      ),
-      isFalse,
-    );
-    expect(
-      serviceRequiresCertification(
-        category: 'Custom Services',
-        serviceTitle: 'Birthday Setup',
-      ),
-      isFalse,
-    );
-  });
+  test(
+    'all services require a certificate; unsupported tasks have no exemption',
+    () {
+      expect(
+        serviceRequiresCertification(
+          category: 'Cleaning',
+          serviceTitle: 'House Cleaning',
+        ),
+        isTrue,
+      );
+      expect(
+        serviceRequiresCertification(
+          category: 'Tutoring',
+          serviceTitle: 'Math Tutoring',
+        ),
+        isTrue,
+      );
+      expect(
+        serviceRequiresCertification(
+          category: 'Custom Services',
+          serviceTitle: 'Birthday Setup',
+        ),
+        isTrue,
+      );
+    },
+  );
 
-  test('ordinary home repair titles do not require certificate', () {
+  test('ordinary repair tasks also require a matching certificate', () {
     expect(
       serviceRequiresCertification(
         category: 'Home Repair',
         serviceTitle: 'Door Repair',
       ),
-      isFalse,
+      isTrue,
     );
   });
 }

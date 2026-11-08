@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'service_approval_status.dart';
+import '../utils/approved_service_catalog.dart';
 
 class ServiceListing {
   ServiceListing({
@@ -38,7 +39,10 @@ class ServiceListing {
   final Timestamp updatedAt;
 
   /// Visible on customer browse, search, and booking.
-  bool get isMarketplaceVisible => approvalStatus.isApproved && isActive;
+  bool get isMarketplaceVisible =>
+      approvalStatus.isApproved &&
+      isActive &&
+      isSupportedService(category, serviceTitle);
 
   factory ServiceListing.fromFirestore(String id, Map<String, dynamic> data) {
     return ServiceListing(
@@ -48,7 +52,11 @@ class ServiceListing {
       category: data['category'] as String? ?? '',
       description: data['description'] as String? ?? '',
       estimatedPrice: (data['estimatedPrice'] as num?)?.toDouble() ?? 0,
-      priceType: data['priceType'] as String? ?? 'negotiable',
+      // Old listing rates are indicative only; historical booking fees stay intact.
+      priceType:
+          const ['fixed', 'daily', 'negotiable'].contains(data['priceType'])
+          ? data['priceType'] as String
+          : 'negotiable',
       estimatedDuration: data['estimatedDuration'] as String? ?? '',
       availability: Map<String, dynamic>.from(
         data['availability'] as Map? ?? {},

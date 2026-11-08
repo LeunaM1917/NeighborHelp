@@ -1,3 +1,4 @@
+import '../../../widgets/service_agreement_card.dart';
 import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart';
@@ -49,7 +50,9 @@ class _ProviderJobsTabState extends State<ProviderJobsTab> {
   @override
   void initState() {
     super.initState();
-    _searchController.addListener(() => setState(() => _query = _searchController.text));
+    _searchController.addListener(
+      () => setState(() => _query = _searchController.text),
+    );
   }
 
   @override
@@ -86,19 +89,29 @@ class _ProviderJobsTabState extends State<ProviderJobsTab> {
 
   Future<void> _respond(Booking booking, bool accept) async {
     try {
-      await _firestore.providerRespondToBooking(
-        bookingId: booking.bookingId,
+      final responded = await reviewAndRespondToOffer(
+        context,
+        booking: booking,
         providerId: widget.appUser.userId,
         accept: accept,
       );
+      if (!responded) return;
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(accept ? 'Booking accepted' : 'Booking declined')),
+        SnackBar(
+          content: Text(accept ? 'Booking accepted' : 'Booking declined'),
+        ),
       );
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not update booking. Try again.')),
+        SnackBar(
+          content: Text(
+            e is StateError
+                ? e.message.toString()
+                : 'Could not update booking. Please retry.',
+          ),
+        ),
       );
     }
   }
@@ -110,9 +123,9 @@ class _ProviderJobsTabState extends State<ProviderJobsTab> {
         providerId: widget.appUser.userId,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Job started')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Job started')));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -128,25 +141,36 @@ class _ProviderJobsTabState extends State<ProviderJobsTab> {
         providerId: widget.appUser.userId,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Marked as completed')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Marked as completed')));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Complete is only available after the work period ends.')),
+        const SnackBar(
+          content: Text(
+            'Complete is only available after the work period ends.',
+          ),
+        ),
       );
     }
   }
 
   void _openDetails(Booking booking) {
     if (booking.isPending) {
-      showProviderBookingRequestReview(context, appUser: widget.appUser, booking: booking);
+      showProviderBookingRequestReview(
+        context,
+        appUser: widget.appUser,
+        booking: booking,
+      );
       return;
     }
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (_) => ProviderBookingDetailScreen(appUser: widget.appUser, booking: booking),
+        builder: (_) => ProviderBookingDetailScreen(
+          appUser: widget.appUser,
+          booking: booking,
+        ),
       ),
     );
   }
@@ -172,7 +196,8 @@ class _ProviderJobsTabState extends State<ProviderJobsTab> {
                 }
 
                 final allBookings = snap.data ?? [];
-                if (_hydratedKey != allBookings.map((b) => b.bookingId).join(',')) {
+                if (_hydratedKey !=
+                    allBookings.map((b) => b.bookingId).join(',')) {
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     if (mounted) unawaited(_hydrate(allBookings));
                   });
@@ -201,8 +226,7 @@ class _ProviderJobsTabState extends State<ProviderJobsTab> {
                 final categories = {
                   for (final c in serviceCategories.values)
                     if (c.isNotEmpty) c,
-                }.toList()
-                  ..sort();
+                }.toList()..sort();
 
                 final filtered = filterProviderJobs(
                   bookings: allBookings,
@@ -214,7 +238,9 @@ class _ProviderJobsTabState extends State<ProviderJobsTab> {
                   customerNames: customerNames,
                 );
 
-                final totalPages = filtered.isEmpty ? 1 : (filtered.length / _pageSize).ceil();
+                final totalPages = filtered.isEmpty
+                    ? 1
+                    : (filtered.length / _pageSize).ceil();
                 final page = _page.clamp(1, totalPages);
                 final start = (page - 1) * _pageSize;
                 final pageItems = filtered.skip(start).take(_pageSize).toList();
@@ -287,12 +313,17 @@ class _ProviderJobsTabState extends State<ProviderJobsTab> {
                       ProviderJobsQuickActionsPanel(
                         onViewMessages: () => widget.onNavigateToTab?.call(3),
                         onUpdateAvailability: () {
-                          ProviderAvailabilityScreen.open(context, appUser: widget.appUser);
+                          ProviderAvailabilityScreen.open(
+                            context,
+                            appUser: widget.appUser,
+                          );
                         },
                         onManageServices: () => widget.onNavigateToTab?.call(1),
                         onViewEarnings: () {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Earnings report — coming soon.')),
+                            const SnackBar(
+                              content: Text('Earnings report — coming soon.'),
+                            ),
                           );
                         },
                       ),

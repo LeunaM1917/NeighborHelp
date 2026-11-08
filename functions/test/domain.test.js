@@ -11,7 +11,7 @@ test('adjacent appointments are allowed but overlapping appointments are rejecte
   assert.equal(validWindow(500, 600, 100), true); assert.equal(validWindow(50, 600, 100), false);
 });
 test('an unrelated, expired, or undocumented credential does not qualify a technical service', () => {
-  const profile = {approvedCertificationIds: ['c'], certificationHistory: [{id: 'c', name: 'Carpentry NC II', url: 'gs://test/c.pdf'}]};
+  const profile = require('./marketplace_fixtures').credentials('Carpentry NC II');
   assert.equal(hasMatchingCertificate(profile, 'Home Repair', 'Plumbing'), false);
   assert.equal(hasMatchingCertificate(profile, 'Home Repair', 'Carpentry'), true);
   profile.certificationHistory[0].expirationDate = '2020-01-01';
@@ -24,4 +24,9 @@ test('exports escape embedded quotes, commas and spreadsheet formulas', () => {
 test('coverage distance uses kilometers', () => {
   assert.equal(distanceKm({latitude: 7,longitude:125}, {latitude:7,longitude:125}), 0);
   assert.ok(distanceKm({latitude:7,longitude:125}, {latitude:8,longitude:125}) > 110);
+});
+test('multi-day agreements reserve the agreed work hours rather than overnight gaps',()=>{
+  const days={agreement:{},scheduledDate:1000000000,numberOfDays:3,hoursPerDay:8};
+  assert.equal(overlaps(days,{scheduledDate:1000000000+25*3600000,scheduledEndDate:1000000000+26*3600000}),true);
+  assert.equal(overlaps(days,{scheduledDate:1000000000+12*3600000,scheduledEndDate:1000000000+13*3600000}),false);
 });

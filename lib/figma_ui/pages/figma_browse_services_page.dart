@@ -311,7 +311,7 @@ class _BrowseServiceCardState extends State<_BrowseServiceCard> {
                           ),
                         ),
                         Text(
-                          'From ₱${widget.data.pricePhp}/hr',
+                          'From ₱${widget.data.pricePhp} (indicative)',
                           style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600, color: FigmaColors.navy),
                         ),
                       ],

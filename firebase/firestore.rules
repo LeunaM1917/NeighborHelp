@@ -71,12 +71,21 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/serviceProviders/$(id)).data.isVerified == true
         && get(/databases/$(database)/documents/users/$(id)).data.accountStatus == 'Active';
     }
+    function supportedService(s) {
+      return s.get('priceType','') in ['fixed','daily','negotiable'] && (
+        (s.category == 'Home Repair' && s.serviceTitle in ['Basic Carpentry','Carpentry','Door Repair','Furniture Repair'])
+        || (s.category == 'Cleaning' && s.serviceTitle in ['House Cleaning','Apartment Cleaning','Kitchen Cleaning','Bathroom Cleaning','Laundry Assistance','Ironing Service'])
+        || (s.category == 'Repair and Technical Services' && s.serviceTitle in ['Computer Repair','Laptop Repair','Internet/Wi-Fi Setup','Aircon Cleaning','Aircon Repair','Refrigerator Repair'])
+        || (s.category == 'Handyman' && s.serviceTitle in ['Furniture Assembly','Shelf Installation']));
+    }
     match /services/{id} {
       allow read: if activeUser();
       allow create: if owns(request.resource.data.providerId)
+        && supportedService(request.resource.data)
         && request.resource.data.approvalStatus in ['Draft', 'Pending']
         && request.resource.data.isActive == false;
       allow update: if actorValid() && (isAdmin() || (owns(resource.data.providerId)
+        && (supportedService(request.resource.data) || (request.resource.data.isActive == false && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isActive','updatedAt','updatedBy'])) )
         && request.resource.data.providerId == resource.data.providerId
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['serviceTitle', 'category', 'description', 'estimatedPrice',
           'priceType', 'estimatedDuration', 'availability', 'serviceImages', 'requiresCertification', 'approvalStatus', 'isActive', 'rejectionReason', 'updatedAt', 'updatedBy'])
@@ -92,13 +101,17 @@ service cloud.firestore {
       allow write: if false;
     }
     match /providerSchedules/{id} { allow read, write: if false; }
+    match /inquiries/{id} {
+      allow read: if activeUser() && request.auth.uid in resource.data.participantIds;
+      allow write: if false;
+      match /messages/{messageId} {
+        allow read: if activeUser() && request.auth.uid in get(/databases/$(database)/documents/inquiries/$(id)).data.participantIds;
+        allow write: if false;
+      }
+    }
     match /contracts/{id} {
       allow read: if isAdmin() || (activeUser() && (resource.data.customerId == request.auth.uid || resource.data.providerId == request.auth.uid));
-      allow create, delete: if false;
-      allow update: if activeUser() && request.auth.uid in [resource.data.customerId, resource.data.providerId]
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'endedAt', 'endedByUserId', 'endedByRole', 'updatedAt'])
-        && resource.data.status == 'active' && request.resource.data.status == 'ended'
-        && request.resource.data.endedByUserId == request.auth.uid;
+      allow write: if false;
     }
     match /bookingUserReports/{id} {
       allow read: if isAdmin();

@@ -6,27 +6,65 @@ import '../utils/image_upload.dart';
 
 class StorageService {
   StorageService({FirebaseStorage? storage})
-      : _storage = storage ?? FirebaseStorage.instance;
+    : _storage = storage ?? FirebaseStorage.instance;
 
   final FirebaseStorage _storage;
+  Future<String> uploadInquiryImage({
+    required String inquiryId,
+    required String senderId,
+    required Uint8List bytes,
+  }) async {
+    if (bytes.length > 5 * 1024 * 1024) {
+      throw ArgumentError('Choose an image up to 5 MB.');
+    }
+    final format = ImageUploadFormat.inspect(bytes);
+    final ref = _storage.ref(
+      'inquiries/$inquiryId/$senderId/${DateTime.now().microsecondsSinceEpoch}.${format.extension}',
+    );
+    await ref.putData(bytes, SettableMetadata(contentType: format.contentType));
+    return 'gs://${ref.bucket}/${ref.fullPath}';
+  }
 
-  Future<String> uploadCertificate({required String providerId, required String certificateId, required Uint8List bytes, required String extension}) async {
-    if (bytes.length > 5 * 1024 * 1024 || !['pdf', 'jpg', 'jpeg', 'png'].contains(extension)) throw ArgumentError('Use a PDF, JPG or PNG file up to 5 MB.');
-    final contentType = extension == 'pdf' ? 'application/pdf' : extension == 'png' ? 'image/png' : 'image/jpeg';
-    final ref = _storage.ref('certificates/$providerId/$certificateId/${DateTime.now().microsecondsSinceEpoch}.$extension');
+  Future<String> uploadCertificate({
+    required String providerId,
+    required String certificateId,
+    required Uint8List bytes,
+    required String extension,
+  }) async {
+    if (bytes.length > 5 * 1024 * 1024 ||
+        !['pdf', 'jpg', 'jpeg', 'png'].contains(extension)) {
+      throw ArgumentError('Use a PDF, JPG or PNG file up to 5 MB.');
+    }
+    final contentType = extension == 'pdf'
+        ? 'application/pdf'
+        : extension == 'png'
+        ? 'image/png'
+        : 'image/jpeg';
+    final ref = _storage.ref(
+      'certificates/$providerId/$certificateId/${DateTime.now().microsecondsSinceEpoch}.$extension',
+    );
     await ref.putData(bytes, SettableMetadata(contentType: contentType));
     return 'gs://${ref.bucket}/${ref.fullPath}';
   }
 
-  Future<String> uploadMessageImage({required String bookingId, required String senderId, required Uint8List bytes}) async {
-    if (bytes.length > 5 * 1024 * 1024) throw ArgumentError('Choose an image up to 5 MB.');
-    final ref = _storage.ref('messages/$bookingId/$senderId/${DateTime.now().microsecondsSinceEpoch}.jpg');
+  Future<String> uploadMessageImage({
+    required String bookingId,
+    required String senderId,
+    required Uint8List bytes,
+  }) async {
+    if (bytes.length > 5 * 1024 * 1024) {
+      throw ArgumentError('Choose an image up to 5 MB.');
+    }
+    final ref = _storage.ref(
+      'messages/$bookingId/$senderId/${DateTime.now().microsecondsSinceEpoch}.jpg',
+    );
     await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
     return 'gs://${ref.bucket}/${ref.fullPath}';
   }
 
   Future<String> readableUrl(String value) => value.startsWith('gs://')
-      ? _storage.refFromURL(value).getDownloadURL() : Future.value(value);
+      ? _storage.refFromURL(value).getDownloadURL()
+      : Future.value(value);
 
   /// Each upload gets a new URL so an older cached photo is never reused.
   Future<String> uploadProfilePhoto({
@@ -36,7 +74,10 @@ class StorageService {
     if (kIsWeb) {
       throw UnsupportedError('Use uploadProfilePhotoBytes on web.');
     }
-    return uploadProfilePhotoBytes(userId: userId, bytes: await (file as File).readAsBytes());
+    return uploadProfilePhotoBytes(
+      userId: userId,
+      bytes: await (file as File).readAsBytes(),
+    );
   }
 
   Future<String> uploadProfilePhotoBytes({
@@ -44,7 +85,9 @@ class StorageService {
     required Uint8List bytes,
   }) async {
     final format = ImageUploadFormat.inspect(bytes);
-    final ref = _storage.ref('users/$userId/profile-${DateTime.now().microsecondsSinceEpoch}.${format.extension}');
+    final ref = _storage.ref(
+      'users/$userId/profile-${DateTime.now().microsecondsSinceEpoch}.${format.extension}',
+    );
     await ref.putData(bytes, SettableMetadata(contentType: format.contentType));
     return ref.getDownloadURL();
   }

@@ -1,3 +1,4 @@
+const {credentials,offer}=require('./marketplace_fixtures');
 const { GeoPoint, getFirestore } = require('firebase-admin/firestore');
 const {before, after, beforeEach, test} = require('node:test');
 const assert = require('node:assert/strict');
@@ -16,27 +17,35 @@ after(async () => { await require('firebase-admin/app').deleteApp(app); await en
 beforeEach(async () => {
   await env.clearFirestore();
   for (const [id, role] of [['customer','Customer'],['second','Customer'],['provider','Provider'],['admin','Administrator']]) await db.collection('users').doc(id).set({role,accountStatus:'Active'});
-  await db.collection('serviceProviders').doc('provider').set({userId:'provider',isVerified:true,location:new GeoPoint(7.3,125.6),serviceRadiusKm:10,acceptedBookings:0,completedBookings:0});
+  await db.collection('serviceProviders').doc('provider').set({userId:'provider',isVerified:true,location:new GeoPoint(7.3,125.6),serviceRadiusKm:10,acceptedBookings:0,completedBookings:0,...credentials()});
   await db.collection('services').doc('cleaning').set({providerId:'provider',category:'Cleaning',serviceTitle:'House cleaning',isActive:true,approvalStatus:'Approved',estimatedPrice:100,priceType:'Hourly'});
 });
 const auth = uid => ({auth:{uid}});
 const start = () => Date.now() + 3 * 3600000;
 async function create(id, uid='customer', at=start()) {
-  return command({action:'create',bookingId:id,serviceId:'cleaning',serviceLocation:'Panabo City, test address',
-    location:{latitude:7.3,longitude:125.6}, scheduledDate:at, scheduledEndDate:at+3600000},auth(uid));
+  const inquiryId=require('node:crypto').createHash('sha256').update(JSON.stringify([uid,'provider'])).digest('hex');
+  await db.doc('inquiries/'+inquiryId).set({customerId:uid,providerId:'provider',participantIds:[uid,'provider'],customerMessageCount:1,providerMessageCount:1});
+  const data={bookingId:id,serviceId:'cleaning',inquiryId,serviceLocation:'Panabo City, test address',location:{latitude:7.3,longitude:125.6},scheduledDate:at,...offer()};
+  const preview=await command({action:'preview',...data},auth(uid));
+  return command({action:'create',...data,agreementHash:preview.agreement.hash},auth(uid));
 }
+async function respond(bookingId,uid='provider') {
+  const b=(await db.doc('bookings/'+bookingId).get()).data();
+  return command({action:'accept',bookingId,acceptAgreement:true,agreementHash:b.agreement.hash},auth(uid));
+}
+
 test('creation validates identity, coverage, schedule, service approval and server fee', async () => {
   await create('one');
   const b = (await db.doc('bookings/one').get()).data();
   assert.equal(b.totalFee,100); assert.equal(b.status,'Pending');
   assert.equal((await db.collection('auditLogs').get()).size,1);
-  await assert.rejects(command({action:'create',bookingId:'past',serviceId:'cleaning',location:{latitude:7.3,longitude:125.6},serviceLocation:'Address',scheduledDate:1,scheduledEndDate:100},auth('customer')),/future/);
+  await assert.rejects(create('past','customer',1),/future/);
   await db.doc('serviceProviders/provider').update({isVerified:false});
   await assert.rejects(create('blocked'),/eligible/);
 });
 test('two concurrent accepts cannot double-book the same provider', async () => {
   const at=start(); await create('one','customer',at); await create('two','second',at);
-  const results = await Promise.allSettled(['one','two'].map(bookingId=> command({action:'accept',bookingId},auth('provider'))));
+  const results = await Promise.allSettled(['one','two'].map(bookingId=> respond(bookingId)));
   assert.equal(results.filter(r=>r.status==='fulfilled').length,1);
   assert.equal(results.filter(r=>r.status==='rejected').length,1);
   assert.equal((await db.doc('serviceProviders/provider').get()).data().acceptedBookings,1);
@@ -44,22 +53,24 @@ test('two concurrent accepts cannot double-book the same provider', async () => 
 test('status transitions and counters cannot be replayed or performed by another user', async () => {
   await create('one');
   await assert.rejects(command({action:'accept',bookingId:'one'},auth('customer')),/provider/);
-  await command({action:'accept',bookingId:'one'},auth('provider'));
-  await assert.rejects(command({action:'accept',bookingId:'one'},auth('provider')),/pending/);
+  await respond('one');
+  await assert.rejects(respond('one'),/pending/);
   await assert.rejects(command({action:'complete',bookingId:'one'},auth('provider')),/Start/);
   await assert.rejects(command({action:'start',bookingId:'one'},auth('provider')),/start time/);
   await assert.rejects(command({action:'cancel',bookingId:'one',reason:'Unauthorized cancellation'},auth('second')),/another/);
   await command({action:'cancel',bookingId:'one',reason:'Customer needs to cancel this appointment.'},auth('customer'));
   assert.equal((await db.doc('bookings/one').get()).data().cancelledByRole,'customer');
 });
-test('rescheduling keeps the original schedule until the provider agrees and rejects conflicts', async () => {
-  const at=start(); await create('one','customer',at); await command({action:'accept',bookingId:'one'},auth('provider'));
+test('legacy rescheduling keeps the original schedule until the provider agrees and rejects conflicts', async () => {
+  const at=start(); await create('one','customer',at); await respond('one');
+  await db.doc('bookings/one').update({agreement:require('firebase-admin/firestore').FieldValue.delete()});
   const later=at+4*3600000;
   await command({action:'requestReschedule',bookingId:'one',scheduledDate:later},auth('customer'));
   assert.equal((await db.doc('bookings/one').get()).data().scheduledDate.toMillis(),at);
   await command({action:'approveReschedule',bookingId:'one'},auth('provider'));
   const b=(await db.doc('bookings/one').get()).data(); assert.equal(b.scheduledDate.toMillis(),later); assert.equal(b.rescheduleRequest,undefined);
-  await create('two','second',at); await command({action:'accept',bookingId:'two'},auth('provider'));
+  await create('two','second',at); await respond('two');
+  await db.doc('bookings/two').update({agreement:require('firebase-admin/firestore').FieldValue.delete()});
   await command({action:'requestReschedule',bookingId:'two',scheduledDate:later},auth('second'));
   await assert.rejects(command({action:'approveReschedule',bookingId:'two'},auth('provider')),/already has/);
 });

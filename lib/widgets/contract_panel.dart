@@ -11,6 +11,7 @@ import '../services/firestore_service.dart';
 import '../theme/role_theme.dart';
 import '../ui/app_ui_kit.dart';
 import 'milestone_feedback_details.dart';
+import 'service_agreement_card.dart';
 
 /// Contract summary, milestone history, and optional end-contract action.
 class ContractPanel extends StatefulWidget {
@@ -24,6 +25,7 @@ class ContractPanel extends StatefulWidget {
 
   final AppUser appUser;
   final Booking booking;
+
   /// `customer` or `provider`
   final String viewerRole;
   final VoidCallback? onContractEnded;
@@ -44,8 +46,14 @@ class _ContractPanelState extends State<ContractPanel> {
           'You can still message each other, but future bookings will start a new contract unless you work together again under a new agreement.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('End contract')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('End contract'),
+          ),
         ],
       ),
     );
@@ -60,9 +68,9 @@ class _ContractPanelState extends State<ContractPanel> {
       );
       widget.onContractEnded?.call();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Contract ended.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Contract ended.')));
       }
     } catch (_) {
       if (mounted) {
@@ -78,7 +86,16 @@ class _ContractPanelState extends State<ContractPanel> {
   @override
   Widget build(BuildContext context) {
     final contractId = widget.booking.contractId;
-    if (contractId == null || contractId.isEmpty) return const SizedBox.shrink();
+    if (contractId == null || contractId.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ServiceAgreementCard(booking: widget.booking),
+          if (widget.viewerRole == 'provider' && widget.booking.isPending)
+            OfferChangeButton(booking: widget.booking),
+        ],
+      );
+    }
 
     return StreamBuilder<ServiceContract?>(
       stream: FirestoreService().contractStream(contractId),
@@ -94,9 +111,16 @@ class _ContractPanelState extends State<ContractPanel> {
             final dateFmt = DateFormat('MMM d, yyyy');
 
             final past = milestones.where((m) => m.isMilestoneComplete).toList()
-              ..sort((a, b) => (b.milestoneNumber ?? 0).compareTo(a.milestoneNumber ?? 0));
-            final active = milestones.where((m) => !m.isMilestoneComplete).toList()
-              ..sort((a, b) => (a.milestoneNumber ?? 0).compareTo(b.milestoneNumber ?? 0));
+              ..sort(
+                (a, b) =>
+                    (b.milestoneNumber ?? 0).compareTo(a.milestoneNumber ?? 0),
+              );
+            final active =
+                milestones.where((m) => !m.isMilestoneComplete).toList()..sort(
+                  (a, b) => (a.milestoneNumber ?? 0).compareTo(
+                    b.milestoneNumber ?? 0,
+                  ),
+                );
 
             return FutureBuilder<(String, String)>(
               future: _partyNames(contract),
@@ -107,16 +131,20 @@ class _ContractPanelState extends State<ContractPanel> {
                 return AppSection(
                   title: 'Contract',
                   subtitle: contract.isActive
-                      ? 'Ongoing work with repeat milestones on one contract'
+                      ? 'Work under the accepted service agreement'
                       : 'This contract has ended',
                   child: AppSurfaceCard(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        ServiceAgreementCard(booking: widget.booking),
                         Row(
                           children: [
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
                               decoration: BoxDecoration(
                                 color: rc.tint,
                                 borderRadius: BorderRadius.circular(8),
@@ -131,12 +159,17 @@ class _ContractPanelState extends State<ContractPanel> {
                               ),
                             ),
                             const SizedBox(width: 10),
-                            FigmaStatusChip(status: contract.isActive ? 'Active' : 'Ended'),
+                            FigmaStatusChip(
+                              status: contract.isActive ? 'Active' : 'Ended',
+                            ),
                             if (widget.booking.milestoneNumber != null) ...[
                               const Spacer(),
                               Text(
                                 widget.booking.milestoneLabel,
-                                style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600),
+                                style: GoogleFonts.inter(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ],
                           ],
@@ -156,7 +189,8 @@ class _ContractPanelState extends State<ContractPanel> {
                             (m) => _ActiveMilestoneRow(
                               booking: m,
                               dateFmt: dateFmt,
-                              highlight: m.bookingId == widget.booking.bookingId,
+                              highlight:
+                                  m.bookingId == widget.booking.bookingId,
                             ),
                           ),
                         ],
@@ -180,7 +214,8 @@ class _ContractPanelState extends State<ContractPanel> {
                                 viewerRole: widget.viewerRole,
                                 customerName: customerName,
                                 providerName: providerName,
-                                highlight: m.bookingId == widget.booking.bookingId,
+                                highlight:
+                                    m.bookingId == widget.booking.bookingId,
                               ),
                             ),
                           ),
@@ -189,28 +224,42 @@ class _ContractPanelState extends State<ContractPanel> {
                           const SizedBox(height: 4),
                           Text(
                             'Ended ${dateFmt.format(contract.endedAt!.toDate())}',
-                            style: GoogleFonts.inter(fontSize: 12, color: FigmaColors.gray500),
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: FigmaColors.gray500,
+                            ),
                           ),
                         ],
                         if (contract.isActive) ...[
                           const SizedBox(height: 16),
                           OutlinedButton.icon(
-                            onPressed: _ending ? null : () => _confirmEnd(contract),
+                            onPressed: _ending
+                                ? null
+                                : () => _confirmEnd(contract),
                             icon: _ending
                                 ? const SizedBox(
                                     width: 16,
                                     height: 16,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
                                   )
-                                : const Icon(Icons.handshake_outlined, size: 18),
+                                : const Icon(
+                                    Icons.handshake_outlined,
+                                    size: 18,
+                                  ),
                             label: Text(
                               'End contract',
-                              style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                              style: GoogleFonts.inter(
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                             style: OutlinedButton.styleFrom(
                               minimumSize: const Size.fromHeight(44),
                               foregroundColor: FigmaColors.gray800,
-                              side: const BorderSide(color: FigmaColors.gray200),
+                              side: const BorderSide(
+                                color: FigmaColors.gray200,
+                              ),
                             ),
                           ),
                         ],
@@ -235,8 +284,12 @@ class _ContractPanelState extends State<ContractPanel> {
     final customer = results[0];
     final provider = results[1];
     return (
-      customer?.fullName.trim().isNotEmpty == true ? customer!.fullName : 'Customer',
-      provider?.fullName.trim().isNotEmpty == true ? provider!.fullName : 'Provider',
+      customer?.fullName.trim().isNotEmpty == true
+          ? customer!.fullName
+          : 'Customer',
+      provider?.fullName.trim().isNotEmpty == true
+          ? provider!.fullName
+          : 'Provider',
     );
   }
 }
@@ -263,7 +316,9 @@ class _ActiveMilestoneRow extends StatelessWidget {
             ? BoxDecoration(
                 color: FigmaColors.tintBlue.withValues(alpha: 0.35),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: FigmaColors.navy.withValues(alpha: 0.15)),
+                border: Border.all(
+                  color: FigmaColors.navy.withValues(alpha: 0.15),
+                ),
               )
             : null,
         child: Row(
@@ -289,7 +344,10 @@ class _ActiveMilestoneRow extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     '${dateFmt.format(when)} • ${booking.scheduledWindowLabel}',
-                    style: GoogleFonts.inter(fontSize: 12, color: FigmaColors.gray600),
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: FigmaColors.gray600,
+                    ),
                   ),
                 ],
               ),
@@ -321,16 +379,23 @@ class _PastMilestoneCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final completedAt = booking.completedAt?.toDate() ?? booking.scheduledDate.toDate();
-    final fee = booking.totalFee != null ? '₱${booking.totalFee!.toStringAsFixed(0)}' : null;
+    final completedAt =
+        booking.completedAt?.toDate() ?? booking.scheduledDate.toDate();
+    final fee = booking.totalFee != null
+        ? '₱${booking.totalFee!.toStringAsFixed(0)}'
+        : null;
 
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: highlight ? FigmaColors.tintGreen.withValues(alpha: 0.25) : FigmaColors.gray50,
+        color: highlight
+            ? FigmaColors.tintGreen.withValues(alpha: 0.25)
+            : FigmaColors.gray50,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: highlight ? FigmaColors.green.withValues(alpha: 0.35) : FigmaColors.gray200,
+          color: highlight
+              ? FigmaColors.green.withValues(alpha: 0.35)
+              : FigmaColors.gray200,
         ),
       ),
       child: Column(
@@ -339,7 +404,11 @@ class _PastMilestoneCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.check_circle, size: 20, color: FigmaColors.green),
+              const Icon(
+                Icons.check_circle,
+                size: 20,
+                color: FigmaColors.green,
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -359,7 +428,10 @@ class _PastMilestoneCard extends StatelessWidget {
                         ),
                         if (highlight)
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
                               color: FigmaColors.tintBlue,
                               borderRadius: BorderRadius.circular(6),
@@ -378,12 +450,18 @@ class _PastMilestoneCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       'Completed ${dateFmt.format(completedAt)}',
-                      style: GoogleFonts.inter(fontSize: 12, color: FigmaColors.gray600),
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: FigmaColors.gray600,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       booking.scheduledWindowLabel,
-                      style: GoogleFonts.inter(fontSize: 12, color: FigmaColors.gray600),
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: FigmaColors.gray600,
+                      ),
                     ),
                     if (fee != null) ...[
                       const SizedBox(height: 2),
