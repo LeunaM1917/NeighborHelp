@@ -9,6 +9,8 @@ import '../services/marketplace_service.dart';
 import '../screens/shared/agreement_amendment_screen.dart';
 import 'service_agreement_card.dart';
 import 'work_completion_card.dart';
+import 'settlement_card.dart';
+import '../l10n/app_strings.dart';
 
 /// Read-only history plus server-authorized agreement and payment actions.
 class ContractRecordsCard extends StatefulWidget {
@@ -64,7 +66,7 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
       final ok = await confirmServiceAgreement(
         context,
         agreement: Map<String, dynamic>.from(data['agreement'] as Map),
-        title: 'Review amendment',
+        title: context.tr('Review amendment'),
         confirmation: 'I voluntarily accept this exact amended agreement.',
       );
       if (ok != true) return;
@@ -78,7 +80,7 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
     });
   }
 
-  Future<void> _reportPayment() async {
+  Future<void> _reportPayment({bool refund=false}) async {
     final form = GlobalKey<FormState>(),
         amount = TextEditingController(),
         reference = TextEditingController();
@@ -87,7 +89,7 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setLocal) => AlertDialog(
-          title: const Text('Record a payment you made'),
+          title: Text(context.tr(refund?'Record refund sent':'Record a payment you made')),
           content: SizedBox(
             width: 480,
             child: Form(
@@ -101,8 +103,8 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
                     ),
                     TextFormField(
                       controller: amount,
-                      decoration: const InputDecoration(
-                        labelText: 'Amount paid (PHP)',
+                      decoration: InputDecoration(
+                        labelText: context.tr(refund?'Amount refunded (PHP)':'Amount paid (PHP)'),
                       ),
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
@@ -123,16 +125,16 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
                           'Bank transfer',
                           'Other',
                         ])
-                          DropdownMenuItem(value: m, child: Text(m)),
+                          DropdownMenuItem(value: m, child: Text(context.tr(m))),
                       ],
                       onChanged: (v) => setLocal(() => method = v!),
-                      decoration: const InputDecoration(labelText: 'Method'),
+                      decoration:  InputDecoration(labelText: context.tr('Method')),
                     ),
                     TextFormField(
                       controller: reference,
                       maxLength: 200,
-                      decoration: const InputDecoration(
-                        labelText: 'Transaction reference (optional)',
+                      decoration:  InputDecoration(
+                        labelText: context.tr('Transaction reference (optional)'),
                       ),
                     ),
                   ],
@@ -143,7 +145,7 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Back'),
+              child: Text(context.tr('Back')),
             ),
             FilledButton(
               onPressed: () {
@@ -155,7 +157,7 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
                   });
                 }
               },
-              child: const Text('Report payment'),
+              child: Text(context.tr(refund?'Report refund':'Report payment')),
             ),
           ],
         ),
@@ -166,12 +168,12 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
       reference.dispose();
     });
     if (payload == null) return;
-    final payloadKey=jsonEncode(payload);
+    final payloadKey=jsonEncode({'refund':refund,...payload});
     if(_paymentAttemptId==null || _paymentAttemptPayload!=payloadKey){
       _paymentAttemptId=_ref.collection('payments').doc().id;_paymentAttemptPayload=payloadKey;
     }
     await MarketplaceService.command('paymentCommand', {
-      'action': 'report',
+      'action': refund?'reportRefund':'report',
       'bookingId': widget.booking.bookingId,
       'paymentId': _paymentAttemptId,
       ...payload,
@@ -189,18 +191,18 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
       final ok = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Acknowledge actual receipt?'),
+          title: Text(context.tr('Acknowledge actual receipt?')),
           content: Text(
             'Confirm only if you received PHP ${((data['amountCents'] as num) / 100).toStringAsFixed(2)} by ${data['method']}. Check your own cash or account records.',
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Back'),
+              child: Text(context.tr('Back')),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('I received this amount'),
+              child: Text(context.tr('I received this amount')),
             ),
           ],
         ),
@@ -216,7 +218,7 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
       if (reason == null) return;
     }
     await MarketplaceService.command('paymentCommand', {
-      'action': action,
+      'action': data['recordType']=='refund' ? '${action}Refund' : action,
       'bookingId': widget.booking.bookingId,
       'paymentId': id,
       'confirmReceived': true,
@@ -266,7 +268,7 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
                   return ListTile(
                     isThreeLine: true,
                     title: Text(
-                      'PHP ${((data['amountCents'] as num) / 100).toStringAsFixed(2)} · ${data['status']}',
+                      '${context.tr(data['recordType']=='refund'?'Refund':'Payment')} - PHP ${((data['amountCents'] as num) / 100).toStringAsFixed(2)} · ${data['status']}',
                     ),
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -276,13 +278,13 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
                         ),
                         if (data['status'] == 'Received')
                           Text(
-                            'Provider acknowledged ${_time(data['confirmedAt'])}',
+                            'Receipt acknowledged ${_time(data['confirmedAt'])}',
                           ),
                         if (data['status'] == 'Reported')
                           Wrap(
                             spacing: 8,
                             children:
-                                widget.viewerId == widget.booking.providerId
+                                widget.viewerId == (data['recordType']=='refund'?widget.booking.customerId:widget.booking.providerId)
                                 ? [
                                     TextButton(
                                       onPressed: _busy
@@ -294,7 +296,7 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
                                                 data,
                                               ),
                                             ),
-                                      child: const Text('Confirm receipt'),
+                                      child: Text(context.tr('Confirm receipt')),
                                     ),
                                     TextButton(
                                       onPressed: _busy
@@ -306,7 +308,7 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
                                                 data,
                                               ),
                                             ),
-                                      child: const Text('Dispute'),
+                                      child: Text(context.tr('Dispute')),
                                     ),
                                   ]
                                 : [
@@ -320,7 +322,7 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
                                                 data,
                                               ),
                                             ),
-                                      child: const Text('Withdraw report'),
+                                      child: Text(context.tr('Withdraw report')),
                                     ),
                                   ],
                           ),
@@ -349,7 +351,7 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
                     ),
                     TextButton.icon(
                       icon: const Icon(Icons.download_outlined),
-                      label: const Text('Download agreement record'),
+                      label: Text(context.tr('Download agreement record')),
                       onPressed: () async {
                         final record =
                             '${agreement['text']}\nSHA-256: ${agreement['hash']}\nCustomer accepted: ${_time(data['customerAcceptedAt'])}\nProvider accepted: ${_time(data['providerAcceptedAt'])}\nProposed: ${_time(data['proposedAt'])}\nAccepted: ${_time(data['acceptedAt'])}\nStatus: ${data['status'] ?? 'Accepted'}';
@@ -363,7 +365,7 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
                         } catch (e) {
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
+                               SnackBar(
                                 content: Text(
                                   'Could not save the record. Retry.',
                                 ),
@@ -385,7 +387,7 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
                                           () =>
                                               _amend('withdraw', doc.id, data),
                                         ),
-                                  child: const Text('Withdraw amendment'),
+                                  child: Text(context.tr('Withdraw amendment')),
                                 ),
                               ]
                             : [
@@ -395,7 +397,7 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
                                       : () => _run(
                                           () => _amend('accept', doc.id, data),
                                         ),
-                                  child: const Text('Review and accept'),
+                                  child: Text(context.tr('Review and accept')),
                                 ),
                                 TextButton(
                                   onPressed: _busy
@@ -423,17 +425,18 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
       builder: (context, snap) {
         final data = snap.data?.data();
         if (data == null) return const SizedBox.shrink();
-        final received = ((data['confirmedPaymentCents'] as num?) ?? 0) / 100,
+        final grossReceived = ((data['confirmedPaymentCents'] as num?) ?? 0) / 100,
+            refunded = ((data['confirmedRefundCents'] as num?) ?? 0) / 100,
+            received = grossReceived - refunded,
             pending = ((data['pendingPaymentCents'] as num?) ?? 0) / 100,
-            total = (data['totalFee'] as num?)?.toDouble() ?? 0;
+            total = data['settlement'] is Map ? ((data['settlement'] as Map)['agreedFeeCents'] as num).toDouble()/100 : (data['totalFee'] as num?)?.toDouble() ?? 0;
         return Card(
           child: Padding(
             padding: const EdgeInsets.all(12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  'Agreement changes and payments',
+                Text(context.tr('Agreement changes and payments'),
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 if (widget.booking.agreement != null &&
@@ -451,12 +454,12 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
                             ),
                           ),
                     icon: const Icon(Icons.edit_document),
-                    label: const Text('Propose amendment'),
+                    label: Text(context.tr('Propose amendment')),
                   ),
                 _history('amendments', 'Amendment history'),
                 _history('agreementVersions', 'Accepted agreement versions'),
                 Text(
-                  'Received: PHP ${received.toStringAsFixed(2)}\nReported, awaiting receipt: PHP ${pending.toStringAsFixed(2)}\nBalance after acknowledged receipts: PHP ${(total - received).toStringAsFixed(2)}',
+                  '${context.tr('Net received')}: PHP ${received.toStringAsFixed(2)}\n${context.tr('Reported, awaiting receipt')}: PHP ${pending.toStringAsFixed(2)}\n${context.tr('Refund reported, awaiting receipt')}: PHP ${(((data['pendingRefundCents'] as num?) ?? 0)/100).toStringAsFixed(2)}',
                 ),
                 const Text(
                   'Payment records are separate from completion. They record statements by the parties and do not verify a bank transfer or move money.',
@@ -465,9 +468,14 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
                   OutlinedButton.icon(
                     onPressed: _busy ? null : () => _run(_reportPayment),
                     icon: const Icon(Icons.payments_outlined),
-                    label: const Text('Record payment made'),
+                    label: Text(context.tr('Record payment made')),
                   ),
-                _history('payments', 'Payment records'),
+                if(widget.viewerId==widget.booking.providerId && data['settlement']!=null)
+                  OutlinedButton.icon(onPressed:_busy?null:()=>_run(()=>_reportPayment(refund:true)),icon:const Icon(Icons.currency_exchange),label:Text(context.tr('Record refund sent'))),
+                if(refunded>0)Text('${context.tr('Received refunds')}: PHP ${refunded.toStringAsFixed(2)}'),
+                Text('${context.tr('Balance due')}: PHP ${(total>received?total-received:0).toStringAsFixed(2)}\n${context.tr('Refund due')}: PHP ${(received>total?received-total:0).toStringAsFixed(2)}'),
+                _history('payments', context.tr('Payment records')),
+                SettlementCard(bookingId:widget.booking.bookingId,bookingData:data,viewerId:widget.viewerId),
               ],
             ),
           ),

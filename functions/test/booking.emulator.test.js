@@ -20,7 +20,7 @@ beforeEach(async () => {
   await db.collection('serviceProviders').doc('provider').set({userId:'provider',isVerified:true,location:new GeoPoint(7.3,125.6),serviceRadiusKm:10,acceptedBookings:0,completedBookings:0,...credentials()});
   await db.collection('services').doc('cleaning').set({providerId:'provider',category:'Cleaning',serviceTitle:'House cleaning',isActive:true,approvalStatus:'Approved',estimatedPrice:100,priceType:'Hourly'});
 });
-const auth = uid => ({auth:{uid}});
+const auth = uid => ({auth:{uid,token:{email_verified:true}}});
 const start = () => Date.now() + 3 * 3600000;
 async function create(id, uid='customer', at=start()) {
   const inquiryId=require('node:crypto').createHash('sha256').update(JSON.stringify([uid,'provider'])).digest('hex');

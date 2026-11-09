@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../../models/app_user.dart';
 import '../../../services/auth_service.dart';
 import '../../../widgets/enable_notifications_button.dart';
+import '../../../widgets/app_preferences_panel.dart';
+import '../../../widgets/admin_mfa_panel.dart';
 import '../widgets/admin_dashboard_widgets.dart';
 import '../widgets/admin_retention_panel.dart';
 import '../widgets/admin_widgets.dart';
@@ -23,6 +25,8 @@ class AdminSettingsPage extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        const AppPreferencesPanel(),
+        const AdminMfaPanel(),
         const AdminDashboardHeader(
           title: 'Admin settings',
           subtitle: 'Account protection, notifications and record retention.',

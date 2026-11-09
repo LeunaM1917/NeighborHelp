@@ -14,6 +14,7 @@ import 'milestone_feedback_details.dart';
 import 'service_agreement_card.dart';
 import 'work_completion_card.dart';
 import 'contract_records_card.dart';
+import 'work_cases_card.dart';
 
 /// Contract summary, milestone history, and optional end-contract action.
 class ContractPanel extends StatefulWidget {
@@ -141,6 +142,7 @@ class _ContractPanelState extends State<ContractPanel> {
                       children: [
                         ServiceAgreementCard(booking: widget.booking),
                         WorkCompletionCard(booking: widget.booking, asCustomer: widget.viewerRole == 'customer'),
+                        WorkCasesCard(booking:widget.booking,viewerId:widget.appUser.userId),
                         ContractRecordsCard(booking: widget.booking, viewerId: widget.appUser.userId),
                         Row(
                           children: [

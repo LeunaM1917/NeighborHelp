@@ -21,7 +21,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
   }
 
-  test('admin groups preserve all thirteen original destination indices', () {
+  test('admin groups preserve original indices and add unresolved work', () {
     final destinations = [
       for (final item in adminNavigationItems)
         if (item.index != null) item else ...item.children,
@@ -40,8 +40,9 @@ void main() {
       10: 'Notifications',
       11: 'Ranking',
       12: 'Settings',
+      13: 'Unresolved work',
     };
-    expect(destinations.length, 13);
+    expect(destinations.length, 14);
     expect({for (final item in destinations) item.index: item.label}, expected);
     expect(adminNavigationItems.length, 6);
   });
@@ -93,7 +94,7 @@ void main() {
           await tester.pump(const Duration(milliseconds: 250));
         }
       }
-      expect(selected.toSet(), {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
+      expect(selected.toSet(), {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13});
       expect(tester.takeException(), isNull);
     },
   );

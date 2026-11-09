@@ -1,0 +1,73 @@
+{
+  "verified_at_utc": "2026-11-09T06:36:57.343707+00:00",
+  "source_state": "local uncommitted implementation; no production deployment or hosted CI run",
+  "baseline_commit": "386a953351e5e60600cdccd320d45a6ec0b0f37f",
+  "checks": {
+    "flutter": {
+      "passed": 141,
+      "log": "artifacts\\reliability-flutter-final.log"
+    },
+    "server_unit": {
+      "passed": 12,
+      "log": "artifacts\\reliability-node-unit.log"
+    },
+    "firebase_emulator": {
+      "passed": 72,
+      "log": "artifacts\\reliability-emulators-final.log"
+    },
+    "python": {
+      "passed": 21,
+      "log": "artifacts\\reliability-python-tests.log"
+    },
+    "final_consent_and_language_regressions": {
+      "passed": 7,
+      "log": "artifacts\\reliability-consent-tests.log"
+    }
+  },
+  "analyzer": "no issues",
+  "android": {
+    "release_build": "passed",
+    "target": "android-arm64",
+    "apk_bytes": 27078607,
+    "apk_sha256": "f702a45e013e2d03064f3c8882eb96682c1f5b6c6d7df1c6d61c207576e6e531",
+    "crash_reporting_build_flag": true,
+    "signing": "existing development signing configuration; not a store publication"
+  },
+  "web": {
+    "release_build": "passed",
+    "firebase_target": "demo emulators"
+  },
+  "assets": {
+    "before_bytes": 548658277,
+    "after_bytes": 1004130,
+    "bundled_images": 18,
+    "originals_modified": false
+  },
+  "recovery": {
+    "local_export_import_verified": true,
+    "synthetic_documents": 12,
+    "cloud_backup_schedules": 0,
+    "available_cloud_backups": 0,
+    "cloud_restore_performed": false
+  },
+  "pending_operational_verification": [
+    "Individual cloud admin-account migration and old credential retirement",
+    "Identity Platform MFA configuration, enrollment and real-device challenge",
+    "Crashlytics real-device consent and delivery checks",
+    "Cloud backup scheduling and real cloud restore, plus Auth and Storage recovery",
+    "Native-speaker review and user pilot",
+    "Push changes to run GitHub Actions; deploy matching client/functions/rules/indexes"
+  ],
+  "source_sha256": {
+    "functions/admin_security.js": "39224572cbc839ed40f9d353d0d9c69343e371b2de9ef30de18fe8007ab94066",
+    "functions/settlement_commands.js": "d032a80e04d0d72ee90532499a15141b2a7db954417f0bbe561c7bdba518b043",
+    "functions/payment_commands.js": "150497cedd876b65a1c6045f61bdbdae581a803fe82aad4d157e791d5c41cf4e",
+    "functions/work_cases.js": "ba54763c8ff73a6a87c82159c63e77b7cd8c87c486774e0418f428ae355ffce7",
+    "firebase/firestore.rules": "dab79778a8d6015058ff5305a3d39bed137f74956c7327531a76f652f99c4bde",
+    "firebase/storage.rules": "44b8e8ae52c99fb814b28ce4ffcab06d3b6269c65a0db85e8c70b60307fa81cb",
+    "lib/services/auth_service.dart": "c674ddb6ac8b43f3f281b3e50aaa78a17eebc7e6c63169bc5faa99be7b5188cd",
+    "lib/services/crash_reporting.dart": "7fa744fe13caca7315ea8d9d392103aa2cbc810ec75721069c0832efbca88648",
+    "lib/l10n/messages.dart": "f3ba46a70511509b7740a69a146d5ba3d22e08c0b35ffe86e272e32d78ec09c0",
+    ".github/workflows/quality.yml": "34cd8486c6161239414c30d98c7e7cc238f5e076cffe50d3ecd5ce5f51e81411"
+  }
+}

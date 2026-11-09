@@ -34,6 +34,10 @@ dependencies:
   cupertino_icons: ^1.0.8
   firebase_core: ^3.8.1
   firebase_app_check: ^0.3.2
+  firebase_crashlytics: ^4.3.10
+  shared_preferences: ^2.5.3
+  flutter_localizations:
+    sdk: flutter
   firebase_auth: ^5.3.4
   cloud_firestore: ^5.6.0
   firebase_storage: ^12.3.7
@@ -42,7 +46,7 @@ dependencies:
   geolocator: ^13.0.2
   permission_handler: ^11.3.1
   fl_chart: ^0.69.2
-  intl: ^0.19.0
+  intl: ^0.20.2
   image_picker: ^1.1.2
   geocoding: ^3.0.0
   google_fonts: ^6.2.1
@@ -87,16 +91,7 @@ flutter:
   assets:
     - branding/nav_logo.png
     - branding/footer_logo.jpg
-    - assets/service_picture/1. Home Repair/
-    - assets/service_picture/2. Cleaning/
-    - assets/service_picture/3. Repair and Technical Services/
-    - assets/service_picture/4. Handyman/
-    - assets/service_picture/5. Tutoring and Lessons/
-    - assets/service_picture/6. Personal and Care Services/
-    - assets/service_picture/7. Moving and Errands/
-    - assets/service_picture/8. Food and Event Support/
-    - assets/service_picture/9. Pet Care/
-    - assets/service_picture/10. More  Community Help/
+    - assets/optimized_services/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

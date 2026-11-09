@@ -1,3 +1,4 @@
+import '../../l10n/app_strings.dart';
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -141,7 +142,7 @@ class _ScheduledProviderSearchScreenState
             TextButton.icon(
               onPressed: () => setState(() => _key = null),
               icon: const Icon(Icons.refresh),
-              label: const Text('Refresh availability'),
+              label: Text(context.tr('Refresh availability')),
             ),
             SizedBox(
               height: 320,
@@ -185,7 +186,7 @@ class _ScheduledProviderSearchScreenState
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Find providers for your schedule')),
+    appBar: AppBar(title: Text(context.tr('Find providers for your schedule'))),
     body: Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 1000),
@@ -246,8 +247,8 @@ class _ScheduledProviderSearchScreenState
             ),
             DropdownButtonFormField<int>(
               initialValue: _days,
-              decoration: const InputDecoration(
-                labelText: 'Consecutive workdays',
+              decoration:  InputDecoration(
+                labelText: context.tr('Consecutive workdays'),
               ),
               items: [
                 for (var n = 1; n <= 30; n++)
@@ -257,7 +258,7 @@ class _ScheduledProviderSearchScreenState
             ),
             DropdownButtonFormField<double>(
               initialValue: _hours,
-              decoration: const InputDecoration(labelText: 'Hours per day'),
+              decoration:  InputDecoration(labelText: context.tr('Hours per day')),
               items: [
                 for (var h = .5; h <= 8; h += .5)
                   DropdownMenuItem(value: h, child: Text('$h hours')),

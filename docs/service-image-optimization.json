@@ -1,0 +1,189 @@
+{
+  "original_catalog_bytes": 548658277,
+  "selected_source_bytes": 61672183,
+  "bundled_service_image_bytes": 1004130,
+  "images": [
+    {
+      "key": "home_repair|basic carpentry",
+      "source": "assets/service_picture/1. Home Repair/Basic Carpentry.jpg",
+      "source_bytes": 269797,
+      "source_sha256": "cc41c9c25745d2c4491c1128e2e1423041232de3cd2c5bc79212c186a8300b20",
+      "bundled_path": "assets/optimized_services/home_repair-basic-carpentry.webp",
+      "bundled_bytes": 87346,
+      "width": 1200,
+      "height": 800
+    },
+    {
+      "key": "home_repair|door repair",
+      "source": "assets/service_picture/1. Home Repair/Door Repair.jpg",
+      "source_bytes": 223665,
+      "source_sha256": "91a0af482c42bc6872e0cc6b175a53a3eb69899e2af28b67cb54473cd494e24f",
+      "bundled_path": "assets/optimized_services/home_repair-door-repair.webp",
+      "bundled_bytes": 50608,
+      "width": 1200,
+      "height": 801
+    },
+    {
+      "key": "home_repair|home repair",
+      "source": "assets/service_picture/1. Home Repair/Home Repair.jpg",
+      "source_bytes": 2157828,
+      "source_sha256": "7844f980705c16461bd40b24e740bd2ea7f603f3b036f667456790dea969cfb6",
+      "bundled_path": "assets/optimized_services/home_repair-home-repair.webp",
+      "bundled_bytes": 83320,
+      "width": 1200,
+      "height": 750
+    },
+    {
+      "key": "cleaning|apartment cleaning",
+      "source": "assets/service_picture/2. Cleaning/Apartment Cleaning.jpg",
+      "source_bytes": 576335,
+      "source_sha256": "a5ee97768d3ef0ce0d3a8da18d02f4273ee32941f55d90c58b05ae053a10c072",
+      "bundled_path": "assets/optimized_services/cleaning-apartment-cleaning.webp",
+      "bundled_bytes": 29156,
+      "width": 1200,
+      "height": 675
+    },
+    {
+      "key": "cleaning|bathroom cleaning",
+      "source": "assets/service_picture/2. Cleaning/Bathroom Cleaning.jpg",
+      "source_bytes": 25119428,
+      "source_sha256": "e7a7761b1e23dc01c4d45606e00cb0c902d3beddd77a4f96c21411e4b7bbc2a5",
+      "bundled_path": "assets/optimized_services/cleaning-bathroom-cleaning.webp",
+      "bundled_bytes": 58468,
+      "width": 1200,
+      "height": 800
+    },
+    {
+      "key": "cleaning|cleaning",
+      "source": "assets/service_picture/2. Cleaning/Cleaning.jpg",
+      "source_bytes": 2451892,
+      "source_sha256": "8078c792a4389553b135562bcdf8e5d46b4ab30f2b1302a995313777bb028303",
+      "bundled_path": "assets/optimized_services/cleaning-cleaning.webp",
+      "bundled_bytes": 20212,
+      "width": 1200,
+      "height": 800
+    },
+    {
+      "key": "cleaning|house cleaning",
+      "source": "assets/service_picture/2. Cleaning/House Cleaning.jpg",
+      "source_bytes": 746245,
+      "source_sha256": "74bded7773bef52569ef53cfbb3641a6cb6f3a8e5a6708343a3ea78ab40bf0dc",
+      "bundled_path": "assets/optimized_services/cleaning-house-cleaning.webp",
+      "bundled_bytes": 34364,
+      "width": 1200,
+      "height": 800
+    },
+    {
+      "key": "cleaning|ironing service",
+      "source": "assets/service_picture/2. Cleaning/Ironing Service.jpg",
+      "source_bytes": 10813763,
+      "source_sha256": "492b1a8af987a43d5ef6e5c5ba12eff18f996636f84e3be48c90d96d66d1ea39",
+      "bundled_path": "assets/optimized_services/cleaning-ironing-service.webp",
+      "bundled_bytes": 76996,
+      "width": 1200,
+      "height": 1200
+    },
+    {
+      "key": "cleaning|kitchen cleaning",
+      "source": "assets/service_picture/2. Cleaning/Kitchen Cleaning.jpg",
+      "source_bytes": 6623089,
+      "source_sha256": "3a8bd6059333cee83d4db2f35f4df1eae26632a4fba0e3ea7c0b0975ba3c851f",
+      "bundled_path": "assets/optimized_services/cleaning-kitchen-cleaning.webp",
+      "bundled_bytes": 41514,
+      "width": 1200,
+      "height": 798
+    },
+    {
+      "key": "cleaning|laundry assistance",
+      "source": "assets/service_picture/2. Cleaning/Laundry Assistance.jpg",
+      "source_bytes": 10661959,
+      "source_sha256": "41f98b8f9cf56ac4b916a457b8afed8fe0487ff651ff38f7721f42abd39b79c5",
+      "bundled_path": "assets/optimized_services/cleaning-laundry-assistance.webp",
+      "bundled_bytes": 61710,
+      "width": 1200,
+      "height": 800
+    },
+    {
+      "key": "repair_technical|aircon cleaning",
+      "source": "assets/service_picture/3. Repair and Technical Services/Aircon Cleaning.jpg",
+      "source_bytes": 163545,
+      "source_sha256": "9d06f7093ea38f44ace5654f4ef10786c10bac3ffe806c051ce4534d8795600b",
+      "bundled_path": "assets/optimized_services/repair_technical-aircon-cleaning.webp",
+      "bundled_bytes": 39660,
+      "width": 1200,
+      "height": 800
+    },
+    {
+      "key": "repair_technical|computer repair",
+      "source": "assets/service_picture/3. Repair and Technical Services/Computer Repair.jpg",
+      "source_bytes": 162047,
+      "source_sha256": "048e324c4bd65e913f5231b006f90c75cfe58145b3069b5141d4471aef71b2f0",
+      "bundled_path": "assets/optimized_services/repair_technical-computer-repair.webp",
+      "bundled_bytes": 45784,
+      "width": 1200,
+      "height": 800
+    },
+    {
+      "key": "repair_technical|internetwi fi setup",
+      "source": "assets/service_picture/3. Repair and Technical Services/InternetWi-Fi Setup.jpg",
+      "source_bytes": 99097,
+      "source_sha256": "ee4ef7bbb45f539cd6b8020ca0c429c628afd22adcd6ab761807637fa8f8ba1d",
+      "bundled_path": "assets/optimized_services/repair_technical-internetwi-fi-setup.webp",
+      "bundled_bytes": 22106,
+      "width": 1200,
+      "height": 801
+    },
+    {
+      "key": "repair_technical|laptop repair",
+      "source": "assets/service_picture/3. Repair and Technical Services/Laptop Repair.jpg",
+      "source_bytes": 388500,
+      "source_sha256": "5bd85d1934df25ba0426df0186568f583dfbd7b87a0985551cac1ab29f4789ab",
+      "bundled_path": "assets/optimized_services/repair_technical-laptop-repair.webp",
+      "bundled_bytes": 134786,
+      "width": 1200,
+      "height": 799
+    },
+    {
+      "key": "repair_technical|refrigerator repair",
+      "source": "assets/service_picture/3. Repair and Technical Services/Refrigerator Repair.jpg",
+      "source_bytes": 296798,
+      "source_sha256": "69f6506a9868f14d974298e62286fb2fd3b40b6880fe9c7d7dced3e79e14a347",
+      "bundled_path": "assets/optimized_services/repair_technical-refrigerator-repair.webp",
+      "bundled_bytes": 76614,
+      "width": 1200,
+      "height": 800
+    },
+    {
+      "key": "repair_technical|repair and technical services",
+      "source": "assets/service_picture/3. Repair and Technical Services/Repair and Technical Services.jpg",
+      "source_bytes": 270148,
+      "source_sha256": "d66b89ba9e9292671cb4a0529232aafde69367b729e8eda919caa3ce62b60079",
+      "bundled_path": "assets/optimized_services/repair_technical-repair-and-technical-services.webp",
+      "bundled_bytes": 83014,
+      "width": 1200,
+      "height": 801
+    },
+    {
+      "key": "handyman|furniture assembly",
+      "source": "assets/service_picture/4. Handyman/Furniture Assembly.jpg",
+      "source_bytes": 478010,
+      "source_sha256": "07e0546ca7af70b6d51b7a7d587ea19b46c7474b9f54355cd586a0e98193d57c",
+      "bundled_path": "assets/optimized_services/handyman-furniture-assembly.webp",
+      "bundled_bytes": 17950,
+      "width": 1200,
+      "height": 675
+    },
+    {
+      "key": "handyman|shelf installation",
+      "source": "assets/service_picture/4. Handyman/Shelf Installation.jpg",
+      "source_bytes": 170037,
+      "source_sha256": "c72accfc186cb8630e7430f8c503eec47ac5fb5a0c183233143cbb47f4431c7c",
+      "bundled_path": "assets/optimized_services/handyman-shelf-installation.webp",
+      "bundled_bytes": 40522,
+      "width": 1200,
+      "height": 800
+    }
+  ],
+  "codec": "WebP quality 80; maximum 1200 x 1200; EXIF metadata removed",
+  "originals_modified": false
+}

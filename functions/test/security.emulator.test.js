@@ -38,7 +38,7 @@ test('registration cannot create a privileged user or verified identity', async 
 });
 test('private profiles are hidden from unrelated users', async () => {
   await assertFails(getDoc(doc(env.authenticatedContext('stranger').firestore(),'users','customer')));
-  await assertSucceeds(getDoc(doc(env.authenticatedContext('admin').firestore(),'users','customer')));
+  await assertSucceeds(getDoc(doc(env.authenticatedContext('admin',{email_verified:true}).firestore(),'users','customer')));
 });
 
 test('customers can save their own map pin and providers can set their service base', async () => {
@@ -70,12 +70,12 @@ test('messages require the actual other booking participant; read receipts canno
   await assertSucceeds(updateDoc(doc(receiver,'messages','message'),{isRead:true}));
 });
 test('audit records cannot be fabricated or erased, even by client administrators', async () => {
-  await assertFails(setDoc(doc(env.authenticatedContext('admin').firestore(),'auditLogs','fake'), {action:'fake'}));
+  await assertFails(setDoc(doc(env.authenticatedContext('admin',{email_verified:true}).firestore(),'auditLogs','fake'), {action:'fake'}));
 });
 
 test('customer and provider conversation queries can read both directions without exposing strangers', async () => {
   for (const uid of ['customer','provider']) {
-    const db = env.authenticatedContext(uid).firestore();
+    const db = env.authenticatedContext(uid,{email_verified:true}).firestore();
     const participant = or(where('senderId','==',uid),where('receiverId','==',uid));
     for (const scope of [where('threadId','==','customer_provider'),where('bookingId','in',['booking'])]) {
       const rows = await assertSucceeds(getDocs(query(collection(db,'messages'),and(scope,participant))));
@@ -90,7 +90,7 @@ test('customer and provider conversation queries can read both directions withou
 
 test('booking and contract list queries are authorized for participants and restricted after suspension', async () => {
   for (const [uid,field] of [['customer','customerId'],['provider','providerId']]) {
-    const db = env.authenticatedContext(uid).firestore();
+    const db = env.authenticatedContext(uid,{email_verified:true}).firestore();
     for (const name of ['bookings','contracts']) {
       const rows = await assertSucceeds(getDocs(query(collection(db,name),where(field,'==',uid))));
       require('node:assert/strict').equal(rows.size,1);
@@ -110,7 +110,7 @@ test('certificate documents are private and immutable; chat images require parti
   await assertSucceeds(uploadBytes(cert,bytes,{contentType:'image/png'}));
   await assertFails(uploadBytes(cert,bytes,{contentType:'image/png'}));
   await assertFails(getBytes(ref(env.authenticatedContext('stranger').storage(), 'certificates/provider/cert/proof.png')));
-  await assertSucceeds(getBytes(ref(env.authenticatedContext('admin').storage(), 'certificates/provider/cert/proof.png')));
+  await assertSucceeds(getBytes(ref(env.authenticatedContext('admin',{email_verified:true}).storage(), 'certificates/provider/cert/proof.png')));
   await assertFails(uploadBytes(ref(env.authenticatedContext('stranger').storage(),'messages/booking/stranger/image.png'), bytes, {contentType:'image/png'}));
 });
 
@@ -131,7 +131,7 @@ test('inquiries, messages and attachments are private to their actual participan
     await setDoc(doc(c.firestore(),'inquiries','thread','messages','m'),{senderId:'customer',text:'Private requirements'});
   });
   for(const uid of ['customer','provider']) {
-    const db=env.authenticatedContext(uid).firestore();
+    const db=env.authenticatedContext(uid,{email_verified:true}).firestore();
     await assertSucceeds(getDoc(doc(db,'inquiries','thread')));
     await assertSucceeds(getDocs(query(collection(db,'inquiries'),where('participantIds','array-contains',uid))));
     await assertSucceeds(getDocs(collection(db,'inquiries','thread','messages')));
@@ -139,7 +139,7 @@ test('inquiries, messages and attachments are private to their actual participan
     await assertFails(setDoc(doc(db,'inquiries','thread','messages','forged'),{senderId:uid,text:'Bypass discussion count'}));
   }
   for(const uid of ['stranger','admin','agency']) {
-    const db=env.authenticatedContext(uid).firestore();
+    const db=env.authenticatedContext(uid,{email_verified:true}).firestore();
     await assertFails(getDoc(doc(db,'inquiries','thread')));
     await assertFails(getDoc(doc(db,'inquiries','thread','messages','m')));
   }
@@ -159,11 +159,11 @@ test('blocks revoke an issued upload permit and private contract records cannot 
   });
   await assertFails(uploadBytes(ref(env.authenticatedContext('customer').storage(),'inquiries/blocked/customer/blocked-photo.png'),new Uint8Array([137,80,78,71]),{contentType:'image/png'}));
   for(const name of ['payments','amendments','agreementVersions','workEvents']) {
-    for(const uid of ['customer','provider','admin'])await assertSucceeds(getDoc(doc(env.authenticatedContext(uid).firestore(),'bookings','booking',name,'record')));
+    for(const uid of ['customer','provider','admin'])await assertSucceeds(getDoc(doc(env.authenticatedContext(uid,{email_verified:true}).firestore(),'bookings','booking',name,'record')));
     await assertFails(getDoc(doc(env.authenticatedContext('stranger').firestore(),'bookings','booking',name,'record')));
     await assertFails(updateDoc(doc(env.authenticatedContext('customer').firestore(),'bookings','booking',name,'record'),{status:'Forged'}));
   }
-  await assertFails(updateDoc(doc(env.authenticatedContext('admin').firestore(),'bookingUserReports','report'),{evidence:[]}));
+  await assertFails(updateDoc(doc(env.authenticatedContext('admin',{email_verified:true}).firestore(),'bookingUserReports','report'),{evidence:[]}));
   await assertFails(getDoc(doc(env.authenticatedContext('customer').firestore(),'rateLimits','private')));
 });
 
@@ -174,4 +174,19 @@ test('providers cannot publish custom services or reintroduce hourly listings',a
   await assertFails(setDoc(doc(db,'services','hourly'),{...data,priceType:'hourly'}));
   await assertFails(setDoc(doc(db,'services','custom'),{...data,category:'Custom Services',serviceTitle:'Anything'}));
   await assertFails(setDoc(doc(db,'services','electric'),{...data,category:'Repair and Technical Services',serviceTitle:'Electrical Repair'}));
+});
+
+test('unverified administrators cannot read privileged records and MFA policy covers Firestore and certificate Storage',async()=>{
+  await assertFails(getDoc(doc(env.authenticatedContext('admin').firestore(),'users','customer')));
+  const bytes=new Uint8Array([137,80,78,71]);
+  await assertSucceeds(uploadBytes(ref(env.authenticatedContext('provider').storage(),'certificates/provider/cert/mfa-proof.png'),bytes,{contentType:'image/png'}));
+  await assertFails(getBytes(ref(env.authenticatedContext('admin').storage(),'certificates/provider/cert/mfa-proof.png')));
+  await env.withSecurityRulesDisabled(async c=>{await setDoc(doc(c.firestore(),'securityPolicy','admin'),{requireMfa:true});});
+  const primary=env.authenticatedContext('admin',{email_verified:true});
+  await assertFails(getDoc(doc(primary.firestore(),'users','customer')));
+  await assertFails(getBytes(ref(primary.storage(),'certificates/provider/cert/mfa-proof.png')));
+  const mfa=env.authenticatedContext('admin',{email_verified:true,firebase:{sign_in_provider:'password',identities:{},sign_in_second_factor:'phone'}});
+  await assertSucceeds(getDoc(doc(mfa.firestore(),'users','customer')));
+  await assertSucceeds(getBytes(ref(mfa.storage(),'certificates/provider/cert/mfa-proof.png')));
+  await assertFails(updateDoc(doc(mfa.firestore(),'securityPolicy','admin'),{requireMfa:false}));
 });

@@ -8,6 +8,7 @@ module.exports = ({db, functions}) => async (data, context) => {
   return db.runTransaction(async tx => {
     const actor = (await tx.get(db.doc(`users/${uid}`))).data();
     if (actor?.role !== 'Administrator' || actor.accountStatus !== 'Active') fail('permission-denied','Administrator access required.');
+    await require('./admin_security').assertAdminToken(context,fail,db,tx);
     const providerId = String(data.providerId || ''), certId = String(data.certificationEntryId || '');
     if (!/^[\w-]{1,160}$/.test(providerId) || !/^[\w-]{1,160}$/.test(certId)) fail('invalid-argument','Invalid certificate reference.');
     const ref = db.doc(`serviceProviders/${providerId}`), p = (await tx.get(ref)).data();

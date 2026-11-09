@@ -1,0 +1,27 @@
+[
+  {
+    "repo": "actions/checkout",
+    "tag": "v6",
+    "sha": "d23441a48e516b6c34aea4fa41551a30e30af803"
+  },
+  {
+    "repo": "actions/setup-node",
+    "tag": "v7",
+    "sha": "949feb2413d6458794dcd2491c4babbbce0c15c1"
+  },
+  {
+    "repo": "actions/setup-java",
+    "tag": "v5",
+    "sha": "b6effb05e454b25005698d916606bdc6ffcbf961"
+  },
+  {
+    "repo": "actions/setup-python",
+    "tag": "v6",
+    "sha": "ece7cb06caefa5fff74198d8649806c4678c61a1"
+  },
+  {
+    "repo": "subosito/flutter-action",
+    "tag": "v2",
+    "sha": "1a449444c387b1966244ae4d4f8c696479add0b2"
+  }
+]

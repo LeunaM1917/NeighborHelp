@@ -26,6 +26,7 @@ module.exports = function bookingCommands({ db, admin, functions }) {
       const actor = actorSnap.data() || {};
       if (!actorSnap.exists || actor.accountStatus !== 'Active') fail('permission-denied', 'An active account is required.');
       const isAdmin = actor.role === 'Administrator';
+      if(isAdmin)await require('./admin_security').assertAdminToken(context,fail,db,tx);
       const snap = await tx.get(ref);
       const b = snap.data();
       let patch;

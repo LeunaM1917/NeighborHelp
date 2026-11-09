@@ -1,0 +1,14 @@
+{
+  "performedAt": "2026-11-09T05:53:57.053Z",
+  "kind": "actual_local_emulator_export_import",
+  "projectId": "demo-neighborhelp-recovery",
+  "restoredDocuments": 12,
+  "sha256": "0c36a078e9c15f753c9e34642e44048ddcbb3a61c1584fe7c8ac296776b3dee4",
+  "valuesVerified": true,
+  "financialBalanceVerified": true,
+  "originalAgreementVerified": true,
+  "cloudRestorePerformed": false,
+  "limitations": [
+    "Synthetic local Firestore data only. Does not restore Auth users, Storage blobs or prove cloud backup readiness."
+  ]
+}

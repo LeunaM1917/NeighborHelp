@@ -1,3 +1,4 @@
+import '../../l10n/app_strings.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -108,10 +109,10 @@ class _InquiryScreenState extends State<InquiryScreen> {
     String? reason;
     if (action == 'report') {
       final share = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
-        title: const Text('Report this inquiry?'),
+        title: Text(context.tr('Report this inquiry?')),
         content: const Text('Your explanation and the latest 10 messages will be shared with the system administrator as evidence. Use blocking separately to stop messages and new offers.'),
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Back')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Continue report'))],
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('Back'))),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.tr('Continue report')))],
       ));
       if (share != true || !mounted) return;
       reason = await askRecordedReason(context, 'Explain the concern');
@@ -206,9 +207,9 @@ class _InquiryScreenState extends State<InquiryScreen> {
       }
       return Scaffold(
         appBar: AppBar(
-          actions: [if(t != null) PopupMenuButton<String>(tooltip:'Conversation safety',onSelected:_safetyAction,itemBuilder:(_)=>[
+          actions: [if(t != null) PopupMenuButton<String>(tooltip: context.tr('Conversation safety'),onSelected:_safetyAction,itemBuilder:(_)=>[
             PopupMenuItem(value:t.blockedBy.contains(widget.appUser.userId)?'unblock':'block',child:Text(t.blockedBy.contains(widget.appUser.userId)?'Unblock conversation':'Block conversation')),
-            const PopupMenuItem(value:'report',child:Text('Report to administrator')),
+            PopupMenuItem(value:'report',child:Text(context.tr('Report to administrator'))),
           ])],
           title: Text(
             t == null
@@ -258,8 +259,7 @@ class _InquiryScreenState extends State<InquiryScreen> {
                                         )
                                       : null,
                                   icon: const Icon(Icons.description_outlined),
-                                  label: const Text(
-                                    'Prepare fixed or daily offer',
+                                  label: Text(context.tr('Prepare fixed or daily offer'),
                                   ),
                                 ),
                                 if (!t.hasDiscussion)
@@ -368,7 +368,7 @@ class _InquiryScreenState extends State<InquiryScreen> {
                                 icon: const Icon(
                                   Icons.add_photo_alternate_outlined,
                                 ),
-                                tooltip: 'Send photo',
+                                tooltip: context.tr('Send photo'),
                               ),
                               Expanded(
                                 child: TextField(
@@ -377,7 +377,7 @@ class _InquiryScreenState extends State<InquiryScreen> {
                                   maxLength: 6000,
                                   minLines: 1,
                                   maxLines: 4,
-                                  decoration: const InputDecoration(
+                                  decoration:  InputDecoration(
                                     hintText: 'Discuss the job…',
                                     counterText: '',
                                     border: OutlineInputBorder(),
@@ -395,7 +395,7 @@ class _InquiryScreenState extends State<InquiryScreen> {
                                         ),
                                       )
                                     : const Icon(Icons.send),
-                                tooltip: 'Send message',
+                                tooltip: context.tr('Send message'),
                               ),
                             ],
                           ),

@@ -4,7 +4,13 @@ service firebase.storage {
     function signedIn() { return request.auth != null; }
     function user() { return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data; }
     function active() { return signedIn() && user().accountStatus == 'Active'; }
-    function admin() { return active() && user().role == 'Administrator'; }
+    function adminMfa() {
+      return !firestore.exists(/databases/(default)/documents/securityPolicy/admin)
+        || firestore.get(/databases/(default)/documents/securityPolicy/admin).data.get('requireMfa', false) != true
+        || (request.auth.token.get('firebase', {}).get('sign_in_second_factor', '') is string
+          && request.auth.token.get('firebase', {}).get('sign_in_second_factor', '').size() > 0);
+    }
+    function admin() { return active() && user().role == 'Administrator' && request.auth.token.get('email_verified', false) == true && adminMfa(); }
     function image() { return request.resource != null && request.resource.size <= 5 * 1024 * 1024 && request.resource.contentType.matches('image/(jpeg|png|webp)'); }
     match /users/{userId}/{allPaths=**} {
       allow read: if active();

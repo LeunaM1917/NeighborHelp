@@ -1,3 +1,4 @@
+import '../l10n/app_strings.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
@@ -55,7 +56,7 @@ class OfferChangeButton extends StatelessWidget {
             controller: reason,
             maxLength: 3000,
             maxLines: 4,
-            decoration: const InputDecoration(
+            decoration:  InputDecoration(
               hintText:
                   'Explain the scope, price or schedule changes needed. The customer must send a revised offer.',
             ),
@@ -63,7 +64,7 @@ class OfferChangeButton extends StatelessWidget {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Back'),
+              child: Text(context.tr('Back')),
             ),
             FilledButton(
               onPressed: () {
@@ -124,7 +125,7 @@ Future<bool?> confirmServiceAgreement(
                 contentPadding: EdgeInsets.zero,
                 value: accepted,
                 onChanged: (v) => setState(() => accepted = v ?? false),
-                title: Text(confirmation),
+                title: Text(context.tr(confirmation)),
               ),
             ],
           ),
@@ -132,11 +133,11 @@ Future<bool?> confirmServiceAgreement(
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Back'),
+            child: Text(context.tr('Back')),
           ),
           FilledButton(
             onPressed: accepted ? () => Navigator.pop(context, true) : null,
-            child: const Text('Agree and continue'),
+            child: Text(context.tr('Agree and continue')),
           ),
         ],
       ),
@@ -173,8 +174,7 @@ class ServiceAgreementCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'Service agreement',
+            Text(context.tr('Service agreement'),
               style: Theme.of(context).textTheme.titleMedium,
             ),
             Text(
@@ -204,7 +204,7 @@ class ServiceAgreementCard extends StatelessWidget {
                 } catch (_) {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
+                       SnackBar(
                         content: Text(
                           'Could not download. You can copy the agreement text above.',
                         ),

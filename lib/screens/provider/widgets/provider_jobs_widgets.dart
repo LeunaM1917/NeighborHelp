@@ -1,3 +1,4 @@
+import '../../../l10n/app_strings.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -156,7 +157,7 @@ class ProviderJobsStatsRow extends StatelessWidget {
         iconColor: FigmaColors.orange600,
         iconBg: FigmaColors.orange50,
         value: '$inProgress',
-        title: 'In Progress',
+        title: context.tr('In Progress'),
         subtitle: 'Currently active jobs',
         subtitleColor: FigmaColors.orange600,
         compact: compact,
@@ -712,7 +713,7 @@ class _ProviderJobTableRowState extends State<ProviderJobTableRow> {
                       if (mounted) setState(() => _busy = false);
                     },
                     style: _filledActionStyle(rc),
-                    child: const Text('Report work finished'),
+                    child: Text(context.tr('Report work finished')),
                   ),
                   const SizedBox(width: 8),
                   OutlinedButton(
@@ -953,22 +954,22 @@ class ProviderJobsOverviewPanel extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 _LegendRow(color: FigmaColors.yellow500, label: 'New', count: newCount, percent: pct(newCount)),
-                _LegendRow(color: FigmaColors.green, label: 'Accepted', count: acceptedCount, percent: pct(acceptedCount)),
+                _LegendRow(color: FigmaColors.green, label: context.tr('Accepted'), count: acceptedCount, percent: pct(acceptedCount)),
                 _LegendRow(
                   color: const Color(0xFF3B82F6),
-                  label: 'In Progress',
+                  label: context.tr('In Progress'),
                   count: inProgressCount,
                   percent: pct(inProgressCount),
                 ),
                 _LegendRow(
                   color: FigmaColors.navy,
-                  label: 'Completed',
+                  label: context.tr('Completed'),
                   count: completedCount,
                   percent: pct(completedCount),
                 ),
                 _LegendRow(
                   color: FigmaColors.red600,
-                  label: 'Cancelled',
+                  label: context.tr('Cancelled'),
                   count: cancelledCount,
                   percent: pct(cancelledCount),
                 ),

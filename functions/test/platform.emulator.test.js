@@ -7,7 +7,7 @@ const functions = require('firebase-functions/v1');
 const {initializeTestEnvironment} = require('@firebase/rules-unit-testing');
 let env, app, db, ops;
 const sent = [];
-const auth = uid => ({auth:{uid}});
+const auth = uid => ({auth:{uid,token:{email_verified:true}}});
 before(async () => {
   if (!process.env.FIRESTORE_EMULATOR_HOST) throw new Error('Demo emulator required.');
   env = await initializeTestEnvironment({projectId:'demo-neighborhelp'});

@@ -6,7 +6,7 @@ const admin=require('firebase-admin'),functions=require('firebase-functions/v1')
 const {initializeTestEnvironment}=require('@firebase/rules-unit-testing');
 const {credentials,certificate,offer}=require('./marketplace_fixtures');
 let env,app,db,inquiry,booking,review;
-const auth=uid=>({auth:{uid}});
+const auth=uid=>({auth:{uid,token:{email_verified:true}}});
 before(async()=>{
   if(!process.env.FIRESTORE_EMULATOR_HOST) throw Error('Demo emulator required');
   env=await initializeTestEnvironment({projectId:'demo-neighborhelp'});

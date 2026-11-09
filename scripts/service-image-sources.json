@@ -1,0 +1,20 @@
+{
+  "home_repair|basic carpentry": "assets/service_picture/1. Home Repair/Basic Carpentry.jpg",
+  "home_repair|door repair": "assets/service_picture/1. Home Repair/Door Repair.jpg",
+  "home_repair|home repair": "assets/service_picture/1. Home Repair/Home Repair.jpg",
+  "cleaning|apartment cleaning": "assets/service_picture/2. Cleaning/Apartment Cleaning.jpg",
+  "cleaning|bathroom cleaning": "assets/service_picture/2. Cleaning/Bathroom Cleaning.jpg",
+  "cleaning|cleaning": "assets/service_picture/2. Cleaning/Cleaning.jpg",
+  "cleaning|house cleaning": "assets/service_picture/2. Cleaning/House Cleaning.jpg",
+  "cleaning|ironing service": "assets/service_picture/2. Cleaning/Ironing Service.jpg",
+  "cleaning|kitchen cleaning": "assets/service_picture/2. Cleaning/Kitchen Cleaning.jpg",
+  "cleaning|laundry assistance": "assets/service_picture/2. Cleaning/Laundry Assistance.jpg",
+  "repair_technical|aircon cleaning": "assets/service_picture/3. Repair and Technical Services/Aircon Cleaning.jpg",
+  "repair_technical|computer repair": "assets/service_picture/3. Repair and Technical Services/Computer Repair.jpg",
+  "repair_technical|internetwi fi setup": "assets/service_picture/3. Repair and Technical Services/InternetWi-Fi Setup.jpg",
+  "repair_technical|laptop repair": "assets/service_picture/3. Repair and Technical Services/Laptop Repair.jpg",
+  "repair_technical|refrigerator repair": "assets/service_picture/3. Repair and Technical Services/Refrigerator Repair.jpg",
+  "repair_technical|repair and technical services": "assets/service_picture/3. Repair and Technical Services/Repair and Technical Services.jpg",
+  "handyman|furniture assembly": "assets/service_picture/4. Handyman/Furniture Assembly.jpg",
+  "handyman|shelf installation": "assets/service_picture/4. Handyman/Shelf Installation.jpg"
+}

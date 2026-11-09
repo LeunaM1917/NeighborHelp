@@ -5,7 +5,7 @@ const admin=require('firebase-admin'),functions=require('firebase-functions/v1')
 const {initializeTestEnvironment}=require('@firebase/rules-unit-testing');
 const {credentials,offer}=require('./marketplace_fixtures');
 let env,app,db,booking,inquiry,amendment,payment,availability,report;
-const auth=uid=>({auth:{uid}}), stamp=ms=>Timestamp.fromMillis(ms);
+const auth=uid=>({auth:{uid,token:{email_verified:true}}}), stamp=ms=>Timestamp.fromMillis(ms);
 const future=()=>{const day=new Date(Date.now()+2*86400000+8*3600000);return Date.UTC(day.getUTCFullYear(),day.getUTCMonth(),day.getUTCDate(),1);};
 before(async()=>{
   if(!process.env.FIRESTORE_EMULATOR_HOST)throw Error('Demo emulator required.');
@@ -125,10 +125,14 @@ test('blocking stops both directions, uploads and new contracts; the other user 
 });
 test('message retries are free but excessive sends and repeated photo uploads are limited',async()=>{
   const id=await conversation();
-  for(let n=0;n<29;n++)await inquiry({action:'send',inquiryId:id,messageId:`m${n}`,text:'A permitted message.'},auth('c'));
+  for(let n=0;n<2;n++)await inquiry({action:'send',inquiryId:id,messageId:`m${n}`,text:'A permitted message.'},auth('c'));
+  for(const bucket of [Math.floor(Date.now()/60000),Math.floor(Date.now()/60000)+1])await db.doc(`rateLimits/c_messages_60000_${bucket}`).set({count:30});
   await inquiry({action:'send',inquiryId:id,messageId:'m0',text:'A permitted message.'},auth('c'));
+  assert.equal((await db.doc(`inquiries/${id}`).get()).data().customerMessageCount,3);
   await assert.rejects(inquiry({action:'send',inquiryId:id,messageId:'overflow',text:'Too many sends.'},auth('c')),/Too many messages/);
-  for(let n=0;n<20;n++)await inquiry({action:'authorizeUpload',inquiryId:id,permitId:`photo${n}`,extension:'png'},auth('p'));
+  await inquiry({action:'authorizeUpload',inquiryId:id,permitId:'photo',extension:'png'},auth('p'));
+  for(const bucket of [Math.floor(Date.now()/3600000),Math.floor(Date.now()/3600000)+1])await db.doc(`rateLimits/p_photo_uploads_3600000_${bucket}`).set({count:20});
+  await inquiry({action:'authorizeUpload',inquiryId:id,permitId:'photo',extension:'png'},auth('p'));
   await assert.rejects(inquiry({action:'authorizeUpload',inquiryId:id,permitId:'overflow',extension:'png'},auth('p')),/photo_uploads/);
 });
 test('only an authorized unexpired photo permit can be attached once',async()=>{

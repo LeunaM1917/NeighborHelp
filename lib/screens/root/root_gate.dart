@@ -1,5 +1,5 @@
 import '../../widgets/session_idle_guard.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../widgets/admin_account_gate.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -7,7 +7,6 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../figma_ui/guest_marketing_root.dart';
 import '../../theme/mobile_layout.dart';
 import '../auth/mobile_auth_gate.dart';
-import '../../models/account_status.dart';
 import '../../models/app_user.dart';
 import '../../models/provider.dart';
 import '../../models/user_role.dart';
@@ -48,35 +47,11 @@ class RootGate extends StatelessWidget {
           ));
         }
 
-        return StreamBuilder<bool>(
-          stream: auth.localAdminStateChanges(),
-          builder: (context, localAdminSnap) {
-            if (localAdminSnap.data == true) {
-              return AdminShell(appUser: _localAdminUser(), auth: auth);
-            }
-            if (MobileLayout.isNativePlatform) {
-              return const MobileAuthGate();
-            }
-            return const GuestMarketingRoot();
-          },
-        );
+        if (MobileLayout.isNativePlatform) return const MobileAuthGate();
+        return const GuestMarketingRoot();
       },
     );
   }
-}
-
-AppUser _localAdminUser() {
-  final now = Timestamp.now();
-  return AppUser(
-    userId: 'local-admin',
-    fullName: 'System Administrator',
-    email: 'admin@neighborhelp.local',
-    role: UserRole.administrator,
-    accountStatus: AccountStatus.active,
-    createdAt: now,
-    updatedAt: now,
-    lastActive: now,
-  );
 }
 
 /// Tries to create a missing `users/{uid}` doc (common when only `serviceProviders` exists).
@@ -289,7 +264,7 @@ class _SignedInUserGateState extends State<_SignedInUserGate> {
           );
         }
         if (appUser.role == UserRole.administrator) {
-          return AdminShell(appUser: appUser, auth: widget.auth);
+          return AdminAccountGate(child:AdminShell(appUser: appUser, auth: widget.auth));
         }
         if (appUser.role == UserRole.verificationAgency) {
           return Scaffold(body: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [const Padding(padding: EdgeInsets.all(24), child: Text('Verification is now managed by the System Administrator. This legacy account has no review access.')), OutlinedButton(onPressed: widget.auth.signOut, child: const Text('Sign out'))])));

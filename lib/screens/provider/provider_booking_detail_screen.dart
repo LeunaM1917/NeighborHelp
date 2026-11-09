@@ -1,3 +1,4 @@
+import '../../l10n/app_strings.dart';
 import '../../widgets/service_agreement_card.dart';
 import '../../widgets/booking_reschedule_card.dart';
 import 'dart:async';
@@ -759,7 +760,7 @@ class _ProviderBookingDetailScreenState
           ),
           const SizedBox(height: 12),
           AppPrimaryButton(
-            label: 'Start the job',
+            label: context.tr('Start the job'),
             icon: Icons.play_arrow_rounded,
             onPressed: () => _startJob(b),
           ),
@@ -808,7 +809,7 @@ class _ProviderBookingDetailScreenState
 
     if (b.canMarkCompleted) {
       return AppPrimaryButton(
-        label: 'Report work finished',
+        label: context.tr('Report work finished'),
         icon: Icons.task_alt_outlined,
         onPressed: () => _complete(b),
       );

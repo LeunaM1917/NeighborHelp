@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'l10n/app_strings.dart';
 
 import 'screens/root/root_gate.dart';
 import 'theme/app_theme.dart';
@@ -9,7 +10,10 @@ class NeighborHelpApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return ListenableBuilder(listenable:AppPreferences.instance,builder:(context,_)=>MaterialApp(
+      locale:AppPreferences.instance.locale,
+      supportedLocales:const [Locale('en'),Locale('fil'),Locale('ceb')],
+      localizationsDelegates:const [AppStrings.delegate,MarketplaceMaterialDelegate(),MarketplaceWidgetsDelegate(),MarketplaceCupertinoDelegate()],
       title: 'NeighborHelp',
       debugShowCheckedModeBanner: false,
       theme: neighborHelpLightTheme(),
@@ -25,6 +29,6 @@ class NeighborHelpApp extends StatelessWidget {
         },
       ),
       home: const RootGate(),
-    );
+    ));
   }
 }

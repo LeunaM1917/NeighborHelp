@@ -41,6 +41,7 @@ class Booking {
     this.completionReportedAt,
     this.completionResponseDueAt,
     this.correctionRequest,
+    this.correctionRequestedAt,
   });
 
   final String bookingId;
@@ -93,6 +94,7 @@ class Booking {
   final Timestamp? completionReportedAt;
   final Timestamp? completionResponseDueAt;
   final String? correctionRequest;
+  final Timestamp? correctionRequestedAt;
 
   factory Booking.fromFirestore(String id, Map<String, dynamic> data) {
     return Booking(
@@ -138,6 +140,7 @@ class Booking {
       completionReportedAt: data['completionReportedAt'] as Timestamp?,
       completionResponseDueAt: data['completionResponseDueAt'] as Timestamp?,
       correctionRequest: data['correctionRequest'] as String?,
+      correctionRequestedAt: data['correctionRequestedAt'] as Timestamp?,
     );
   }
 

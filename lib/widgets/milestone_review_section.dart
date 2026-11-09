@@ -1,3 +1,4 @@
+import '../l10n/app_strings.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -49,7 +50,7 @@ class _MilestoneReviewSectionState extends State<MilestoneReviewSection> {
   Future<void> _submit() async {
     if (!widget.booking.isMilestoneComplete) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Reviews unlock after the milestone is marked complete.')),
+         SnackBar(content: Text('Reviews unlock after the milestone is marked complete.')),
       );
       return;
     }
@@ -65,16 +66,16 @@ class _MilestoneReviewSectionState extends State<MilestoneReviewSection> {
         onSentimentWarning: (warning) async {
           if (!mounted) return false;
           return await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
-            title: const Text('Review your feedback'), content: Text(warning), actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Edit review')),
-              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Post as written')),
+            title: Text(context.tr('Review your feedback')), content: Text(warning), actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('Edit review'))),
+              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.tr('Post as written'))),
             ],
           )) ?? false;
         },
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Thank you for your feedback!')),
+         SnackBar(content: Text('Thank you for your feedback!')),
       );
     } on FirebaseException catch (e) {
       if (mounted) {
@@ -200,7 +201,7 @@ class _MilestoneReviewSectionState extends State<MilestoneReviewSection> {
             ),
             const SizedBox(height: 16),
             AppPrimaryButton(
-              label: 'Submit feedback',
+              label: context.tr('Submit feedback'),
               icon: Icons.star_outline,
               loading: _submitting,
               onPressed: _submitting ? null : _submit,

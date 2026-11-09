@@ -10,6 +10,7 @@ module.exports=({db,functions})=>async(data,context)=>{
     const stamp=()=>FieldValue.serverTimestamp();
     if(data.action==='resolve') {
       if(actor.role!=='Administrator')fail('permission-denied','Administrator access required.');
+      await require('./admin_security').assertAdminToken(context,fail,db,tx);
       const id=String(data.reportId || ''),status=String(data.status || ''),notes=String(data.adminNotes || '').trim();
       if(!/^[\w-]{1,500}$/.test(id)||!['resolved','dismissed'].includes(status)||notes.length<10||notes.length>3000)fail('invalid-argument','Choose a decision and explain it in 10–3000 characters.');
       const ref=db.doc(`bookingUserReports/${id}`),report=(await tx.get(ref)).data();

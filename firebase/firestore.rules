@@ -4,7 +4,17 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function userPath() { return /databases/$(database)/documents/users/$(request.auth.uid); }
     function activeUser() { return signedIn() && exists(userPath()) && get(userPath()).data.get('accountStatus', '') == 'Active'; }
-    function isAdmin() { return activeUser() && get(userPath()).data.role == 'Administrator'; }
+    function adminMfa() {
+      return !exists(/databases/$(database)/documents/securityPolicy/admin)
+        || get(/databases/$(database)/documents/securityPolicy/admin).data.get('requireMfa', false) != true
+        || (request.auth.token.get('firebase', {}).get('sign_in_second_factor', '') is string
+          && request.auth.token.get('firebase', {}).get('sign_in_second_factor', '').size() > 0);
+    }
+    function isAdmin() { return activeUser() && get(userPath()).data.role == 'Administrator' && request.auth.token.get('email_verified', false) == true && adminMfa(); }
+    match /securityPolicy/admin {
+      allow read: if activeUser() && get(userPath()).data.role == 'Administrator';
+      allow write: if false;
+    }
     function owns(id) { return activeUser() && request.auth.uid == id; }
     function actorValid() { return request.resource.data.get('updatedBy', request.auth.uid) == request.auth.uid; }
     function bookingPath(id) { return /databases/$(database)/documents/bookings/$(id); }
@@ -100,7 +110,7 @@ service cloud.firestore {
       allow read: if isAdmin() || (activeUser() && (resource.data.customerId == request.auth.uid || resource.data.providerId == request.auth.uid));
       allow write: if false;
       match /{recordType}/{recordId} {
-        allow read: if recordType in ['workEvents', 'amendments', 'agreementVersions', 'payments'] && (isAdmin() || participant(id));
+        allow read: if recordType in ['workEvents', 'amendments', 'agreementVersions', 'payments', 'settlements'] && (isAdmin() || participant(id));
         allow write: if false;
       }
     }
@@ -116,6 +126,14 @@ service cloud.firestore {
     match /contracts/{id} {
       allow read: if isAdmin() || (activeUser() && (resource.data.customerId == request.auth.uid || resource.data.providerId == request.auth.uid));
       allow write: if false;
+    }
+    match /workCases/{id} {
+      allow read: if isAdmin() || (activeUser() && request.auth.uid in resource.data.participantIds);
+      allow write: if false;
+      match /events/{eventId} {
+        allow read: if isAdmin() || (activeUser() && request.auth.uid in get(/databases/$(database)/documents/workCases/$(id)).data.participantIds);
+        allow write: if false;
+      }
     }
     match /bookingUserReports/{id} {
       allow read: if isAdmin();

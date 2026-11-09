@@ -25,6 +25,7 @@ import 'pages/admin_settings_page.dart';
 import 'pages/admin_certificate_review_page.dart';
 import 'pages/admin_recommendation_ranking_page.dart';
 import 'pages/admin_verification_page.dart';
+import 'pages/admin_work_cases_page.dart';
 
 class AdminShell extends StatefulWidget {
   const AdminShell({super.key, required this.appUser, required this.auth});
@@ -54,6 +55,7 @@ class _AdminShellState extends State<AdminShell> {
     _AdminTab('Notifications', Icons.campaign_outlined),
     _AdminTab('Ranking', Icons.leaderboard_outlined),
     _AdminTab('Settings', Icons.settings_outlined),
+    _AdminTab('Unresolved work', Icons.assignment_late_outlined),
   ];
 
   @override
@@ -176,6 +178,7 @@ class _AdminShellState extends State<AdminShell> {
                       onNavigateToTab: _selectTab,
                     ),
                   ),
+                  _adminTabScope(13,const AdminWorkCasesPage()),
                 ],
               ),
             ),

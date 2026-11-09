@@ -259,47 +259,11 @@ class AdminSplitSection extends StatelessWidget {
 
 class AdminFirestoreBanner extends StatelessWidget {
   const AdminFirestoreBanner({super.key, required this.auth});
-
   final AuthService auth;
-
   @override
-  Widget build(BuildContext context) {
-    if (!auth.isLocalAdminOnly) return const SizedBox.shrink();
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 20),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: colorScheme.errorContainer,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colorScheme.outline),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.info_outline, color: colorScheme.onErrorContainer),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'Preview mode: Firestore is unavailable without a Firebase admin account. '
-              'Create user admin@neighborhelp.com in Firebase Auth, set users/{uid}.role to '
-              'Administrator in Firestore, then sign in with admin / admin123.',
-              style: GoogleFonts.inter(
-                color: colorScheme.onErrorContainer,
-                fontSize: 13,
-                height: 1.45,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => const SizedBox.shrink();
 }
 
-/// Active admin tab scroll controller (from [AdminShell]).
 class AdminShellScrollScope extends InheritedWidget {
   const AdminShellScrollScope({
     super.key,

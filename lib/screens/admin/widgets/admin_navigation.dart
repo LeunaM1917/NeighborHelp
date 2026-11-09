@@ -36,6 +36,7 @@ const adminNavigationItems = [
         icon: Icons.flag_outlined,
         index: 3,
       ),
+      WorkspaceNavigationItem(label:'Unresolved work',icon:Icons.assignment_late_outlined,index:13),
       WorkspaceNavigationItem(
         label: 'Verification',
         icon: Icons.verified_user_outlined,

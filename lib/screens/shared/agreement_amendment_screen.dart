@@ -1,3 +1,4 @@
+import '../../l10n/app_strings.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -129,7 +130,7 @@ class _AgreementAmendmentScreenState extends State<AgreementAmendmentScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Propose contract amendment')),
+    appBar: AppBar(title: Text(context.tr('Propose contract amendment'))),
     body: Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 760),
@@ -146,17 +147,17 @@ class _AgreementAmendmentScreenState extends State<AgreementAmendmentScreen> {
                 minLines: 2,
                 maxLines: 4,
                 maxLength: 3000,
-                decoration: const InputDecoration(
-                  labelText: 'Reason for amendment',
+                decoration:  InputDecoration(
+                  labelText: context.tr('Reason for amendment'),
                 ),
                 validator: (v) => (v?.trim().length ?? 0) < 10
                     ? 'Explain in at least 10 characters'
                     : null,
               ),
               SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(value: 'fixed', label: Text('Fixed amount')),
-                  ButtonSegment(value: 'daily', label: Text('Daily rate')),
+                segments: [
+                  ButtonSegment(value: 'fixed', label: Text(context.tr('Fixed amount'))),
+                  ButtonSegment(value: 'daily', label: Text(context.tr('Daily rate'))),
                 ],
                 selected: {_type},
                 onSelectionChanged: _busy
@@ -183,7 +184,7 @@ class _AgreementAmendmentScreenState extends State<AgreementAmendmentScreen> {
               TextFormField(
                 controller: _days,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
+                decoration:  InputDecoration(
                   labelText: 'Revised total consecutive working days (1–30)',
                 ),
                 validator: (v) {
@@ -195,7 +196,7 @@ class _AgreementAmendmentScreenState extends State<AgreementAmendmentScreen> {
               ),
               DropdownButtonFormField<double>(
                 initialValue: _hours,
-                decoration: const InputDecoration(labelText: 'Hours per day'),
+                decoration:  InputDecoration(labelText: 'Hours per day'),
                 items: [
                   for (var h = .5; h <= 8; h += .5)
                     DropdownMenuItem(value: h, child: Text('$h hours')),
@@ -253,7 +254,7 @@ class _AgreementAmendmentScreenState extends State<AgreementAmendmentScreen> {
                   maxLines: 5,
                   maxLength: 3000,
                   decoration: InputDecoration(
-                    labelText: {
+                    labelText: context.tr({
                       'scope': 'Scope of work',
                       'deliverables': 'Deliverables',
                       'exclusions': 'Exclusions',
@@ -261,7 +262,7 @@ class _AgreementAmendmentScreenState extends State<AgreementAmendmentScreen> {
                       'paymentTerms': 'Payment arrangement',
                       'completionCriteria': 'Completion criteria',
                       'responsibilities': 'Responsibilities',
-                    }[f.key],
+                    }[f.key]!),
                   ),
                   validator: (v) => (v?.trim().length ?? 0) < 5
                       ? 'Describe in at least 5 characters'

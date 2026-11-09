@@ -11,9 +11,12 @@ import 'package:flutter/material.dart';
 import 'app.dart';
 import 'firebase_options.dart';
 import 'services/push_notification_service.dart';
+import 'services/crash_reporting.dart';
+import 'l10n/app_strings.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await AppPreferences.instance.load();
 
   const useEmulators = bool.fromEnvironment('USE_FIREBASE_EMULATORS');
   if (!useEmulators) FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
@@ -52,6 +55,7 @@ Future<void> main() async {
 
   // Do not await push setup before [runApp]: on web, [requestPermission] can stall
   // cold start (blank page with only index.html title) until the user interacts.
+  await CrashReporting.initialize(useEmulators:useEmulators);
   runApp(const NeighborHelpApp());
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     if (useEmulators) return;

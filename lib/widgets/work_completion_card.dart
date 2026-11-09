@@ -1,3 +1,4 @@
+import '../l10n/app_strings.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/booking.dart';
@@ -13,14 +14,14 @@ Future<String?> askRecordedReason(BuildContext context, String title) async {
         controller: controller,
         maxLines: 4,
         maxLength: 3000,
-        decoration: const InputDecoration(
-          labelText: 'Explain in at least 10 characters',
+        decoration:  InputDecoration(
+          labelText: context.tr('Explain in at least 10 characters'),
         ),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(ctx),
-          child: const Text('Back'),
+          child: Text(context.tr('Back')),
         ),
         FilledButton(
           onPressed: () {
@@ -28,7 +29,7 @@ Future<String?> askRecordedReason(BuildContext context, String title) async {
               Navigator.pop(ctx, controller.text.trim());
             }
           },
-          child: const Text('Continue'),
+          child: Text(context.tr('Continue')),
         ),
       ],
     ),
@@ -58,18 +59,16 @@ class _WorkCompletionCardState extends State<WorkCompletionCard> {
       final ok = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Confirm the work is complete?'),
-          content: const Text(
-            'Inspect the deliverables and completion criteria in your agreement. Confirmation unlocks reviews. Payment receipt is recorded separately and your legal remedies remain available.',
-          ),
+          title: Text(context.tr('Confirm the work is complete?')),
+          content: Text(context.tr('Inspect the deliverables and completion criteria in your agreement. Confirmation unlocks reviews. Payment receipt is recorded separately and your legal remedies remain available.')),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Back'),
+              child: Text(context.tr('Back')),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Confirm deliverables complete'),
+              child: Text(context.tr('Confirm deliverables complete')),
             ),
           ],
         ),
@@ -135,17 +134,17 @@ class _WorkCompletionCardState extends State<WorkCompletionCard> {
               ),
               if (due != null)
                 Text(
-                  'Please respond by ${DateFormat('MMM d, yyyy h:mm a').format(due)} (Asia/Manila). If unresolved, use Report user for admin review. Completion is never approved automatically.',
+                  '${context.tr('Please respond by')} ${DateFormat('MMM d, yyyy h:mm a').format(due)} (Asia/Manila). ${context.tr('Overdue review notice')}',
                 ),
               if (widget.asCustomer) ...[
                 FilledButton.icon(
                   onPressed: _busy ? null : () => _respond(true),
                   icon: const Icon(Icons.check_circle_outline),
-                  label: const Text('Confirm work complete'),
+                  label: Text(context.tr('Confirm work complete')),
                 ),
                 OutlinedButton(
                   onPressed: _busy ? null : () => _respond(false),
-                  child: const Text('Request corrections'),
+                  child: Text(context.tr('Request corrections')),
                 ),
               ],
             ],

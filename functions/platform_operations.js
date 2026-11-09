@@ -38,6 +38,7 @@ module.exports = function platformOperations({ db, admin, functions, region, mes
     if (!context.auth) fail('unauthenticated', 'Sign in required.');
     const user = (await db.collection('users').doc(context.auth.uid).get()).data();
     if (user?.role !== 'Administrator' || user.accountStatus !== 'Active') fail('permission-denied', 'An active administrator account is required.');
+    await require('./admin_security').assertAdminToken(context,fail,db);
     return user;
   }
   async function notify(key, userId, title, message, bookingId = '', type = 'Update') {
@@ -53,6 +54,10 @@ module.exports = function platformOperations({ db, admin, functions, region, mes
   out.agreementCommand = functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'}).https.onCall(require('./agreement_commands')({db,functions}));
   out.paymentCommand = functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'}).https.onCall(require('./payment_commands')({db,functions}));
   out.reportCommand = functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'}).https.onCall(require('./report_commands')({db,functions}));
+  out.settlementCommand=functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK==='true'}).https.onCall(require('./settlement_commands')({db,functions}));
+  const workCases=require('./work_cases')({db,functions});
+  out.workCaseCommand=functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK==='true'}).https.onCall(workCases.command);
+  out.unresolvedWorkReminders=functions.region(region).pubsub.schedule('every 30 minutes').onRun(workCases.sweep);
   out.cleanupAbuseLimits=functions.region(region).pubsub.schedule('every 6 hours').onRun(async()=>{
     for(const collection of ['rateLimits','inquiryUploads']) {
       const expired=await db.collection(collection).where('expiresAt','<',Timestamp.now()).limit(450).get();

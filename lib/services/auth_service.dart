@@ -2,14 +2,12 @@ import 'package:cloud_functions/cloud_functions.dart';
 import '../constants/functions_config.dart';
 import 'firestore_service.dart';
 import 'push_notification_service.dart';
-import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
-import '../config/admin_config.dart';
 import '../config/google_oauth.dart';
 import '../constants/collections.dart';
 import '../models/account_status.dart';
@@ -27,12 +25,8 @@ class AuthService {
 
   /// Shared across all `AuthService()` instances so Google sign-out works after any screen signs in.
   static GoogleSignIn? _sharedGoogleSignIn;
-  static final StreamController<bool> _localAdminController =
-      StreamController<bool>.broadcast();
-  static bool _localAdminSignedIn = false;
-
-  /// True when using UI-only admin login without Firebase (Firestore actions disabled).
-  bool get isLocalAdminOnly => _localAdminSignedIn && _auth.currentUser == null;
+  /// Compatibility for legacy admin page constructors; local admin sessions no longer exist.
+  bool get isLocalAdminOnly => false;
 
   GoogleSignIn _gsi() {
     if (!isGoogleOAuthConfigured) {
@@ -55,56 +49,7 @@ class AuthService {
 
   Stream<User?> authStateChanges() => _auth.authStateChanges();
 
-  Stream<bool> localAdminStateChanges() async* {
-    yield _localAdminSignedIn;
-    yield* _localAdminController.stream;
-  }
-
   User? get currentUser => _auth.currentUser;
-
-  bool isLocalAdminCredential({
-    required String username,
-    required String password,
-  }) {
-    return username.trim().toLowerCase() == 'admin' && password == 'admin123';
-  }
-
-  Future<bool> signInAsLocalAdmin({
-    required String username,
-    required String password,
-  }) async {
-    if (!isLocalAdminCredential(username: username, password: password)) {
-      return false;
-    }
-
-    // Prefer Firebase admin so Firestore rules (`Administrator` role) apply.
-    try {
-      await _auth.signInWithEmailAndPassword(
-        email: AdminConfig.firebaseEmail,
-        password: password,
-      );
-      final uid = _auth.currentUser?.uid;
-      if (uid != null) {
-        final snap = await _firestore.collection(FirestoreCollections.users).doc(uid).get();
-        final role = UserRole.fromFirestore(snap.data()?['role']?.toString());
-        if (role == UserRole.administrator) {
-          _localAdminSignedIn = false;
-          _localAdminController.add(false);
-          return true;
-        }
-      }
-      await _auth.signOut();
-    } catch (_) {
-      await _auth.signOut();
-    }
-
-    if (_auth.currentUser != null) {
-      await _auth.signOut();
-    }
-    _localAdminSignedIn = true;
-    _localAdminController.add(true);
-    return true;
-  }
 
   Future<UserCredential> signIn({
     required String email,
@@ -472,10 +417,6 @@ class AuthService {
       try { await FirebaseFunctions.instanceFor(region: kNeighborHelpFunctionsRegion).httpsCallable('recordSessionEvent').call({'action': 'logout'}).timeout(const Duration(seconds: 3)); } catch (_) {}
     }
     try { await PushNotificationService().unregister().timeout(const Duration(seconds: 3)); } catch (_) {}
-    if (_localAdminSignedIn) {
-      _localAdminSignedIn = false;
-      _localAdminController.add(false);
-    }
     try {
       await _sharedGoogleSignIn?.signOut();
     } catch (_) {

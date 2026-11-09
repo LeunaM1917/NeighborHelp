@@ -1,3 +1,4 @@
+import '../../l10n/app_strings.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -7,6 +8,7 @@ import '../../services/auth_service.dart';
 import '../../theme/provider_tokens.dart';
 import '../../figma_ui/pages/figma_signup_landing_page.dart';
 import '../../widgets/marketplace_ui.dart';
+import '../../widgets/mfa_sign_in_dialog.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -39,14 +41,10 @@ class _LoginScreenState extends State<LoginScreen> {
       _error = null;
     });
     try {
-      final adminSignedIn = await _auth.signInAsLocalAdmin(
-        username: username,
-        password: _password.text,
-      );
-      if (!adminSignedIn) {
-        await _auth.signIn(email: username, password: _password.text);
-      }
+      await _auth.signIn(email: username, password: _password.text);
       if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
+    } on FirebaseAuthMultiFactorException catch (e) {
+      if(mounted && await finishMfaSignIn(context,e) && mounted)Navigator.of(context).popUntil((r)=>r.isFirst);
     } on FirebaseAuthException catch (e) {
       setState(() => _error = AuthService.messageForUser(e));
     } catch (e) {
@@ -79,7 +77,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   controller: controller,
                   keyboardType: TextInputType.emailAddress,
                   autofocus: true,
-                  decoration: const InputDecoration(labelText: 'Email'),
+                  decoration:  InputDecoration(labelText: context.tr('Email')),
                   validator: (v) {
                     final value = v?.trim() ?? '';
                     if (value.isEmpty) return 'Enter your email';
@@ -93,7 +91,7 @@ class _LoginScreenState extends State<LoginScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancel'),
+              child: Text(context.tr('Cancel')),
             ),
             FilledButton(
               onPressed: () {
@@ -141,6 +139,8 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       await _auth.signInWithGoogle();
       if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
+    } on FirebaseAuthMultiFactorException catch (e) {
+      if(mounted && await finishMfaSignIn(context,e) && mounted)Navigator.of(context).popUntil((r)=>r.isFirst);
     } on FirebaseAuthException catch (e) {
       if (e.code != 'aborted-by-user') {
         setState(() => _error = AuthService.messageForUser(e));
@@ -163,6 +163,7 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              const Align(alignment:Alignment.centerRight,child:LanguageMenuButton()),
               const BrandLockup(
                 subtitle: 'Hire local service providers for home, errands, and personal services — simple, trusted, and neighborhood-first.',
               ),
@@ -186,11 +187,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 keyboardType: TextInputType.emailAddress,
                 textInputAction: TextInputAction.next,
                 autofillHints: const [AutofillHints.email],
-                decoration: const InputDecoration(labelText: 'Email or username'),
+                decoration:  InputDecoration(labelText: context.tr('Email')),
                 validator: (v) {
                   final value = v?.trim() ?? '';
-                  if (value.isEmpty) return 'Enter your email or username';
-                  if (value.toLowerCase() == 'admin') return null;
+                  if (value.isEmpty) return 'Enter your email';
                   if (!value.contains('@')) return 'Enter a valid email';
                   return null;
                 },
@@ -203,7 +203,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 onFieldSubmitted: (_) => _submit(),
                 autofillHints: const [AutofillHints.password],
                 decoration: InputDecoration(
-                  labelText: 'Password',
+                  labelText: context.tr('Password'),
                   suffixIcon: IconButton(
                     onPressed: _busy
                         ? null

@@ -4,6 +4,7 @@ import '../../widgets/profile_location_editor.dart';
 import '../../utils/image_upload.dart';
 import '../../widgets/profile_avatar.dart';
 import '../../widgets/enable_notifications_button.dart';
+import '../../widgets/app_preferences_panel.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -194,6 +195,7 @@ class _CustomerSettingsScreenState extends State<CustomerSettingsScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
               const EnableNotificationsButton(),
+              const AppPreferencesPanel(),
           if (!widget.inDialog)
             AppPageHeader(
               title: 'Profile settings',

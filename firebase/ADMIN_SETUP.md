@@ -1,93 +1,18 @@
-# Admin account setup (Firestore Database)
+# Individual administrator accounts
 
-The administrator role is **not** added inside `firestore.rules`.  
-Rules only **check** the role; you store it in a **user document** in Firestore.
+The shared demo credential and local administrator fallback have been removed. A failed Firebase sign-in never opens an administrator preview.
 
-## Step 1 — Create Firebase Auth user
+1. Create one Firebase Authentication account per authorized administrator, with an email they own and a unique strong password or Google sign-in. Do not share accounts or reuse a publicly documented demonstration password.
+2. In a trusted Firebase console, create/review `users/{AUTH_UID}` with their `fullName`, `email`, `role: "Administrator"`, `accountStatus: "Active"`, and server timestamps for `createdAt`/`updatedAt`. The document ID must match the Firebase Authentication UID. Public registration cannot assign an administrator role.
+3. Sign in with that email and verify ownership through the administrator account gate. Follow the verification link, then refresh verification or sign in again. Rules and administrator commands require a verified Firebase token; editing a profile field does not satisfy this requirement.
+4. Confirm the individual accounts work before retiring a legacy shared account. Rotate its known password and disable it through Firebase Authentication after arranging account recovery. This code does not automatically change existing cloud credentials.
 
-1. Open [Firebase Console](https://console.firebase.google.com/) → your project.
-2. **Build** → **Authentication** → **Users** → **Add user**.
-3. Email: `admin@neighborhelp.com`  
-   Password: `admin123` (or your own; update `lib/config/admin_config.dart` if you change it).
-4. After creating, **copy the User UID** (long string like `xYz123AbC...`).
+## Optional two-step sign-in
 
-## Step 2 — Create the Firestore user document
+Admin settings supports phone MFA enrollment. Both password and Google sign-in handle the second-factor challenge. Follow the official [Flutter MFA setup](https://firebase.google.com/docs/auth/flutter/multi-factor). Identity Platform, SMS regions, signing/domain configuration and provider billing must be configured in the real project. None was enabled here. SMS has security limitations; review stronger factors where supported, and establish an approved account recovery process.
 
-1. **Build** → **Firestore Database** → **Data**.
-2. Open collection **`users`** (create it if empty).
-3. **Add document** with **Document ID** = the UID from Step 1 (must match exactly).
-4. Add these fields (use your console’s field types):
+Enroll and test every intended administrator before enforcing MFA. Then, through a trusted console/Admin SDK, set `securityPolicy/admin` to `{ "requireMfa": true }`. Client writes to this document are denied, including for administrators. The root gate, administrator callables, Firestore rules and certificate Storage rules read the same policy. A verified primary-password token is then insufficient; Firebase must issue a second-factor token. Enrollment alone does not enable the policy or upgrade a primary-only session: sign out and sign in with the second factor.
 
-| Field | Type | Value |
-|-------|------|--------|
-| `fullName` | string | `System Administrator` |
-| `email` | string | `admin@neighborhelp.com` |
-| `role` | string | `Administrator` |
-| `accountStatus` | string | `Active` |
-| `contactNumber` | null | *(leave empty / null)* |
-| `profilePhotoUrl` | null | *(optional)* |
-| `address` | null | *(optional)* |
-| `location` | null | *(optional)* |
-| `country` | null | *(optional)* |
-| `marketingOptIn` | boolean | `false` |
-| `createdAt` | timestamp | *(now)* |
-| `updatedAt` | timestamp | *(now)* |
-| `lastActive` | timestamp | *(now)* |
+A missing/false policy allows verified-email administrator accounts during staged setup. An authorized operator can change the policy through the trusted console for approved recovery; the admin UI cannot disable it. Do not require MFA before enrollment/recovery are tested.
 
-### Example (JSON view)
-
-If your console has “JSON” or you import via CLI, the document looks like:
-
-```json
-{
-  "fullName": "System Administrator",
-  "email": "admin@neighborhelp.com",
-  "role": "Administrator",
-  "accountStatus": "Active",
-  "contactNumber": null,
-  "profilePhotoUrl": null,
-  "address": null,
-  "location": null,
-  "country": null,
-  "marketingOptIn": false,
-  "createdAt": "<server timestamp>",
-  "updatedAt": "<server timestamp>",
-  "lastActive": "<server timestamp>"
-}
-```
-
-**Important:** `role` must be exactly `Administrator` (same spelling as in the app).
-
-## Step 3 — Deploy rules (if you changed them)
-
-From the project root:
-
-```bash
-firebase deploy --only firestore:rules
-```
-
-## Step 4 — Sign in to the app
-
-1. Run the app.
-2. Log in with username **`admin`** and password **`admin123`**.
-3. You should land in **Admin Console** with live Firestore data (not “Preview only”).
-
-## Troubleshooting
-
-| Problem | Fix |
-|---------|-----|
-| “Preview only” banner | Auth user missing, wrong password, or `users/{uid}.role` is not `Administrator`. |
-| Permission denied in admin tables | UID in `users` doc must match Auth UID; deploy rules; sign out and sign in again. |
-| Still routes to Customer/Provider | `role` field typo (e.g. `admin` vs `Administrator`). |
-
-## What `firestore.rules` already does
-
-When `users/{your-uid}.role == 'Administrator'`, `isAdmin()` allows admins to:
-
-- Read/update any **users** document  
-- Read/update any **serviceProviders** document  
-- Read/update/delete any **services** document  
-- Read/update any **bookings** document  
-- Update/delete **reviews**
-
-No extra rule entry is required for the JSON above—only the **database document**.
+Deploy matching Functions, rules and client versions together. No live accounts, passwords, roles or MFA policy were changed by this local implementation.

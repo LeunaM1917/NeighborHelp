@@ -52,6 +52,7 @@ android/secrets.properties
 /functions/emulator-test.log
 
 # Local ML datasets and experiment checkpoints (provenance stays in reports).
+/artifacts/
 /ml/data/
 /ml/runs/
 /ml/.venv/

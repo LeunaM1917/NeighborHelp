@@ -25,7 +25,7 @@ beforeEach(async () => {
   prediction.sentiment='positive';
   delete prediction.model_family;
 });
-const auth = uid => ({auth:{uid}});
+const auth = uid => ({auth:{uid,token:{email_verified:true}}});
 test('a sentiment disagreement is advisory and the reviewer can post their own stars and words', async () => {
   prediction.sentiment='negative';
   const data={bookingId:'booking',reviewerRole:'customer',rating:5,comment:'The work was terrible and very disappointing.'};
