@@ -5,7 +5,7 @@ const admin=require('firebase-admin'),functions=require('firebase-functions/v1')
 const {initializeTestEnvironment,assertFails,assertSucceeds}=require('@firebase/rules-unit-testing');
 const {doc,getDoc,setDoc,updateDoc,getDocs,collection,query,where,GeoPoint:ClientGeoPoint,Timestamp:ClientTimestamp}=require('firebase/firestore');
 const {ref,uploadBytes,getBytes}=require('firebase/storage');
-const {credentials,offer}=require('./marketplace_fixtures');
+const {credentials,offer,futureWorkStart}=require('./marketplace_fixtures');
 const catalog=require('../panabo_barangays.json').barangays,area=require('../provider_area');
 let env,app,db,inquiry,timeOff,booking,ops;
 const auth=uid=>({auth:{uid,token:{email_verified:true}}}),stamp=n=>Timestamp.fromMillis(n);
@@ -28,7 +28,7 @@ async function legacy(status='Completed') {
 async function createOffer() {
   const id=(await inquiry({action:'open',serviceId:'s'},auth('c'))).inquiryId;
   for(const uid of ['c','p'])await inquiry({action:'send',inquiryId:id,messageId:uid,text:'We agree to discuss the job details.'},auth(uid));
-  const payload={bookingId:'new',serviceId:'s',inquiryId:id,serviceLocation:'Panabo City complete job address',location:{latitude:7.3,longitude:125.6},scheduledDate:Date.now()+86400000,...offer()};
+  const payload={bookingId:'new',serviceId:'s',inquiryId:id,serviceLocation:'Panabo City complete job address',location:{latitude:7.3,longitude:125.6},scheduledDate:futureWorkStart(),...offer()};
   const preview=await booking({action:'preview',...payload},auth('c'));
   await booking({action:'create',...payload,agreementHash:preview.agreement.hash},auth('c'));
   return (await db.doc('bookings/new').get()).data();

@@ -1,4 +1,4 @@
-const {credentials,offer}=require('./marketplace_fixtures');
+const {credentials,offer,futureWorkStart}=require('./marketplace_fixtures');
 const { GeoPoint, getFirestore } = require('firebase-admin/firestore');
 const {before, after, beforeEach, test} = require('node:test');
 const assert = require('node:assert/strict');
@@ -21,7 +21,7 @@ beforeEach(async () => {
   await db.collection('services').doc('cleaning').set({providerId:'provider',category:'Cleaning',serviceTitle:'House cleaning',isActive:true,approvalStatus:'Approved',estimatedPrice:100,priceType:'Hourly'});
 });
 const auth = uid => ({auth:{uid,token:{email_verified:true}}});
-const start = () => Date.now() + 3 * 3600000;
+const start = () => futureWorkStart();
 async function create(id, uid='customer', at=start()) {
   const inquiryId=require('node:crypto').createHash('sha256').update(JSON.stringify([uid,'provider'])).digest('hex');
   await db.doc('inquiries/'+inquiryId).set({customerId:uid,providerId:'provider',participantIds:[uid,'provider'],customerMessageCount:1,providerMessageCount:1});

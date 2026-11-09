@@ -4,7 +4,7 @@ const {before,after,beforeEach,test}=require('node:test');
 const assert=require('node:assert/strict');
 const admin=require('firebase-admin'),functions=require('firebase-functions/v1');
 const {initializeTestEnvironment}=require('@firebase/rules-unit-testing');
-const {credentials,certificate,offer}=require('./marketplace_fixtures');
+const {credentials,certificate,offer,futureWorkStart}=require('./marketplace_fixtures');
 let env,app,db,inquiry,booking,review;
 const auth=uid=>({auth:{uid,token:{email_verified:true}}});
 before(async()=>{
@@ -29,7 +29,7 @@ async function discuss(provider='p',customer='c') {
   await inquiry({action:'send',inquiryId:id,messageId:'provider-text',text:'Yes, let us agree the materials, work and schedule.'},auth(provider));
   return id;
 }
-async function payload(extra={}) {return {bookingId:'offer',serviceId:'p',inquiryId:await discuss(),serviceLocation:'Panabo City complete address',location:{latitude:7.3,longitude:125.6},scheduledDate:Date.now()+86400000,...offer(),...extra};}
+async function payload(extra={}) {return {bookingId:'offer',serviceId:'p',inquiryId:await discuss(),serviceLocation:'Panabo City complete address',location:{latitude:7.3,longitude:125.6},scheduledDate:futureWorkStart(),...offer(),...extra};}
 async function create(data) {
   const preview=await booking({action:'preview',...data},auth('c'));
   await booking({action:'create',...data,agreementHash:preview.agreement.hash},auth('c'));

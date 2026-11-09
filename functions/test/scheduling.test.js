@@ -1,8 +1,27 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const {coversSchedule,conflicts,minutes,requestedWindow}=require('../scheduling');
+const {credentials,futureWorkStart}=require('./marketplace_fixtures');
 const at=s=>Date.parse(`${s}+08:00`);
 const request=(s,days=1,hours=1)=>({scheduledDate:at(s),numberOfDays:days,hoursPerDay:hours});
+test('positive booking fixtures stay within working hours at every runner hour and across date rollovers',()=>{
+  const profile=credentials();
+  for(const date of ['2026-11-09','2026-12-31','2028-02-28','2028-02-29']) {
+    for(let hour=0;hour<24;hour++)for(const minute of [0,31,59]) {
+      const now=Date.parse(`${date}T${String(hour).padStart(2,'0')}:${String(minute).padStart(2,'0')}:00Z`),start=futureWorkStart(now);
+      assert.ok(start>now);assert.ok(start-now<2*86400000);
+      const local=new Date(start+8*3600000);
+      assert.equal(local.getUTCHours(),9);assert.equal(local.getUTCMinutes(),0);
+      assert.equal(coversSchedule(profile,{scheduledDate:start,numberOfDays:3,hoursPerDay:6}),true,`runner time ${new Date(now).toISOString()}`);
+    }
+  }
+});
+test('the failed CI start crosses midnight; the corrected fixture preserves schedule enforcement',()=>{
+  const now=Date.parse('2026-11-09T14:31:37Z'),profile=credentials();
+  const booking={scheduledDate:now+86400000,numberOfDays:3,hoursPerDay:6};
+  assert.equal(coversSchedule(profile,booking),false);
+  assert.equal(coversSchedule(profile,{...booking,scheduledDate:futureWorkStart(now)}),true);
+});
 test('a request must fit every daily period, not just its start or today',()=>{
   const profile={};
   assert.equal(coversSchedule(profile,request('2026-11-09T16:00:00',1,1)),true);
