@@ -92,7 +92,7 @@ class _ScheduledProviderSearchScreenState
     ]);
     if (key != _key) {
       _key = key;
-      _availability = _check(providers,request);
+      _availability = _check(providers, request);
     }
     return FutureBuilder<Map<String, bool>>(
       future: _availability,
@@ -128,6 +128,7 @@ class _ScheduledProviderSearchScreenState
               id: r.profile.providerId,
               position: latLngFromGeoPoint(r.profile.location),
               label: users[r.profile.userId]?.fullName ?? 'Provider',
+              area: r.profile.serviceArea,
             ),
         ];
         return Column(
@@ -137,7 +138,7 @@ class _ScheduledProviderSearchScreenState
               'Available for all $_days workday(s), $_hours hours each. A 15-minute gap between jobs is included. Checked ${DateFormat('h:mm a').format(_checkedAt ?? DateTime.now())}.',
             ),
             const Text(
-              'Distance is a straight-line estimate. Availability can change and is checked again when an offer is accepted. Discuss travel and requirements in messages.',
+              'Distance is an estimate from the provider barangay center. Availability can change and is checked again when an offer is accepted. Discuss travel and requirements in messages.',
             ),
             TextButton.icon(
               onPressed: () => setState(() => _key = null),
@@ -165,7 +166,7 @@ class _ScheduledProviderSearchScreenState
                   leading: CircleAvatar(child: Text('${r.rank}')),
                   title: Text(users[r.profile.userId]?.fullName ?? 'Provider'),
                   subtitle: Text(
-                    'Available for this schedule · ${r.distanceKm?.toStringAsFixed(1) ?? '?'} km\n${r.profile.serviceArea}',
+                    'Available for this schedule · ${r.distanceKm?.toStringAsFixed(1) ?? '?'} km estimated\n${r.profile.serviceArea}',
                   ),
                   isThreeLine: true,
                   trailing: const Icon(Icons.chevron_right),
@@ -247,7 +248,7 @@ class _ScheduledProviderSearchScreenState
             ),
             DropdownButtonFormField<int>(
               initialValue: _days,
-              decoration:  InputDecoration(
+              decoration: InputDecoration(
                 labelText: context.tr('Consecutive workdays'),
               ),
               items: [
@@ -258,7 +259,9 @@ class _ScheduledProviderSearchScreenState
             ),
             DropdownButtonFormField<double>(
               initialValue: _hours,
-              decoration:  InputDecoration(labelText: context.tr('Hours per day')),
+              decoration: InputDecoration(
+                labelText: context.tr('Hours per day'),
+              ),
               items: [
                 for (var h = .5; h <= 8; h += .5)
                   DropdownMenuItem(value: h, child: Text('$h hours')),

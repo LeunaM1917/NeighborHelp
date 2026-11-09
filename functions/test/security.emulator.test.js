@@ -41,11 +41,11 @@ test('private profiles are hidden from unrelated users', async () => {
   await assertSucceeds(getDoc(doc(env.authenticatedContext('admin',{email_verified:true}).firestore(),'users','customer')));
 });
 
-test('customers can save their own map pin and providers can set their service base', async () => {
+test('customers can save a private job pin; provider home pins cannot be written directly', async () => {
   const customer=env.authenticatedContext('customer').firestore();
   const provider=env.authenticatedContext('provider').firestore();
   await assertSucceeds(updateDoc(doc(customer,'users','customer'),{location:new GeoPoint(7.3,125.6),updatedBy:'customer'}));
-  await assertSucceeds(updateDoc(doc(provider,'serviceProviders','provider'),{location:new GeoPoint(7.31,125.61),updatedBy:'provider'}));
+  await assertFails(updateDoc(doc(provider,'serviceProviders','provider'),{location:new GeoPoint(7.31,125.61),updatedBy:'provider'}));
   await assertFails(updateDoc(doc(customer,'serviceProviders','provider'),{location:new GeoPoint(7.4,125.6),updatedBy:'customer'}));
   await assertFails(updateDoc(doc(provider,'users','customer'),{location:new GeoPoint(7.4,125.6),updatedBy:'provider'}));
 });
@@ -60,10 +60,10 @@ test('providers cannot forge ratings or certificate approval; legacy agency cann
   for (const patch of [{averageRating:5}, {isVerified:true,acceptedBookings:999}, {approvedCertificationIds:['fake']}]) await assertFails(updateDoc(doc(db,'serviceProviders','provider'),patch));
   await assertFails(updateDoc(doc(env.authenticatedContext('agency').firestore(),'serviceProviders','provider'), {isVerified:true}));
 });
-test('messages require the actual other booking participant; read receipts cannot rewrite content', async () => {
+test('old booking messages are read-only except recipient read receipts', async () => {
   const db = env.authenticatedContext('customer').firestore();
   const payload = {bookingId:'booking', senderId:'customer',receiverId:'provider',messageType:'Text',messageText:'hello',isRead:false};
-  await assertSucceeds(setDoc(doc(db,'messages','valid'),payload));
+  await assertFails(setDoc(doc(db,'messages','valid'),payload));
   await assertFails(setDoc(doc(db,'messages','invalid'), {...payload, receiverId:'stranger'}));
   const receiver = env.authenticatedContext('provider').firestore();
   await assertFails(updateDoc(doc(receiver,'messages','message'),{messageText:'rewritten',isRead:true}));

@@ -1,9 +1,10 @@
 'use strict';
 const { FieldValue, Timestamp, GeoPoint } = require('firebase-admin/firestore');
 
-const { active, windowFor, validWindow, hasMatchingCertificate, distanceKm } = require('./domain');
+const { active, windowFor, validWindow, hasMatchingCertificate } = require('./domain');
 const {validateOffer, makeAgreement} = require('./agreements');
 const {coversSchedule, conflicts} = require('./scheduling');
+const offerExpiry=require('./offer_expiry');
 
 module.exports = function bookingCommands({ db, admin, functions }) {
   const fail = (code, message) => { throw new functions.https.HttpsError(code, message); };
@@ -47,7 +48,7 @@ module.exports = function bookingCommands({ db, admin, functions }) {
         if (!profile?.isVerified || provider?.accountStatus !== 'Active') fail('failed-precondition', 'This provider is not currently eligible for bookings.');
         if (!hasMatchingCertificate(profile, service.category, service.serviceTitle)) fail('failed-precondition', 'The provider needs a valid certificate for this service.');
         const location = point(data.location);
-        if (!profile.location || distanceKm(profile.location, location) > (profile.serviceRadiusKm || 5)) fail('failed-precondition', 'The address is outside this provider’s service coverage.');
+        if (!require('./provider_area').covers(profile,location)) fail('failed-precondition', 'Choose a job address within the provider selected service barangays. Discuss boundary estimates in messages.');
         const offer = validateOffer(data, fail);
         const inquiryId = String(data.inquiryId || '');
         if (!/^[a-f0-9]{64}$/.test(inquiryId)) fail('failed-precondition', 'Message the provider and discuss the requirements before sending an offer.');
@@ -64,7 +65,7 @@ module.exports = function bookingCommands({ db, admin, functions }) {
         patch = { customerId: uid, providerId, serviceId: serviceSnap.id, serviceLocation: address, location,
           scheduledDate: timestamp(start), scheduledEndDate: timestamp(end), durationHours: hours,
           ...offer, inquiryId, agreement, customerAcceptedAt: stamp(), customerAcceptedHash:agreement.hash,
-          notes: String(data.notes || '').trim().slice(0, 3000), status: 'Pending', createdAt: stamp() };
+          notes: String(data.notes || '').trim().slice(0, 3000), status: 'Pending',offerExpiresAt:timestamp(offerExpiry.deadline(start)),createdAt: stamp() };
         if (action === 'preview') return {agreement, totalFee:offer.totalFee};
         if (data.agreementHash !== agreement.hash) fail('failed-precondition','The agreement changed. Preview and accept its current version again.');
         // An offer does not reserve time. The provider's acceptance takes the lock.
@@ -73,11 +74,13 @@ module.exports = function bookingCommands({ db, admin, functions }) {
         providerId = b.providerId;
         const customer = b.customerId === uid, provider = b.providerId === uid;
         if (!customer && !provider && !isAdmin) fail('permission-denied', 'This booking belongs to another account.');
+        if(offerExpiry.expired(b))fail('failed-precondition','This offer expired. Discuss and send a new offer.');
         const status = String(b.status).toLowerCase();
         switch (action) {
           case 'accept':
           case 'decline': {
             if (!provider || status !== 'pending') fail('failed-precondition', 'Only the provider can respond to a pending booking.');
+            if(offerExpiry.expired(b))fail('failed-precondition','This offer expired. Ask the customer to discuss and send a new offer.');
             if (action === 'accept' && (!b.agreement || data.acceptAgreement !== true || data.agreementHash !== b.agreement.hash)) fail('failed-precondition', 'Review and accept the current contract. Legacy pending requests must be replaced with a fixed or daily offer.');
             if (action === 'accept' && windowFor(b).start <= Date.now()) fail('failed-precondition','This offer has passed its start time. Ask the customer for a new offer.');
             if(action==='accept' && b.inquiryId) {
@@ -89,6 +92,7 @@ module.exports = function bookingCommands({ db, admin, functions }) {
             break;
           }
           case 'requestChanges':
+            if(offerExpiry.expired(b))fail('failed-precondition','This offer expired. Discuss a new offer.');
             if (!provider || status !== 'pending') fail('failed-precondition','Only the provider can request changes to a pending offer.');
             if (String(data.reason || '').trim().length < 10) fail('invalid-argument','Explain the requested changes in at least 10 characters.');
             patch = {status:'Changes Requested',changeRequest:String(data.reason).trim().slice(0,3000)};
@@ -189,6 +193,7 @@ module.exports = function bookingCommands({ db, admin, functions }) {
         const service = (await tx.get(db.collection('services').doc(b.serviceId))).data();
         if (!profile?.isVerified || customer?.accountStatus !== 'Active' || !service?.isActive || service.approvalStatus !== 'Approved'
           || !hasMatchingCertificate(profile, service.category, service.serviceTitle)) fail('failed-precondition', 'The service or one of its participants is no longer eligible for booking.');
+        if(!require('./provider_area').covers(profile,b.location)) fail('failed-precondition','The provider no longer serves this barangay. Discuss coverage before sending a new offer.');
         // Each accepted offer has its own immutable agreement; never overwrite a past contract.
         contractRef = db.collection('contracts').doc(id);
         contract = (await tx.get(contractRef)).data();

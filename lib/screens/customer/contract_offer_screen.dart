@@ -60,7 +60,7 @@ class _ContractOfferScreenState extends State<ContractOfferScreen> {
         _locatedAddress != _address.text.trim() ||
         _serviceId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-         SnackBar(
+        SnackBar(
           content: Text(
             'Choose a service, start date and confirmed map location.',
           ),
@@ -104,9 +104,16 @@ class _ContractOfferScreenState extends State<ContractOfferScreen> {
         ...payload,
       });
       if (!mounted) return;
-      if(preview['duplicate']==true){
-        ScaffoldMessenger.of(context).showSnackBar( SnackBar(content:Text('This offer was already recorded. Open it from the conversation.')));
-        Navigator.pop(context);return;
+      if (preview['duplicate'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'This offer was already recorded. Open it from the conversation.',
+            ),
+          ),
+        );
+        Navigator.pop(context);
+        return;
       }
       final agreement = Map<String, dynamic>.from(preview['agreement'] as Map);
       final accepted = await confirmServiceAgreement(
@@ -124,7 +131,7 @@ class _ContractOfferScreenState extends State<ContractOfferScreen> {
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-           SnackBar(
+          SnackBar(
             content: Text(
               'Offer sent. Work can begin only after the provider accepts.',
             ),
@@ -151,7 +158,10 @@ class _ContractOfferScreenState extends State<ContractOfferScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: Text(context.tr('Prepare contract offer')),actions:const [LanguageMenuButton()]),
+    appBar: AppBar(
+      title: Text(context.tr('Prepare contract offer')),
+      actions: const [LanguageMenuButton()],
+    ),
     body: Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 760),
@@ -188,7 +198,9 @@ class _ContractOfferScreenState extends State<ContractOfferScreen> {
                         ? _serviceId
                         : null,
                     isExpanded: true,
-                    decoration:  InputDecoration(labelText: context.tr('Service')),
+                    decoration: InputDecoration(
+                      labelText: context.tr('Service'),
+                    ),
                     items: [
                       for (final s in services)
                         DropdownMenuItem(
@@ -207,8 +219,14 @@ class _ContractOfferScreenState extends State<ContractOfferScreen> {
               const SizedBox(height: 16),
               SegmentedButton<String>(
                 segments: [
-                  ButtonSegment(value: 'fixed', label: Text(context.tr('Fixed amount'))),
-                  ButtonSegment(value: 'daily', label: Text(context.tr('Daily rate'))),
+                  ButtonSegment(
+                    value: 'fixed',
+                    label: Text(context.tr('Fixed amount')),
+                  ),
+                  ButtonSegment(
+                    value: 'daily',
+                    label: Text(context.tr('Daily rate')),
+                  ),
                 ],
                 selected: {_type},
                 onSelectionChanged: _busy
@@ -222,9 +240,11 @@ class _ContractOfferScreenState extends State<ContractOfferScreen> {
                   decimal: true,
                 ),
                 decoration: InputDecoration(
-                  labelText: context.tr(_type == 'fixed'
-                      ? 'Total labour amount (₱)'
-                      : 'Labour amount per day (₱)'),
+                  labelText: context.tr(
+                    _type == 'fixed'
+                        ? 'Total labour amount (₱)'
+                        : 'Labour amount per day (₱)',
+                  ),
                 ),
                 validator: (v) {
                   final n = double.tryParse(v ?? '');
@@ -236,8 +256,10 @@ class _ContractOfferScreenState extends State<ContractOfferScreen> {
               TextFormField(
                 controller: _days,
                 keyboardType: TextInputType.number,
-                decoration:  InputDecoration(
-                  labelText: context.tr('Number of consecutive working days (1–30)'),
+                decoration: InputDecoration(
+                  labelText: context.tr(
+                    'Number of consecutive working days (1–30)',
+                  ),
                 ),
                 validator: (v) {
                   final n = int.tryParse(v ?? '');
@@ -248,8 +270,10 @@ class _ContractOfferScreenState extends State<ContractOfferScreen> {
               ),
               DropdownButtonFormField<double>(
                 initialValue: _hours,
-                decoration:  InputDecoration(
-                  labelText: context.tr('Working hours per day (schedule only)'),
+                decoration: InputDecoration(
+                  labelText: context.tr(
+                    'Working hours per day (schedule only)',
+                  ),
                 ),
                 items: [
                   for (var h = .5; h <= 8; h += .5)
@@ -314,17 +338,20 @@ class _ContractOfferScreenState extends State<ContractOfferScreen> {
                     maxLines: 5,
                     maxLength: 3000,
                     decoration: InputDecoration(
-                      labelText: context.tr({
-                        'scope': 'Work scope',
-                        'deliverables': 'Deliverables',
-                        'exclusions': 'Work excluded',
-                        'materials': 'Materials and who pays for them',
-                        'paymentTerms':
-                            'Direct payment method, timing and any deposit',
-                        'completionCriteria': 'How completion will be checked',
-                        'responsibilities':
-                            'Tools, access, hazards and each party’s responsibilities',
-                      }[f.key]!),
+                      labelText: context.tr(
+                        {
+                          'scope': 'Work scope',
+                          'deliverables': 'Deliverables',
+                          'exclusions': 'Work excluded',
+                          'materials': 'Materials and who pays for them',
+                          'paymentTerms':
+                              'Direct payment method, timing and any deposit',
+                          'completionCriteria':
+                              'How completion will be checked',
+                          'responsibilities':
+                              'Tools, access, hazards and each party’s responsibilities',
+                        }[f.key]!,
+                      ),
                       alignLabelWithHint: true,
                     ),
                     validator: (v) => (v?.trim().length ?? 0) < 5
@@ -342,6 +369,12 @@ class _ContractOfferScreenState extends State<ContractOfferScreen> {
                       )
                     : const Icon(Icons.preview_outlined),
                 label: const Text('Review complete agreement'),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Text(
+                  'The provider has up to 72 hours to respond, or until work starts if sooner. Unanswered offers expire. Discuss a new offer to continue after expiry.',
+                ),
               ),
               const SizedBox(height: 24),
             ],

@@ -13,12 +13,14 @@ class NearbyMapPin {
     required this.label,
     this.photoUrl,
     this.isDemo = false,
+    this.area = '',
   });
   final String id;
   final LatLng position;
   final String label;
   final String? photoUrl;
   final bool isDemo;
+  final String area;
 }
 
 class CustomerProviderDiscovery {
@@ -66,6 +68,7 @@ List<NearbyMapPin> buildNearbyMapPins({
   ).nearby)
     NearbyMapPin(
       id: ranked.profile.providerId,
+      area: ranked.profile.serviceArea,
       position: latLngFromGeoPoint(ranked.profile.location),
       label: users[ranked.profile.userId]?.fullName.trim().isNotEmpty == true
           ? users[ranked.profile.userId]!.fullName
@@ -94,7 +97,7 @@ Set<Marker> customerAreaMarkers({
     Marker(
       markerId: MarkerId(pin.id),
       position: pin.position,
-      infoWindow: InfoWindow(title: pin.label, snippet: 'Service base'),
+      infoWindow: InfoWindow(title: pin.label, snippet: 'Approximate barangay center; not a home location'),
       zIndexInt: 1,
     ),
 };

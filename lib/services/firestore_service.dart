@@ -11,6 +11,7 @@ import '../models/booking_user_report.dart';
 import '../models/message.dart';
 import '../models/notification.dart' as n;
 import '../models/provider.dart';
+import '../data/panabo_barangays.dart';
 
 import '../models/review.dart';
 import '../models/service_contract.dart';
@@ -215,13 +216,15 @@ class FirestoreService {
 
   ServiceProviderProfile _publicProvider(Map<String, dynamic> row) {
     final data = Map<String, dynamic>.from(row);
-    final location = data['location'];
-    if (location is Map) {
-      data['location'] = GeoPoint(
-        (location['latitude'] as num).toDouble(),
-        (location['longitude'] as num).toDouble(),
-      );
-    }
+    final area = panaboBarangays
+        .where((b) => b['id'] == data['baseBarangayId'])
+        .firstOrNull;
+    data['location'] = area == null
+        ? null
+        : GeoPoint(
+            (area['latitude'] as num).toDouble(),
+            (area['longitude'] as num).toDouble(),
+          );
     for (final field in ['createdAt', 'updatedAt']) {
       if (data[field] is num) {
         data[field] = Timestamp.fromMillisecondsSinceEpoch(
@@ -274,7 +277,9 @@ class FirestoreService {
               );
         } else {
           yield* _publicRecords<ServiceProviderProfile>(
-            query: _db.collection('publicProviders'),
+            query: _db
+                .collection('publicProviders')
+                .where('locationPolicyVersion', isEqualTo: 1),
             bootstrap: () => _publicProviders(),
             parse: (_, row) => _publicProvider(row),
             id: (p) => p.providerId,
@@ -428,6 +433,7 @@ class FirestoreService {
           yield* _publicRecords<ServiceProviderProfile>(
             query: _db
                 .collection('publicProviders')
+                .where('locationPolicyVersion', isEqualTo: 1)
                 .where(FieldPath.documentId, isEqualTo: userId),
             bootstrap: () => _publicProviders(userId: userId),
             parse: (_, row) => _publicProvider(row),
@@ -924,11 +930,11 @@ class FirestoreService {
     }
 
     await MarketplaceService.command('reportCommand', {
-          'action': 'resolve',
-          'reportId': reportId,
-          'status': normalized,
-          'adminNotes': adminNotes.trim(),
-        });
+      'action': 'resolve',
+      'reportId': reportId,
+      'status': normalized,
+      'adminNotes': adminNotes.trim(),
+    });
   }
 
   Future<void> sendTextMessage({
@@ -939,21 +945,8 @@ class FirestoreService {
     required String receiverId,
     required String text,
   }) async {
-    final ref = _db.collection(FirestoreCollections.messages).doc();
-    final threadId = messageThreadId(customerId, providerId);
-    final message = ChatMessage(
-      messageId: ref.id,
-      bookingId: bookingId,
-      threadId: threadId,
-      senderId: senderId,
-      receiverId: receiverId,
-      messageText: text,
-      mediaUrl: null,
-      messageType: 'Text',
-      isRead: false,
-      sentAt: Timestamp.now(),
-    );
-    await ref.set(message.toMap());
+    final id = await MarketplaceService.bookingInquiry(bookingId);
+    await MarketplaceService.send(id, text: text);
   }
 
   /// Marks all unread messages in a thread as read for [readerId].
@@ -965,17 +958,8 @@ class FirestoreService {
     required String receiverId,
     required String mediaUrl,
   }) async {
-    await _db.collection(FirestoreCollections.messages).add({
-      'bookingId': bookingId,
-      'threadId': messageThreadId(customerId, providerId),
-      'senderId': senderId,
-      'receiverId': receiverId,
-      'messageText': '',
-      'mediaUrl': mediaUrl,
-      'messageType': 'Image',
-      'isRead': false,
-      'sentAt': FieldValue.serverTimestamp(),
-    });
+    final id = await MarketplaceService.bookingInquiry(bookingId);
+    await MarketplaceService.send(id, mediaUrl: mediaUrl);
   }
 
   Future<void> markConversationMessagesRead({
@@ -998,48 +982,10 @@ class FirestoreService {
     await batch.commit();
   }
 
-  Stream<int> unreadMessageCountStream(String userId) {
-    return _cache('unreadMessages:$userId', () {
-      final controller = StreamController<int>();
-      var bookingCount = 0, inquiryCount = 0;
-      void emit() {
-        if (!controller.isClosed) controller.add(bookingCount + inquiryCount);
-      }
-
-      final bookings = _db
-          .collection(FirestoreCollections.messages)
-          .where('receiverId', isEqualTo: userId)
-          .where('isRead', isEqualTo: false)
-          .snapshots()
-          .listen((s) {
-            bookingCount = s.docs.length;
-            emit();
-          }, onError: controller.addError);
-      final inquiries = _db
-          .collection('inquiries')
-          .where('participantIds', arrayContains: userId)
-          .snapshots()
-          .listen((s) {
-            inquiryCount = s.docs.fold(
-              0,
-              (total, d) =>
-                  total +
-                  ((d.data()[d.data()['customerId'] == userId
-                                  ? 'customerUnreadCount'
-                                  : 'providerUnreadCount']
-                              as num?)
-                          ?.toInt() ??
-                      0),
-            );
-            emit();
-          }, onError: controller.addError);
-      controller.onCancel = () async {
-        await bookings.cancel();
-        await inquiries.cancel();
-      };
-      return controller.stream;
-    });
-  }
+  Stream<int> unreadMessageCountStream(String userId) =>
+      MarketplaceService.inbox(userId).map(
+        (threads) => threads.fold(0, (total, t) => total + t.unreadFor(userId)),
+      );
 
   Stream<List<Review>> reviewsForProviderStream(String providerId) {
     return _cache('reviewsProvider:$providerId', () {
@@ -1460,10 +1406,20 @@ class FirestoreService {
         comment: trimmedComment,
       );
       if (result['requiresConfirmation'] == true) {
-        final proceed = await onSentimentWarning?.call(result['warning'] as String) ?? true;
-        if (!proceed) throw StateError('Review kept as a draft. You can edit it and submit again.');
-        await _submitMilestoneReviewCallable(bookingId: fresh.bookingId, reviewerRole: role, rating: rating,
-          comment: trimmedComment, confirmSentimentMismatch: true);
+        final proceed =
+            await onSentimentWarning?.call(result['warning'] as String) ?? true;
+        if (!proceed) {
+          throw StateError(
+            'Review kept as a draft. You can edit it and submit again.',
+          );
+        }
+        await _submitMilestoneReviewCallable(
+          bookingId: fresh.bookingId,
+          reviewerRole: role,
+          rating: rating,
+          comment: trimmedComment,
+          confirmSentimentMismatch: true,
+        );
       }
     } on FirebaseFunctionsException catch (e) {
       throw StateError(_milestoneReviewFunctionsMessage(e));

@@ -1,5 +1,7 @@
 # Individual administrator accounts
 
+For the barangay privacy migration, unified chat, time off and offer expiry rollout, see [the rollout guide](../docs/barangays-chat-and-offers.md). Deploy matching client/rules/Functions and review the count-only migration plan before applying it.
+
 The shared demo credential and local administrator fallback have been removed. A failed Firebase sign-in never opens an administrator preview.
 
 1. Create one Firebase Authentication account per authorized administrator, with an email they own and a unique strong password or Google sign-in. Do not share accounts or reuse a publicly documented demonstration password.

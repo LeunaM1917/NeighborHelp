@@ -39,7 +39,8 @@ class SelfProviderProfileBody extends StatefulWidget {
   final ValueChanged<int>? onNavigateToTab;
 
   @override
-  State<SelfProviderProfileBody> createState() => _SelfProviderProfileBodyState();
+  State<SelfProviderProfileBody> createState() =>
+      _SelfProviderProfileBodyState();
 }
 
 class _SelfProviderProfileBodyState extends State<SelfProviderProfileBody> {
@@ -81,7 +82,9 @@ class _SelfProviderProfileBodyState extends State<SelfProviderProfileBody> {
     final profile = await _firestore.getProviderProfile(widget.appUser.userId);
     final providerId = profile?.providerId ?? widget.appUser.userId;
     final reviews = await _firestore.reviewsForProvider(providerId);
-    final availability = await _firestore.providerAvailability(widget.appUser.userId);
+    final availability = await _firestore.providerAvailability(
+      widget.appUser.userId,
+    );
     if (!mounted) return;
     setState(() {
       _reviews = reviews;
@@ -102,15 +105,20 @@ class _SelfProviderProfileBodyState extends State<SelfProviderProfileBody> {
       editIndex: editIndex,
     );
     if (saved == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Certification saved')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Certification saved')));
       await _afterSectionSaved();
     }
   }
 
-  Future<void> _deleteCertification(ServiceProviderProfile profile, int index) async {
-    final entries = List<ProviderCertificationEntry>.from(profile.effectiveCertificationHistory);
+  Future<void> _deleteCertification(
+    ServiceProviderProfile profile,
+    int index,
+  ) async {
+    final entries = List<ProviderCertificationEntry>.from(
+      profile.effectiveCertificationHistory,
+    );
     if (index < 0 || index >= entries.length) return;
     final confirmed = await showDialog<bool>(
       context: context,
@@ -118,8 +126,14 @@ class _SelfProviderProfileBodyState extends State<SelfProviderProfileBody> {
         title: const Text('Delete certification?'),
         content: Text('Remove "${entries[index].name}" from your profile?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
         ],
       ),
     );
@@ -132,15 +146,17 @@ class _SelfProviderProfileBodyState extends State<SelfProviderProfileBody> {
       await FirestoreService().updateServiceProvider(
         providerId: _providerDocId(profile),
         data: {
-          'certificationHistory': ProviderCertificationEntry.listToFirestore(entries),
+          'certificationHistory': ProviderCertificationEntry.listToFirestore(
+            entries,
+          ),
           'certifications': entries.map((e) => e.displayLine).toList(),
           'approvedCertificationIds': approvedIds,
         },
       );
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Certification removed')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Certification removed')));
       }
     } catch (_) {
       if (mounted) {
@@ -151,7 +167,10 @@ class _SelfProviderProfileBodyState extends State<SelfProviderProfileBody> {
     }
   }
 
-  Future<void> _openPortfolioEditor(ServiceProviderProfile profile, {bool adding = false}) async {
+  Future<void> _openPortfolioEditor(
+    ServiceProviderProfile profile, {
+    bool adding = false,
+  }) async {
     ProviderPortfolioProject? initial;
     int? editIndex;
     if (!adding) {
@@ -171,14 +190,17 @@ class _SelfProviderProfileBodyState extends State<SelfProviderProfileBody> {
       editIndex: editIndex,
     );
     if (saved == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Portfolio saved')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Portfolio saved')));
       await _afterSectionSaved();
     }
   }
 
-  Future<void> _openEmploymentEditor(ServiceProviderProfile profile, {bool adding = false}) async {
+  Future<void> _openEmploymentEditor(
+    ServiceProviderProfile profile, {
+    bool adding = false,
+  }) async {
     final entries = profile.employmentHistory;
     final saved = await ProviderEmploymentDialog.open(
       context,
@@ -187,14 +209,17 @@ class _SelfProviderProfileBodyState extends State<SelfProviderProfileBody> {
       editIndex: adding ? null : (entries.isNotEmpty ? 0 : null),
     );
     if (saved == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Employment saved')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Employment saved')));
       await _afterSectionSaved();
     }
   }
 
-  Future<void> _openEducationEditor(ServiceProviderProfile profile, {bool adding = false}) async {
+  Future<void> _openEducationEditor(
+    ServiceProviderProfile profile, {
+    bool adding = false,
+  }) async {
     final entries = profile.effectiveEducationHistory;
     final saved = await ProviderEducationDialog.open(
       context,
@@ -203,9 +228,9 @@ class _SelfProviderProfileBodyState extends State<SelfProviderProfileBody> {
       editIndex: adding ? null : (entries.isNotEmpty ? 0 : null),
     );
     if (saved == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Education saved')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Education saved')));
       await _afterSectionSaved();
     }
   }
@@ -217,20 +242,23 @@ class _SelfProviderProfileBodyState extends State<SelfProviderProfileBody> {
       profile: profile,
     );
     if (saved == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile settings saved')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Profile settings saved')));
       await _afterSectionSaved(refreshAccount: true);
     }
   }
 
   Future<void> _openProfileSettings(ServiceProviderProfile? profile) async {
     await _firestore.ensureServiceProviderProfile(widget.appUser.userId);
-    final resolved = profile ?? await _firestore.getProviderProfile(widget.appUser.userId);
+    final resolved =
+        profile ?? await _firestore.getProviderProfile(widget.appUser.userId);
     if (resolved == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not load provider profile. Try again.')),
+          const SnackBar(
+            content: Text('Could not load provider profile. Try again.'),
+          ),
         );
       }
       return;
@@ -270,35 +298,48 @@ class _SelfProviderProfileBodyState extends State<SelfProviderProfileBody> {
                   services: services,
                   reviewCount: reviewCount,
                 );
-                final memberSince = memberProfileMemberSince(widget.appUser.createdAt.toDate());
+                final memberSince = memberProfileMemberSince(
+                  widget.appUser.createdAt.toDate(),
+                );
                 final verified = profile?.isVerifiedProvider ?? false;
                 final rc = context.roleColors;
 
                 final sidebar = MemberProfileSidebar(
                   name: _accountUser.fullName,
-                  headline: profile?.serviceArea.isNotEmpty == true ? profile!.serviceArea : 'Set your service area',
+                  headline: profile?.serviceArea.isNotEmpty == true
+                      ? profile!.serviceArea
+                      : 'Set your service area',
                   roleLabel: 'Service provider',
                   photoUrl: _accountUser.profilePhotoUrl,
                   onEditPhoto: () => _openProfileSettings(profile),
                   badges: [
                     MemberProfileBadge(
-                      label: verified ? 'Verified' : (profile?.verificationStatus ?? 'Pending'),
+                      label: verified
+                          ? 'Verified'
+                          : (profile?.verificationStatus ?? 'Pending'),
                       icon: verified ? Icons.verified : Icons.schedule,
                       background: verified ? rc.tint : FigmaColors.orange50,
                       foreground: verified ? rc.primary : FigmaColors.orange600,
                     ),
                   ],
                   metaLines: [
-                    MemberProfileMetaLine(icon: Icons.calendar_today_outlined, text: 'Member since $memberSince'),
-                    if (profile != null && profile.serviceRadiusKm > 0)
+                    MemberProfileMetaLine(
+                      icon: Icons.calendar_today_outlined,
+                      text: 'Member since $memberSince',
+                    ),
+                    if (profile != null &&
+                        profile.serviceBarangayIds.isNotEmpty)
                       MemberProfileMetaLine(
                         icon: Icons.my_location_outlined,
-                        text: '${profile.serviceRadiusKm.toStringAsFixed(0)} km radius',
+                        text:
+                            '${profile.serviceBarangayIds.length} service barangays',
                       ),
                   ],
                   stats: [
                     MemberProfileStat(
-                      value: effectiveRating > 0 ? effectiveRating.toStringAsFixed(1) : '—',
+                      value: effectiveRating > 0
+                          ? effectiveRating.toStringAsFixed(1)
+                          : '—',
                       label: 'Rating',
                       icon: Icons.star_rounded,
                       iconColor: const Color(0xFFEAB308),
@@ -372,7 +413,8 @@ class _SelfProviderProfileBodyState extends State<SelfProviderProfileBody> {
                     const FigmaEmptyState(
                       icon: Icons.badge_outlined,
                       title: 'Business profile not set up',
-                      message: 'Complete your provider profile so customers can book you.',
+                      message:
+                          'Complete your provider profile so customers can book you.',
                     ),
                 ];
 
@@ -385,7 +427,8 @@ class _SelfProviderProfileBodyState extends State<SelfProviderProfileBody> {
                         reviewCount: reviewCount,
                         onViewAll: () => Navigator.of(context).push<void>(
                           MaterialPageRoute(
-                            builder: (_) => ProviderReviewsScreen(appUser: widget.appUser),
+                            builder: (_) =>
+                                ProviderReviewsScreen(appUser: widget.appUser),
                           ),
                         ),
                       )
@@ -403,13 +446,14 @@ class _SelfProviderProfileBodyState extends State<SelfProviderProfileBody> {
                         profile: profile,
                         services: services,
                         reviewCount: reviewCount,
-                        onRequirementTap: (id) => navigateToProviderProfileRequirement(
-                          context,
-                          id: id,
-                          appUser: widget.appUser,
-                          profile: profile,
-                          onNavigateToTab: widget.onNavigateToTab,
-                        ),
+                        onRequirementTap: (id) =>
+                            navigateToProviderProfileRequirement(
+                              context,
+                              id: id,
+                              appUser: widget.appUser,
+                              profile: profile,
+                              onNavigateToTab: widget.onNavigateToTab,
+                            ),
                       ),
                     ),
                     if (profile != null) ...[
@@ -418,8 +462,10 @@ class _SelfProviderProfileBodyState extends State<SelfProviderProfileBody> {
                         workingDays: formatWorkingDays(_availability),
                         workingHours: formatWorkingHours(_availability),
                         serviceMode: 'On-site',
-                        onEdit: () => ProviderAvailabilityScreen.open(context, appUser: widget.appUser)
-                            .then((_) => _loadExtras()),
+                        onEdit: () => ProviderAvailabilityScreen.open(
+                          context,
+                          appUser: widget.appUser,
+                        ).then((_) => _loadExtras()),
                       ),
                     ],
                   ],
@@ -440,7 +486,10 @@ class _SelfProviderProfileBodyState extends State<SelfProviderProfileBody> {
 
   /// Customer-visible mean of reviews. Stored [ServiceProviderProfile.averageRating]
   /// is Bayesian (pulled toward ~3.5 for small n) and is only for ranking.
-  double _effectiveRating(ServiceProviderProfile? profile, List<Review> reviews) {
+  double _effectiveRating(
+    ServiceProviderProfile? profile,
+    List<Review> reviews,
+  ) {
     return effectiveProviderRating(
       profileAverage: profile?.averageRating ?? 0,
       reviews: reviews,

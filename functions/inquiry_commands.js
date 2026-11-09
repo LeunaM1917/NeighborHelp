@@ -9,6 +9,8 @@ module.exports = ({db, functions}) => async (data, context) => {
   if (!uid) fail('unauthenticated', 'Sign in required.');
   const user = (await db.doc(`users/${uid}`).get()).data();
   if (user?.accountStatus !== 'Active') fail('permission-denied', 'An active account is required.');
+  if(data.action==='bookingThread')return require('./chat_migration')({db,functions}).migrate(String(data.bookingId||''),uid);
+  if(data.action==='syncBookings')return require('./chat_migration')({db,functions}).sync(data,uid,user.role);
   if (data.action === 'template') return {version: require('./agreements').VERSION, text: require('./agreements').TERMS};
   if (data.action === 'open') {
     if (user.role !== 'Customer') fail('permission-denied', 'Only customers can open inquiries.');

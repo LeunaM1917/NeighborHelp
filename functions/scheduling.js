@@ -16,6 +16,11 @@ function periods(b) {
   return Array.from({length:b.numberOfDays}, (_,i) => ({start:bounds.start + i*DAY,end:bounds.start + i*DAY + b.hoursPerDay*3600000}));
 }
 function coversSchedule(profile, booking) {
+  const blocks=profile.timeOff || [];
+  if(blocks.some(b=>{
+    const start=b.start?.toMillis?.() ?? Number(b.start),end=b.end?.toMillis?.() ?? Number(b.end);
+    return !Number.isFinite(start)||!Number.isFinite(end)||end<=start || periods(booking).some(p=>p.start<end&&start<p.end);
+  }))return false;
   return periods(booking).every(({start,end}) => {
     if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return false;
     const local = new Date(start + PH);

@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -61,11 +60,17 @@ class _ProviderProximityLabelState extends State<ProviderProximityLabel> {
 
   @override
   Widget build(BuildContext context) {
-    final style = widget.style ??
+    final style =
+        widget.style ??
         GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray500);
 
     if (_loading && _label == null) {
-      return Text('…', maxLines: 1, overflow: TextOverflow.ellipsis, style: style);
+      return Text(
+        '…',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: style,
+      );
     }
     return Text(
       _label ?? 'Nearby',
@@ -76,32 +81,33 @@ class _ProviderProximityLabelState extends State<ProviderProximityLabel> {
   }
 }
 
-Future<String> _buildLabel(AppUser customer, ServiceProviderProfile profile) async {
+Future<String> _buildLabel(
+  AppUser customer,
+  ServiceProviderProfile profile,
+) async {
   final area = profile.serviceArea.trim();
   final customerLoc = geoPointOrNull(customer.location);
   final providerLoc = geoPointOrNull(profile.location);
 
   if (customerLoc == null) {
-    return providerLoc == null ? 'Map location not set' : (area.isNotEmpty ? area : 'Set your location for distance');
+    return providerLoc == null
+        ? 'Map location not set'
+        : (area.isNotEmpty ? area : 'Set your location for distance');
   }
   if (providerLoc == null) {
     return 'Map location not set';
   }
 
-  final straightKm = DistanceService.instance.straightLineKm(customerLoc, providerLoc);
-  if (area.isNotEmpty && (straightKm > 80 || isDefaultSignupLocation(providerLoc))) {
+  final straightKm = DistanceService.instance.straightLineKm(
+    customerLoc,
+    providerLoc,
+  );
+  if (area.isNotEmpty &&
+      (straightKm > 80 || isDefaultSignupLocation(providerLoc))) {
     return area;
   }
 
-  final driving = await DistanceService.instance.drivingDistancesKm(
-    origin: customerLoc,
-    destinations: [(id: profile.providerId, point: providerLoc)],
-  );
-  final drivingKm = driving[profile.providerId];
-  if (drivingKm != null) {
-    return formatDistanceKm(drivingKm, isDriving: true);
-  }
-  return formatDistanceKm(straightKm);
+  return '${straightKm.toStringAsFixed(1)} km estimated from barangay center';
 }
 
 /// Batch-resolve driving distances for provider list subtitles (fewer API calls).
@@ -114,38 +120,15 @@ Future<Map<String, String>> resolveProviderProximityLabels({
   if (customerLoc == null) {
     for (final p in profiles) {
       final area = p.serviceArea.trim();
-      labels[p.providerId] = geoPointOrNull(p.location) == null ? 'Map location not set' : (area.isNotEmpty ? area : 'Set your location for distance');
+      labels[p.providerId] = geoPointOrNull(p.location) == null
+          ? 'Map location not set'
+          : (area.isNotEmpty ? area : 'Set your location for distance');
     }
     return labels;
   }
 
-  final forDriving = <({String id, GeoPoint point})>[];
   for (final p in profiles) {
-    final area = p.serviceArea.trim();
-    final providerLoc = geoPointOrNull(p.location);
-    if (providerLoc == null) {
-      labels[p.providerId] = 'Map location not set';
-      continue;
-    }
-    final straightKm = DistanceService.instance.straightLineKm(customerLoc, providerLoc);
-    if (area.isNotEmpty && (straightKm > 80 || isDefaultSignupLocation(providerLoc))) {
-      labels[p.providerId] = area;
-      continue;
-    }
-    forDriving.add((id: p.providerId, point: providerLoc));
+    labels[p.providerId] = await _buildLabel(customer, p);
   }
-
-  if (forDriving.isEmpty) return labels;
-  final drivingKm = await DistanceService.instance.drivingDistancesKm(
-    origin: customerLoc,
-    destinations: forDriving,
-  );
-
-  for (final entry in forDriving) {
-    final straightKm = DistanceService.instance.straightLineKm(customerLoc, entry.point);
-    final road = drivingKm[entry.id];
-    labels[entry.id] = road != null ? formatDistanceKm(road, isDriving: true) : formatDistanceKm(straightKm);
-  }
-
   return labels;
 }

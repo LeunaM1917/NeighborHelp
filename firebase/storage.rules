@@ -37,7 +37,7 @@ service firebase.storage {
       function booking() { return firestore.get(/databases/(default)/documents/bookings/$(bookingId)).data; }
       function participant() { return active() && request.auth.uid in [booking().customerId, booking().providerId]; }
       allow read: if participant();
-      allow create: if resource == null && participant() && request.auth.uid == senderId && image();
+      allow create: if false;
       allow update, delete: if false;
     }
     match /inquiries/{inquiryId}/{senderId}/{fileName} {

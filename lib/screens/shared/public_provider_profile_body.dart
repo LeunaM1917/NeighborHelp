@@ -40,8 +40,14 @@ class PublicProviderProfileBody extends StatelessWidget {
         return StreamBuilder<ServiceProviderProfile?>(
           stream: firestore.providerProfileForUser(providerId),
           builder: (context, profileSnap) {
-            if (profileSnap.connectionState == ConnectionState.waiting && user == null) {
-              return const Center(child: Padding(padding: EdgeInsets.all(48), child: CircularProgressIndicator()));
+            if (profileSnap.connectionState == ConnectionState.waiting &&
+                user == null) {
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(48),
+                  child: CircularProgressIndicator(),
+                ),
+              );
             }
             final profile = profileSnap.data;
             return StreamBuilder<List<Review>>(
@@ -52,10 +58,13 @@ class PublicProviderProfileBody extends StatelessWidget {
                   profileAverage: profile?.averageRating ?? 0,
                   reviews: reviews,
                 );
-                final area = profile?.serviceArea.isNotEmpty == true ? profile!.serviceArea : 'Local area';
-                final radius = profile?.serviceRadiusKm.toStringAsFixed(0) ?? '5';
+                final area = profile?.serviceArea.isNotEmpty == true
+                    ? profile!.serviceArea
+                    : 'Local area';
                 final verified = profile?.isVerifiedProvider == true;
-                final memberSince = user != null ? memberProfileMemberSince(user.createdAt.toDate()) : '';
+                final memberSince = user != null
+                    ? memberProfileMemberSince(user.createdAt.toDate())
+                    : '';
 
                 final sidebar = MemberProfileSidebar(
                   name: user?.fullName ?? 'Service provider',
@@ -72,10 +81,20 @@ class PublicProviderProfileBody extends StatelessWidget {
                       ),
                   ],
                   metaLines: [
-                    MemberProfileMetaLine(icon: Icons.place_outlined, text: area),
-                    MemberProfileMetaLine(icon: Icons.my_location_outlined, text: '$radius km radius'),
+                    MemberProfileMetaLine(
+                      icon: Icons.place_outlined,
+                      text: area,
+                    ),
+                    MemberProfileMetaLine(
+                      icon: Icons.my_location_outlined,
+                      text:
+                          '${profile?.serviceBarangayIds.length ?? 0} service barangays',
+                    ),
                     if (memberSince.isNotEmpty)
-                      MemberProfileMetaLine(icon: Icons.calendar_today_outlined, text: 'Member since $memberSince'),
+                      MemberProfileMetaLine(
+                        icon: Icons.calendar_today_outlined,
+                        text: 'Member since $memberSince',
+                      ),
                   ],
                   stats: [
                     MemberProfileStat(
@@ -101,10 +120,26 @@ class PublicProviderProfileBody extends StatelessWidget {
                 final main = <Widget>[
                   MemberProfileStatStrip(
                     items: [
-                      (icon: Icons.work_outline, value: '${profile?.completedBookings ?? 0}', label: 'Completed jobs'),
-                      (icon: Icons.star_outline_rounded, value: rating.toStringAsFixed(1), label: 'Average rating'),
-                      (icon: Icons.bolt_outlined, value: 'Responsive', label: 'Usually replies quickly'),
-                      (icon: Icons.schedule_outlined, value: 'On-site', label: 'NeighborHelp services'),
+                      (
+                        icon: Icons.work_outline,
+                        value: '${profile?.completedBookings ?? 0}',
+                        label: 'Completed jobs',
+                      ),
+                      (
+                        icon: Icons.star_outline_rounded,
+                        value: rating.toStringAsFixed(1),
+                        label: 'Average rating',
+                      ),
+                      (
+                        icon: Icons.bolt_outlined,
+                        value: 'Responsive',
+                        label: 'Usually replies quickly',
+                      ),
+                      (
+                        icon: Icons.schedule_outlined,
+                        value: 'On-site',
+                        label: 'NeighborHelp services',
+                      ),
                     ],
                   ),
                   MemberProfileOverviewSection(
@@ -114,11 +149,16 @@ class PublicProviderProfileBody extends StatelessWidget {
                     tags: profile?.profileTraits ?? const [],
                   ),
                   ..._providerProfessionalSections(profile: profile),
-                  _ServicesSection(viewer: viewer, providerId: providerId, profile: profile),
+                  _ServicesSection(
+                    viewer: viewer,
+                    providerId: providerId,
+                    profile: profile,
+                  ),
                   MemberProfileReviewsSection(
                     reviews: reviews,
                     averageRating: rating,
-                    emptyMessage: 'Be the first to leave a review after a completed milestone.',
+                    emptyMessage:
+                        'Be the first to leave a review after a completed milestone.',
                   ),
                 ];
 
@@ -129,7 +169,11 @@ class PublicProviderProfileBody extends StatelessWidget {
                   profile: profile,
                 );
 
-                return MemberProfileColumns(sidebar: sidebar, main: main, rightRail: rightRail);
+                return MemberProfileColumns(
+                  sidebar: sidebar,
+                  main: main,
+                  rightRail: rightRail,
+                );
               },
             );
           },
@@ -140,7 +184,9 @@ class PublicProviderProfileBody extends StatelessWidget {
 }
 
 /// Employment, education, portfolio, certifications, and other saved profile fields.
-List<Widget> _providerProfessionalSections({required ServiceProviderProfile? profile}) {
+List<Widget> _providerProfessionalSections({
+  required ServiceProviderProfile? profile,
+}) {
   if (profile == null) return const [];
 
   final sections = <Widget>[];
@@ -192,14 +238,20 @@ List<Widget> _providerProfessionalSections({required ServiceProviderProfile? pro
   }
 
   if (profile.linkedAccounts.isNotEmpty) {
-    sections.add(MemberProfileLinkedAccountsSection(accounts: profile.linkedAccounts));
+    sections.add(
+      MemberProfileLinkedAccountsSection(accounts: profile.linkedAccounts),
+    );
   }
 
   return sections;
 }
 
 class _ServicesSection extends StatelessWidget {
-  const _ServicesSection({required this.viewer, required this.providerId, required this.profile});
+  const _ServicesSection({
+    required this.viewer,
+    required this.providerId,
+    required this.profile,
+  });
 
   final AppUser viewer;
   final String providerId;
@@ -214,11 +266,20 @@ class _ServicesSection extends StatelessWidget {
       child: StreamBuilder<List<ServiceListing>>(
         stream: firestore.servicesForProvider(providerId),
         builder: (context, snap) {
-          final services = (snap.data ?? []).where((s) => s.isMarketplaceVisible && profile?.canOfferService(s.serviceId) == true).toList();
+          final services = (snap.data ?? [])
+              .where(
+                (s) =>
+                    s.isMarketplaceVisible &&
+                    profile?.canOfferService(s.serviceId) == true,
+              )
+              .toList();
           if (services.isEmpty) {
             return Text(
               'No published services yet.',
-              style: GoogleFonts.inter(fontSize: 14, color: FigmaColors.gray600),
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: FigmaColors.gray600,
+              ),
             );
           }
           return Column(
@@ -230,7 +291,10 @@ class _ServicesSection extends StatelessWidget {
                   onView: () => Navigator.push<void>(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => CustomerServiceDetailScreen(appUser: viewer, listing: services[i]),
+                      builder: (_) => CustomerServiceDetailScreen(
+                        appUser: viewer,
+                        listing: services[i],
+                      ),
                     ),
                   ),
                 ),
@@ -254,7 +318,10 @@ class _ServiceTile extends StatelessWidget {
     final rc = context.roleColors;
     final imageUrl = listing.serviceImages.isNotEmpty
         ? listing.serviceImages.first
-        : MarketingServiceImages.urlFor(serviceName: listing.serviceTitle, categoryName: listing.category);
+        : MarketingServiceImages.urlFor(
+            serviceName: listing.serviceTitle,
+            categoryName: listing.category,
+          );
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -278,16 +345,32 @@ class _ServiceTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(listing.serviceTitle, style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w700)),
-                Text(listing.category, style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: rc.primary)),
-                Text('₱${listing.estimatedPrice.toStringAsFixed(0)}', style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w800)),
+                Text(
+                  listing.serviceTitle,
+                  style: GoogleFonts.inter(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  listing.category,
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: rc.primary,
+                  ),
+                ),
+                Text(
+                  '₱${listing.estimatedPrice.toStringAsFixed(0)}',
+                  style: GoogleFonts.inter(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
               ],
             ),
           ),
-          OutlinedButton(
-            onPressed: onView,
-            child: const Text('View'),
-          ),
+          OutlinedButton(onPressed: onView, child: const Text('View')),
         ],
       ),
     );
@@ -312,8 +395,6 @@ class _ProviderActionsRail extends StatelessWidget {
     final rc = context.roleColors;
     final firestore = FirestoreService();
     final verified = profile?.isVerifiedProvider == true;
-    final area = profile?.serviceArea.isNotEmpty == true ? profile!.serviceArea : 'your area';
-    final radius = profile?.serviceRadiusKm.toStringAsFixed(0) ?? '5';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -326,25 +407,55 @@ class _ProviderActionsRail extends StatelessWidget {
             children: [
               Text(
                 'Discuss requirements, availability and price before sending a contract offer.',
-                style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray600, height: 1.45),
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  color: FigmaColors.gray600,
+                  height: 1.45,
+                ),
               ),
               const SizedBox(height: 14),
               StreamBuilder<List<ServiceListing>>(
                 stream: firestore.servicesForProvider(providerId),
                 builder: (context, snap) {
-                  final services = (snap.data ?? []).where((s) => s.isMarketplaceVisible && profile?.canOfferService(s.serviceId) == true).toList();
+                  final services = (snap.data ?? [])
+                      .where(
+                        (s) =>
+                            s.isMarketplaceVisible &&
+                            profile?.canOfferService(s.serviceId) == true,
+                      )
+                      .toList();
                   return FilledButton.icon(
-                    onPressed: services.isEmpty ? null : () async {
-                      try {
-                        final id = await MarketplaceService.openInquiry(services.first.serviceId);
-                        if (!context.mounted) return;
-                        await Navigator.push<void>(context, MaterialPageRoute(builder: (_) => InquiryScreen(appUser: viewer, inquiryId: id)));
-                      } catch (e) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e is StateError ? e.message.toString() : 'Could not open the conversation. Please retry.')));
-                        }
-                      }
-                    },
+                    onPressed: services.isEmpty
+                        ? null
+                        : () async {
+                            try {
+                              final id = await MarketplaceService.openInquiry(
+                                services.first.serviceId,
+                              );
+                              if (!context.mounted) return;
+                              await Navigator.push<void>(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => InquiryScreen(
+                                    appUser: viewer,
+                                    inquiryId: id,
+                                  ),
+                                ),
+                              );
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      e is StateError
+                                          ? e.message.toString()
+                                          : 'Could not open the conversation. Please retry.',
+                                    ),
+                                  ),
+                                );
+                              }
+                            }
+                          },
                     style: FilledButton.styleFrom(
                       backgroundColor: rc.primary,
                       foregroundColor: rc.onPrimary,
@@ -359,16 +470,25 @@ class _ProviderActionsRail extends StatelessWidget {
               StreamBuilder<List<ServiceListing>>(
                 stream: firestore.servicesForProvider(providerId),
                 builder: (context, snap) {
-                  final services = (snap.data ?? []).where((s) => s.isMarketplaceVisible && profile?.canOfferService(s.serviceId) == true).toList();
+                  final services = (snap.data ?? [])
+                      .where(
+                        (s) =>
+                            s.isMarketplaceVisible &&
+                            profile?.canOfferService(s.serviceId) == true,
+                      )
+                      .toList();
                   return OutlinedButton.icon(
                     onPressed: services.isEmpty
                         ? null
                         : () => Navigator.push<void>(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => CustomerServiceDetailScreen(appUser: viewer, listing: services.first),
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => CustomerServiceDetailScreen(
+                                appUser: viewer,
+                                listing: services.first,
                               ),
                             ),
+                          ),
                     icon: const Icon(Icons.event_available_outlined, size: 18),
                     label: const Text('View service and discuss'),
                   );
@@ -383,14 +503,26 @@ class _ProviderActionsRail extends StatelessWidget {
           icon: Icons.shield_outlined,
           child: Column(
             children: [
-              if (verified) _TrustLine(icon: Icons.verified_user_outlined, title: 'Verified provider', subtitle: 'Identity verified on NeighborHelp.'),
+              if (verified)
+                _TrustLine(
+                  icon: Icons.verified_user_outlined,
+                  title: 'Verified provider',
+                  subtitle: 'Identity verified on NeighborHelp.',
+                ),
               if (verified) const SizedBox(height: 12),
-              _TrustLine(icon: Icons.place_outlined, title: 'Service area', subtitle: 'Within $radius km of $area.'),
+              _TrustLine(
+                icon: Icons.place_outlined,
+                title: 'Service area',
+                subtitle: profile?.serviceCoverageLabel.isNotEmpty == true
+                    ? profile!.serviceCoverageLabel
+                    : 'Select service barangays to show coverage.',
+              ),
               const SizedBox(height: 12),
               _TrustLine(
                 icon: Icons.work_outline,
                 title: 'Track record',
-                subtitle: '${profile?.completedBookings ?? 0} completed milestone${(profile?.completedBookings ?? 0) == 1 ? '' : 's'}.',
+                subtitle:
+                    '${profile?.completedBookings ?? 0} completed milestone${(profile?.completedBookings ?? 0) == 1 ? '' : 's'}.',
               ),
             ],
           ),
@@ -401,7 +533,11 @@ class _ProviderActionsRail extends StatelessWidget {
 }
 
 class _TrustLine extends StatelessWidget {
-  const _TrustLine({required this.icon, required this.title, required this.subtitle});
+  const _TrustLine({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
 
   final IconData icon;
   final String title;
@@ -419,8 +555,21 @@ class _TrustLine extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700)),
-              Text(subtitle, style: GoogleFonts.inter(fontSize: 12, color: FigmaColors.gray500, height: 1.35)),
+              Text(
+                title,
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              Text(
+                subtitle,
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: FigmaColors.gray500,
+                  height: 1.35,
+                ),
+              ),
             ],
           ),
         ),

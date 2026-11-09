@@ -11,7 +11,9 @@ class Booking {
     required this.location,
     required this.scheduledDate,
     this.scheduledEndDate,
-    required this.status,
+    required String status,
+    this.offerExpiresAt,
+    this.expiredAt,
     this.totalFee,
     this.pricingType,
     this.hourlyRate,
@@ -42,7 +44,7 @@ class Booking {
     this.completionResponseDueAt,
     this.correctionRequest,
     this.correctionRequestedAt,
-  });
+  }) : _status = status;
 
   final String bookingId;
   final String customerId;
@@ -54,7 +56,15 @@ class Booking {
 
   /// Inclusive end of the requested service window (start + [durationHours] when set).
   final Timestamp? scheduledEndDate;
-  final String status;
+  final String _status;
+  final Timestamp? offerExpiresAt;
+  final Timestamp? expiredAt;
+  DateTime get offerDeadline => offerExpiresAt?.toDate() ?? scheduledStart;
+  bool get isExpired =>
+      _status.toLowerCase() == 'expired' ||
+      _status.toLowerCase() == 'pending' &&
+          !DateTime.now().isBefore(offerDeadline);
+  String get status => isExpired ? 'Expired' : _status;
   final double? totalFee;
 
   /// New offers use `fixed` or `daily`; `hourly` remains for historical records.
@@ -107,6 +117,8 @@ class Booking {
       scheduledDate: data['scheduledDate'] as Timestamp? ?? Timestamp.now(),
       scheduledEndDate: data['scheduledEndDate'] as Timestamp?,
       status: data['status'] as String? ?? 'Pending',
+      offerExpiresAt: data['offerExpiresAt'] as Timestamp?,
+      expiredAt: data['expiredAt'] as Timestamp?,
       totalFee: (data['totalFee'] as num?)?.toDouble(),
       pricingType: data['pricingType'] as String?,
       hourlyRate: (data['hourlyRate'] as num?)?.toDouble(),
@@ -149,7 +161,8 @@ class Booking {
   bool get isPending => statusNormalized == 'pending';
   bool get isAccepted => statusNormalized == 'accepted';
   bool get isInProgress => statusNormalized == 'in progress';
-  bool get isAwaitingConfirmation => statusNormalized == 'awaiting confirmation';
+  bool get isAwaitingConfirmation =>
+      statusNormalized == 'awaiting confirmation';
   bool get isCancelled =>
       statusNormalized == 'cancelled' || statusNormalized == 'canceled';
   bool get wasCancelledByProvider =>
@@ -267,7 +280,9 @@ class Booking {
       'location': location,
       'scheduledDate': scheduledDate,
       if (scheduledEndDate != null) 'scheduledEndDate': scheduledEndDate,
-      'status': status,
+      'status': _status,
+      if (offerExpiresAt != null) 'offerExpiresAt': offerExpiresAt,
+      if (expiredAt != null) 'expiredAt': expiredAt,
       'totalFee': totalFee,
       if (pricingType != null) 'pricingType': pricingType,
       if (hourlyRate != null) 'hourlyRate': hourlyRate,

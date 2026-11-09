@@ -28,7 +28,7 @@ import '../../shared/help_support_popover.dart';
 import '../../shared/messages_hub.dart';
 import '../customer_booking_detail_screen.dart';
 
-enum _BookingFilter { all, upcoming, inProgress, completed, cancelled }
+enum _BookingFilter { all, upcoming, inProgress, completed, cancelled, expired }
 
 enum _BookingSort { latest, oldest, serviceName }
 
@@ -91,31 +91,40 @@ class _CustomerBookingsTabState extends State<CustomerBookingsTab> {
       if (b.bookingId.startsWith('demo-')) continue;
       services[b.serviceId] ??= await _firestore.getService(b.serviceId);
       providers[b.providerId] ??= await _firestore.getUser(b.providerId);
-      profiles[b.providerId] ??= await _firestore.getProviderProfile(b.providerId);
+      profiles[b.providerId] ??= await _firestore.getProviderProfile(
+        b.providerId,
+      );
     }
     if (!mounted || _hydratedKey != key) return;
-      _services = services;
-      _providers = providers;
-      _profiles = profiles;
+    _services = services;
+    _providers = providers;
+    _profiles = profiles;
   }
 
   _BookingBucket _bucket(Booking b) {
     final s = b.status.toLowerCase();
+    if (s == 'expired') return _BookingBucket.expired;
     if (s == 'cancelled' || s == 'canceled') return _BookingBucket.cancelled;
-    if (s == 'completed' || s == 'milestone complete') return _BookingBucket.completed;
-    if (s == 'in progress' || s == 'awaiting confirmation') return _BookingBucket.inProgress;
+    if (s == 'completed' || s == 'milestone complete') {
+      return _BookingBucket.completed;
+    }
+    if (s == 'in progress' || s == 'awaiting confirmation') {
+      return _BookingBucket.inProgress;
+    }
     return _BookingBucket.upcoming;
   }
 
   bool _matchesFilter(Booking b, _BookingFilter f) {
     if (f == _BookingFilter.all) return true;
-    return _bucket(b) == switch (f) {
-      _BookingFilter.upcoming => _BookingBucket.upcoming,
-      _BookingFilter.inProgress => _BookingBucket.inProgress,
-      _BookingFilter.completed => _BookingBucket.completed,
-      _BookingFilter.cancelled => _BookingBucket.cancelled,
-      _BookingFilter.all => _BookingBucket.upcoming,
-    };
+    return _bucket(b) ==
+        switch (f) {
+          _BookingFilter.upcoming => _BookingBucket.upcoming,
+          _BookingFilter.inProgress => _BookingBucket.inProgress,
+          _BookingFilter.completed => _BookingBucket.completed,
+          _BookingFilter.cancelled => _BookingBucket.cancelled,
+          _BookingFilter.expired => _BookingBucket.expired,
+          _BookingFilter.all => _BookingBucket.upcoming,
+        };
   }
 
   List<Booking> _sorted(List<Booking> list) {
@@ -178,7 +187,9 @@ class _CustomerBookingsTabState extends State<CustomerBookingsTab> {
   void _messageProvider(Booking booking) {
     if (booking.bookingId.startsWith('demo-')) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Messaging is available for real bookings.')),
+        const SnackBar(
+          content: Text('Messaging is available for real bookings.'),
+        ),
       );
       return;
     }
@@ -208,8 +219,12 @@ class _CustomerBookingsTabState extends State<CustomerBookingsTab> {
                   MobileLayout.pageBottomPadding(context),
                 ),
                 child: DataStreamBuilder<List<Booking>>(
- label: 'bookings', onRetry: () => FirestoreService().retryDataLoads(),
-                  stream: _firestore.bookingsForUser(widget.appUser.userId, asCustomer: true),
+                  label: 'bookings',
+                  onRetry: () => FirestoreService().retryDataLoads(),
+                  stream: _firestore.bookingsForUser(
+                    widget.appUser.userId,
+                    asCustomer: true,
+                  ),
                   builder: (context, snap) {
                     if (isStreamWaiting(snap)) {
                       return const Padding(
@@ -227,13 +242,23 @@ class _CustomerBookingsTabState extends State<CustomerBookingsTab> {
                       future: _hydrate(bookings),
                       builder: (context, hydrateSnap) {
                         if (hydrateSnap.hasError) {
-                          return DataLoadFailure(label: 'booking details', error: hydrateSnap.error,
-                            onRetry: () async { await _firestore.retryDataLoads(); if (mounted) setState(() => _hydration = null); });
+                          return DataLoadFailure(
+                            label: 'booking details',
+                            error: hydrateSnap.error,
+                            onRetry: () async {
+                              await _firestore.retryDataLoads();
+                              if (mounted) setState(() => _hydration = null);
+                            },
+                          );
                         }
-                        if (hydrateSnap.connectionState != ConnectionState.done && bookings.isNotEmpty) {
+                        if (hydrateSnap.connectionState !=
+                                ConnectionState.done &&
+                            bookings.isNotEmpty) {
                           return const Padding(
                             padding: EdgeInsets.symmetric(vertical: 48),
-                            child: LoadingIndicator(message: 'Loading booking details…'),
+                            child: LoadingIndicator(
+                              message: 'Loading booking details…',
+                            ),
                           );
                         }
 
@@ -246,7 +271,9 @@ class _CustomerBookingsTabState extends State<CustomerBookingsTab> {
                             Text(
                               'My bookings',
                               style: GoogleFonts.inter(
-                                fontSize: MobileLayout.isNativeApp(context) ? 24 : 32,
+                                fontSize: MobileLayout.isNativeApp(context)
+                                    ? 24
+                                    : 32,
                                 fontWeight: FontWeight.w700,
                                 color: FigmaColors.gray900,
                                 height: 1.15,
@@ -255,47 +282,68 @@ class _CustomerBookingsTabState extends State<CustomerBookingsTab> {
                             const SizedBox(height: 8),
                             Text(
                               'Track your scheduled, active, and completed services.',
-                              style: GoogleFonts.inter(fontSize: 16, color: FigmaColors.gray600, height: 1.45),
+                              style: GoogleFonts.inter(
+                                fontSize: 16,
+                                color: FigmaColors.gray600,
+                                height: 1.45,
+                              ),
                             ),
                             const SizedBox(height: 24),
                             _SummaryCardsRow(counts: counts),
                             const SizedBox(height: 28),
                             LayoutBuilder(
                               builder: (context, c) {
-                                final twoColumn = c.maxWidth >= _twoColumnMinWidth;
+                                final twoColumn =
+                                    c.maxWidth >= _twoColumnMinWidth;
                                 final main = _BookingsMainColumn(
                                   filter: _filter,
                                   sort: _sort,
                                   searchController: _searchController,
                                   visible: visible,
-                                  totalForFilter: bookings.where((b) => _matchesFilter(b, _filter)).length,
+                                  totalForFilter: bookings
+                                      .where((b) => _matchesFilter(b, _filter))
+                                      .length,
                                   services: _services,
                                   providers: _providers,
                                   profiles: _profiles,
                                   onFilter: (f) => setState(() => _filter = f),
                                   onSort: (s) => setState(() => _sort = s),
-                                  onSearch: () => setState(() => _query = _searchController.text.trim().toLowerCase()),
+                                  onSearch: () => setState(
+                                    () => _query = _searchController.text
+                                        .trim()
+                                        .toLowerCase(),
+                                  ),
                                   onOpenDetail: _openDetail,
                                   onMessage: _messageProvider,
                                 );
                                 final sidebar = _BookingsSidebar(
                                   counts: counts,
-                                  onSupport: () => HelpSupportPopover.show(context, roleLabel: 'Customer'),
-                                  onViewHistory: () => setState(() => _filter = _BookingFilter.completed),
+                                  onSupport: () => HelpSupportPopover.show(
+                                    context,
+                                    roleLabel: 'Customer',
+                                  ),
+                                  onViewHistory: () => setState(
+                                    () => _filter = _BookingFilter.completed,
+                                  ),
                                 );
 
                                 if (twoColumn) {
                                   return Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Expanded(child: main),
                                       const SizedBox(width: _columnGap),
-                                      SizedBox(width: _sidebarWidth, child: sidebar),
+                                      SizedBox(
+                                        width: _sidebarWidth,
+                                        child: sidebar,
+                                      ),
                                     ],
                                   );
                                 }
                                 return Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
                                   children: [
                                     main,
                                     const SizedBox(height: 28),
@@ -320,7 +368,7 @@ class _CustomerBookingsTabState extends State<CustomerBookingsTab> {
   }
 }
 
-enum _BookingBucket { upcoming, inProgress, completed, cancelled }
+enum _BookingBucket { upcoming, inProgress, completed, cancelled, expired }
 
 // --- Demo data (UI preview when Firestore has no bookings) ---
 
@@ -350,12 +398,54 @@ List<Booking> _demoBookings(String customerId) {
   }
 
   return [
-    mk(id: 'demo-1', status: 'Completed', when: now.subtract(const Duration(days: 3)), location: 'Isabela Homes, Panabo City', serviceId: 'demo-dog', fee: 200),
-    mk(id: 'demo-2', status: 'Completed', when: now.subtract(const Duration(days: 10)), location: 'Gredu, Panabo City', serviceId: 'demo-clean', fee: 400),
-    mk(id: 'demo-3', status: 'In Progress', when: now.add(const Duration(hours: 4)), location: 'San Francisco, Panabo City', serviceId: 'demo-moving', fee: 600),
-    mk(id: 'demo-4', status: 'Pending', when: now.add(const Duration(days: 2)), location: 'New Pandan, Panabo City', serviceId: 'demo-tutor', fee: 350),
-    mk(id: 'demo-5', status: 'Accepted', when: now.add(const Duration(days: 5)), location: 'J.P. Laurel, Panabo City', serviceId: 'demo-clean2', fee: 450),
-    mk(id: 'demo-6', status: 'Cancelled', when: now.subtract(const Duration(days: 1)), location: 'Gredu, Panabo City', serviceId: 'demo-repair', fee: 500),
+    mk(
+      id: 'demo-1',
+      status: 'Completed',
+      when: now.subtract(const Duration(days: 3)),
+      location: 'Isabela Homes, Panabo City',
+      serviceId: 'demo-dog',
+      fee: 200,
+    ),
+    mk(
+      id: 'demo-2',
+      status: 'Completed',
+      when: now.subtract(const Duration(days: 10)),
+      location: 'Gredu, Panabo City',
+      serviceId: 'demo-clean',
+      fee: 400,
+    ),
+    mk(
+      id: 'demo-3',
+      status: 'In Progress',
+      when: now.add(const Duration(hours: 4)),
+      location: 'San Francisco, Panabo City',
+      serviceId: 'demo-moving',
+      fee: 600,
+    ),
+    mk(
+      id: 'demo-4',
+      status: 'Pending',
+      when: now.add(const Duration(days: 2)),
+      location: 'New Pandan, Panabo City',
+      serviceId: 'demo-tutor',
+      fee: 350,
+    ),
+    mk(
+      id: 'demo-5',
+      status: 'Accepted',
+      when: now.add(const Duration(days: 5)),
+      location: 'J.P. Laurel, Panabo City',
+      serviceId: 'demo-clean2',
+      fee: 450,
+    ),
+    mk(
+      id: 'demo-6',
+      status: 'Cancelled',
+      when: now.subtract(const Duration(days: 1)),
+      location: 'Gredu, Panabo City',
+      serviceId: 'demo-repair',
+      fee: 500,
+    ),
   ];
 }
 
@@ -372,7 +462,12 @@ ServiceListing? _demoService(String serviceId) {
       priceType: 'fixed',
       estimatedDuration: '1 hr',
       availability: {},
-      serviceImages: [MarketingServiceImages.urlFor(serviceName: 'Dog Walking', categoryId: 'pet_care')],
+      serviceImages: [
+        MarketingServiceImages.urlFor(
+          serviceName: 'Dog Walking',
+          categoryId: 'pet_care',
+        ),
+      ],
       isActive: true,
       approvalStatus: ServiceApprovalStatus.approved,
       createdAt: Timestamp.now(),
@@ -388,7 +483,12 @@ ServiceListing? _demoService(String serviceId) {
       priceType: 'fixed',
       estimatedDuration: '2 hrs',
       availability: {},
-      serviceImages: [MarketingServiceImages.urlFor(serviceName: 'House Cleaning', categoryId: 'cleaning')],
+      serviceImages: [
+        MarketingServiceImages.urlFor(
+          serviceName: 'House Cleaning',
+          categoryId: 'cleaning',
+        ),
+      ],
       isActive: true,
       approvalStatus: ServiceApprovalStatus.approved,
       createdAt: Timestamp.now(),
@@ -404,7 +504,12 @@ ServiceListing? _demoService(String serviceId) {
       priceType: 'fixed',
       estimatedDuration: '3 hrs',
       availability: {},
-      serviceImages: [MarketingServiceImages.urlFor(serviceName: 'Moving Help', categoryId: 'moving_errands')],
+      serviceImages: [
+        MarketingServiceImages.urlFor(
+          serviceName: 'Moving Help',
+          categoryId: 'moving_errands',
+        ),
+      ],
       isActive: true,
       approvalStatus: ServiceApprovalStatus.approved,
       createdAt: Timestamp.now(),
@@ -420,7 +525,12 @@ ServiceListing? _demoService(String serviceId) {
       priceType: 'negotiable',
       estimatedDuration: '1 hr',
       availability: {},
-      serviceImages: [MarketingServiceImages.urlFor(serviceName: 'Math Tutoring', categoryId: 'tutoring')],
+      serviceImages: [
+        MarketingServiceImages.urlFor(
+          serviceName: 'Math Tutoring',
+          categoryId: 'tutoring',
+        ),
+      ],
       isActive: true,
       approvalStatus: ServiceApprovalStatus.approved,
       createdAt: Timestamp.now(),
@@ -436,7 +546,12 @@ ServiceListing? _demoService(String serviceId) {
       priceType: 'fixed',
       estimatedDuration: '2 hrs',
       availability: {},
-      serviceImages: [MarketingServiceImages.urlFor(serviceName: 'Home Repairs', categoryId: 'handyman')],
+      serviceImages: [
+        MarketingServiceImages.urlFor(
+          serviceName: 'Home Repairs',
+          categoryId: 'handyman',
+        ),
+      ],
       isActive: true,
       approvalStatus: ServiceApprovalStatus.approved,
       createdAt: Timestamp.now(),
@@ -447,32 +562,33 @@ ServiceListing? _demoService(String serviceId) {
 }
 
 AppUser _demoProvider() => AppUser(
-      userId: 'demo-provider',
-      email: 'kent@demo.local',
-      fullName: 'Kent Ivan M.',
-      role: UserRole.provider,
-      profilePhotoUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=100&q=80',
-      location: const GeoPoint(7.3083, 125.6842),
-      accountStatus: AccountStatus.active,
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now(),
-    );
+  userId: 'demo-provider',
+  email: 'kent@demo.local',
+  fullName: 'Kent Ivan M.',
+  role: UserRole.provider,
+  profilePhotoUrl:
+      'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=100&q=80',
+  location: const GeoPoint(7.3083, 125.6842),
+  accountStatus: AccountStatus.active,
+  createdAt: Timestamp.now(),
+  updatedAt: Timestamp.now(),
+);
 
 ServiceProviderProfile _demoProfile() => ServiceProviderProfile(
-      providerId: 'demo-provider',
-      userId: 'demo-provider',
-      bio: '',
-      serviceArea: 'Panabo City',
-      location: const GeoPoint(7.3083, 125.6842),
-      serviceRadiusKm: 10,
-      averageRating: 5.0,
-      completedBookings: 12,
-      acceptedBookings: 12,
-      isVerified: true,
-      verificationStatus: 'approved',
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now(),
-    );
+  providerId: 'demo-provider',
+  userId: 'demo-provider',
+  bio: '',
+  serviceArea: 'Panabo City',
+  location: const GeoPoint(7.3083, 125.6842),
+  serviceRadiusKm: 10,
+  averageRating: 5.0,
+  completedBookings: 12,
+  acceptedBookings: 12,
+  isVerified: true,
+  verificationStatus: 'approved',
+  createdAt: Timestamp.now(),
+  updatedAt: Timestamp.now(),
+);
 
 // --- Summary cards ---
 
@@ -563,15 +679,31 @@ class _SummaryCard extends StatelessWidget {
           Container(
             width: 44,
             height: 44,
-            decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(10)),
+            decoration: BoxDecoration(
+              color: iconBg,
+              borderRadius: BorderRadius.circular(10),
+            ),
             child: Icon(icon, color: iconFg, size: 24),
           ),
           const SizedBox(width: 14),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(count.toString(), style: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.w700, color: FigmaColors.gray900)),
-              Text(label, style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray600)),
+              Text(
+                count.toString(),
+                style: GoogleFonts.inter(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w700,
+                  color: FigmaColors.gray900,
+                ),
+              ),
+              Text(
+                label,
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  color: FigmaColors.gray600,
+                ),
+              ),
             ],
           ),
         ],
@@ -618,7 +750,9 @@ class _BookingsMainColumn extends StatelessWidget {
     final nativeMobile = MobileLayout.isNativeApp(context);
     final searchField = AppSearchField(
       controller: searchController,
-      hint: nativeMobile ? 'Search bookings…' : 'Search by booking ID, service, or provider',
+      hint: nativeMobile
+          ? 'Search bookings…'
+          : 'Search by booking ID, service, or provider',
       onSubmitted: (_) => onSearch(),
       onChanged: (_) => onSearch(),
     );
@@ -655,9 +789,19 @@ class _BookingsMainColumn extends StatelessWidget {
                 if (i > 0) const SizedBox(height: 14),
                 _BookingListCard(
                   booking: visible[i],
-                  service: services[visible[i].serviceId] ?? _demoService(visible[i].serviceId),
-                  provider: providers[visible[i].providerId] ?? (visible[i].bookingId.startsWith('demo-') ? _demoProvider() : null),
-                  profile: profiles[visible[i].providerId] ?? (visible[i].bookingId.startsWith('demo-') ? _demoProfile() : null),
+                  service:
+                      services[visible[i].serviceId] ??
+                      _demoService(visible[i].serviceId),
+                  provider:
+                      providers[visible[i].providerId] ??
+                      (visible[i].bookingId.startsWith('demo-')
+                          ? _demoProvider()
+                          : null),
+                  profile:
+                      profiles[visible[i].providerId] ??
+                      (visible[i].bookingId.startsWith('demo-')
+                          ? _demoProfile()
+                          : null),
                   onOpenDetail: () => onOpenDetail(visible[i]),
                   onMessage: () => onMessage(visible[i]),
                 ),
@@ -690,7 +834,11 @@ class _BookingFilterChips extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: active ? rc.primary.withValues(alpha: 0.4) : FigmaColors.gray200),
+              border: Border.all(
+                color: active
+                    ? rc.primary.withValues(alpha: 0.4)
+                    : FigmaColors.gray200,
+              ),
             ),
             child: Text(
               label,
@@ -714,6 +862,7 @@ class _BookingFilterChips extends StatelessWidget {
         chip('In Progress', _BookingFilter.inProgress),
         chip('Completed', _BookingFilter.completed),
         chip('Cancelled', _BookingFilter.cancelled),
+        chip('Expired', _BookingFilter.expired),
       ],
     );
   }
@@ -726,10 +875,10 @@ class _BookingSortDropdown extends StatelessWidget {
   final ValueChanged<_BookingSort> onSort;
 
   String get _label => switch (sort) {
-        _BookingSort.latest => 'Latest',
-        _BookingSort.oldest => 'Oldest',
-        _BookingSort.serviceName => 'Service name',
-      };
+    _BookingSort.latest => 'Latest',
+    _BookingSort.oldest => 'Oldest',
+    _BookingSort.serviceName => 'Service name',
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -746,8 +895,21 @@ class _BookingSortDropdown extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Sort by: ', style: GoogleFonts.inter(fontSize: 14, color: FigmaColors.gray600)),
-            Text(_label, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: FigmaColors.gray900)),
+            Text(
+              'Sort by: ',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: FigmaColors.gray600,
+              ),
+            ),
+            Text(
+              _label,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: FigmaColors.gray900,
+              ),
+            ),
             const Icon(Icons.keyboard_arrow_down, size: 18),
           ],
         ),
@@ -755,7 +917,10 @@ class _BookingSortDropdown extends StatelessWidget {
       itemBuilder: (context) => const [
         PopupMenuItem(value: _BookingSort.latest, child: Text('Latest')),
         PopupMenuItem(value: _BookingSort.oldest, child: Text('Oldest')),
-        PopupMenuItem(value: _BookingSort.serviceName, child: Text('Service name')),
+        PopupMenuItem(
+          value: _BookingSort.serviceName,
+          child: Text('Service name'),
+        ),
       ],
     );
   }
@@ -786,23 +951,38 @@ class _BookingListCard extends StatelessWidget {
     final category = service?.category ?? 'Service';
     final imageUrl = service != null && service!.serviceImages.isNotEmpty
         ? service!.serviceImages.first
-        : MarketingServiceImages.urlFor(serviceName: title, categoryName: category);
-    final providerName = provider?.fullName.isNotEmpty == true ? provider!.fullName : 'Provider';
+        : MarketingServiceImages.urlFor(
+            serviceName: title,
+            categoryName: category,
+          );
+    final providerName = provider?.fullName.isNotEmpty == true
+        ? provider!.fullName
+        : 'Provider';
     final rating = profile?.averageRating ?? 0;
     final reviewCount = profile?.reviewCount ?? 0;
     final fee = booking.totalFee ?? service?.estimatedPrice;
     final showRating = booking.isMilestoneComplete && rating > 0;
     final thumbSize = nativeMobile ? 72.0 : 88.0;
-    final location = booking.serviceLocation.isNotEmpty ? booking.serviceLocation : 'Location not set';
+    final location = booking.serviceLocation.isNotEmpty
+        ? booking.serviceLocation
+        : 'Location not set';
 
     Widget providerRow({required bool stackCategory}) {
       return Row(
         children: [
           CircleAvatar(
             radius: nativeMobile ? 13 : 14,
-            backgroundImage: provider?.profilePhotoUrl != null ? NetworkImage(provider!.profilePhotoUrl!) : null,
+            backgroundImage: provider?.profilePhotoUrl != null
+                ? NetworkImage(provider!.profilePhotoUrl!)
+                : null,
             child: provider?.profilePhotoUrl == null
-                ? Text(providerName[0].toUpperCase(), style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700))
+                ? Text(
+                    providerName[0].toUpperCase(),
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  )
                 : null,
           ),
           const SizedBox(width: 8),
@@ -814,7 +994,11 @@ class _BookingListCard extends StatelessWidget {
                   providerName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500, color: FigmaColors.gray900),
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: FigmaColors.gray900,
+                  ),
                 ),
                 if (stackCategory) ...[
                   const SizedBox(height: 4),
@@ -822,7 +1006,10 @@ class _BookingListCard extends StatelessWidget {
                     category,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(fontSize: 11, color: FigmaColors.gray600),
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      color: FigmaColors.gray600,
+                    ),
                   ),
                 ],
               ],
@@ -841,7 +1028,10 @@ class _BookingListCard extends StatelessWidget {
                   category,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(fontSize: 11, color: FigmaColors.gray600),
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    color: FigmaColors.gray600,
+                  ),
                 ),
               ),
             ),
@@ -858,7 +1048,11 @@ class _BookingListCard extends StatelessWidget {
             const Spacer(),
             Text(
               '₱${fee.toStringAsFixed(0)}',
-              style: GoogleFonts.inter(fontSize: nativeMobile ? 15 : 16, fontWeight: FontWeight.w700, color: rc.primary),
+              style: GoogleFonts.inter(
+                fontSize: nativeMobile ? 15 : 16,
+                fontWeight: FontWeight.w700,
+                color: rc.primary,
+              ),
             ),
           ],
         ],
@@ -883,14 +1077,21 @@ class _BookingListCard extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.star_rounded, size: 14, color: Color(0xFFEAB308)),
+                  const Icon(
+                    Icons.star_rounded,
+                    size: 14,
+                    color: Color(0xFFEAB308),
+                  ),
                   const SizedBox(width: 2),
                   Flexible(
                     child: Text(
                       '${rating.toStringAsFixed(1)} ($reviewCount)',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(fontSize: 11, color: FigmaColors.gray600),
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: FigmaColors.gray600,
+                      ),
                     ),
                   ),
                 ],
@@ -905,12 +1106,22 @@ class _BookingListCard extends StatelessWidget {
       final messageBtn = TextButton.icon(
         onPressed: onMessage,
         icon: Icon(Icons.chat_bubble_outline, size: 18, color: rc.primary),
-        label: Text('Message Provider', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: rc.primary)),
+        label: Text(
+          'Message Provider',
+          style: GoogleFonts.inter(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: rc.primary,
+          ),
+        ),
       );
       final detailsBtn = OutlinedButton.icon(
         onPressed: onOpenDetail,
         icon: const Icon(Icons.chevron_right_rounded, size: 18),
-        label: Text('View Details', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500)),
+        label: Text(
+          'View Details',
+          style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500),
+        ),
         style: OutlinedButton.styleFrom(
           foregroundColor: FigmaColors.gray800,
           side: const BorderSide(color: FigmaColors.gray300),
@@ -954,7 +1165,10 @@ class _BookingListCard extends StatelessWidget {
                   children: [
                     Text(
                       'Booking #${_shortId(booking.bookingId)}',
-                      style: GoogleFonts.inter(fontSize: 12, color: FigmaColors.gray500),
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: FigmaColors.gray500,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -975,17 +1189,27 @@ class _BookingListCard extends StatelessWidget {
                       const SizedBox(height: 6),
                     Text(
                       booking.scheduledWindowLabel,
-                      style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray600),
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: FigmaColors.gray600,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        const Icon(Icons.place_outlined, size: 14, color: FigmaColors.gray500),
+                        const Icon(
+                          Icons.place_outlined,
+                          size: 14,
+                          color: FigmaColors.gray500,
+                        ),
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
                             location,
-                            style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray500),
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              color: FigmaColors.gray500,
+                            ),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -1006,7 +1230,11 @@ class _BookingListCard extends StatelessWidget {
                       const SizedBox(height: 10),
                       Text(
                         '₱${fee.toStringAsFixed(0)}',
-                        style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700, color: rc.primary),
+                        style: GoogleFonts.inter(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: rc.primary,
+                        ),
                       ),
                     ],
                   ],
@@ -1023,14 +1251,18 @@ class _BookingListCard extends StatelessWidget {
   }
 }
 
-String _shortId(String id) => id.length <= 8 ? id : id.replaceFirst('demo-', '').substring(0, 6).toUpperCase();
+String _shortId(String id) => id.length <= 8
+    ? id
+    : id.replaceFirst('demo-', '').substring(0, 6).toUpperCase();
 
 String _displayStatus(String status) {
   final s = status.toLowerCase();
   if (s == 'completed') return 'Completed';
   if (s == 'cancelled' || s == 'canceled') return 'Cancelled';
   if (s == 'in progress') return 'In Progress';
-  if (s == 'pending' || s == 'accepted' || s == 'changes requested') return 'Upcoming';
+  if (s == 'pending' || s == 'accepted' || s == 'changes requested') {
+    return 'Upcoming';
+  }
   return status;
 }
 
@@ -1059,7 +1291,13 @@ class _BookingsSidebar extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Booking overview', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700)),
+              Text(
+                'Booking overview',
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
               const SizedBox(height: 16),
               SizedBox(
                 height: 180,
@@ -1072,7 +1310,14 @@ class _BookingsSidebar extends StatelessWidget {
                 alignment: Alignment.centerLeft,
                 child: TextButton(
                   onPressed: onViewHistory,
-                  child: Text('View full history', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: rc.primary)),
+                  child: Text(
+                    'View full history',
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: rc.primary,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -1089,17 +1334,33 @@ class _BookingsSidebar extends StatelessWidget {
                   Container(
                     width: 40,
                     height: 40,
-                    decoration: BoxDecoration(color: rc.tint, borderRadius: BorderRadius.circular(10)),
-                    child: Icon(Icons.support_agent_outlined, color: rc.primary),
+                    decoration: BoxDecoration(
+                      color: rc.tint,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.support_agent_outlined,
+                      color: rc.primary,
+                    ),
                   ),
                   const SizedBox(width: 12),
-                  Text('Need help?', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700)),
+                  Text(
+                    'Need help?',
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 10),
               Text(
                 'Questions about a booking? Our team can help you and your provider.',
-                style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray600, height: 1.45),
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  color: FigmaColors.gray600,
+                  height: 1.45,
+                ),
               ),
               const SizedBox(height: 14),
               SizedBox(
@@ -1110,9 +1371,17 @@ class _BookingsSidebar extends StatelessWidget {
                     backgroundColor: rc.primary,
                     foregroundColor: rc.onPrimary,
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
-                  child: Text('Contact Support', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)),
+                  child: Text(
+                    'Contact Support',
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -1130,12 +1399,26 @@ class _BookingOverviewChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final total = (_BookingBucket.values.map((b) => counts[b] ?? 0).fold<int>(0, (a, b) => a + b));
+    final total = (_BookingBucket.values
+        .map((b) => counts[b] ?? 0)
+        .fold<int>(0, (a, b) => a + b));
     if (total == 0) {
-      return Center(child: Text('No data yet', style: GoogleFonts.inter(color: FigmaColors.gray500)));
+      return Center(
+        child: Text(
+          'No data yet',
+          style: GoogleFonts.inter(color: FigmaColors.gray500),
+        ),
+      );
     }
 
     final sections = <PieChartSectionData>[
+      if ((counts[_BookingBucket.expired] ?? 0) > 0)
+        PieChartSectionData(
+          value: (counts[_BookingBucket.expired] ?? 0).toDouble(),
+          color: FigmaColors.gray600,
+          radius: 36,
+          showTitle: false,
+        ),
       if ((counts[_BookingBucket.completed] ?? 0) > 0)
         PieChartSectionData(
           value: (counts[_BookingBucket.completed] ?? 0).toDouble(),
@@ -1189,10 +1472,28 @@ class _ChartLegend extends StatelessWidget {
         padding: const EdgeInsets.only(bottom: 6),
         child: Row(
           children: [
-            Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+            Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            ),
             const SizedBox(width: 8),
-            Expanded(child: Text(label, style: GoogleFonts.inter(fontSize: 12, color: FigmaColors.gray700))),
-            Text('$n', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600)),
+            Expanded(
+              child: Text(
+                label,
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: FigmaColors.gray700,
+                ),
+              ),
+            ),
+            Text(
+              '$n',
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ],
         ),
       );
@@ -1200,10 +1501,31 @@ class _ChartLegend extends StatelessWidget {
 
     return Column(
       children: [
-        row(FigmaColors.green, 'Completed', counts[_BookingBucket.completed] ?? 0),
-        row(const Color(0xFF3B82F6), 'Upcoming', counts[_BookingBucket.upcoming] ?? 0),
-        row(FigmaColors.yellow500, 'In Progress', counts[_BookingBucket.inProgress] ?? 0),
-        row(FigmaColors.red600, 'Cancelled', counts[_BookingBucket.cancelled] ?? 0),
+        row(
+          FigmaColors.green,
+          'Completed',
+          counts[_BookingBucket.completed] ?? 0,
+        ),
+        row(
+          const Color(0xFF3B82F6),
+          'Upcoming',
+          counts[_BookingBucket.upcoming] ?? 0,
+        ),
+        row(
+          FigmaColors.yellow500,
+          'In Progress',
+          counts[_BookingBucket.inProgress] ?? 0,
+        ),
+        row(
+          FigmaColors.red600,
+          'Cancelled',
+          counts[_BookingBucket.cancelled] ?? 0,
+        ),
+        row(
+          FigmaColors.gray600,
+          'Expired',
+          counts[_BookingBucket.expired] ?? 0,
+        ),
       ],
     );
   }

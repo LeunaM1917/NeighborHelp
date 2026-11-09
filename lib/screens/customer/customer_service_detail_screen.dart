@@ -595,7 +595,9 @@ class _ServiceAndProviderSection extends StatelessWidget {
                   _FactChip(
                     icon: Icons.map_outlined,
                     label:
-                        '${providerProfile?.serviceRadiusKm.toStringAsFixed(0) ?? '5'} km service radius',
+                        providerProfile?.serviceCoverageLabel.isNotEmpty == true
+                        ? providerProfile!.serviceCoverageLabel
+                        : 'Service barangays not selected',
                   ),
                   if (providerProfile?.isVerifiedProvider != true)
                     _FactChip(

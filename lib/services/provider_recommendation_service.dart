@@ -7,6 +7,7 @@ import '../models/service.dart';
 import '../models/requested_work_schedule.dart';
 import '../utils/geo_location.dart';
 import '../utils/haversine.dart';
+import '../utils/barangay_coverage.dart';
 import '../utils/weighted_scoring.dart';
 
 /// Default proximity filter / normalization radius for recommendation scoring.
@@ -50,7 +51,7 @@ List<RankedProvider> rankProvidersByRecommendation({
   DateTime? now,
   Random? random,
   RequestedWorkSchedule? requestedSchedule,
-  Map<String,bool>? availabilityByProvider,
+  Map<String, bool>? availabilityByProvider,
 }) {
   final at = now ?? DateTime.now().toUtc().add(const Duration(hours: 8));
   final origin = geoPointOrNull(customerOrigin);
@@ -70,16 +71,28 @@ List<RankedProvider> rankProvidersByRecommendation({
         continue;
       }
       distanceKm = haversineDistanceKmFromGeoPoints(origin, providerLoc);
-      if (distanceKm > maxSearchRadiusKm || distanceKm > profile.serviceRadiusKm) continue;
+      if (distanceKm > maxSearchRadiusKm ||
+          profile.serviceBarangayIds.isNotEmpty &&
+              !barangaysCover(profile.serviceBarangayIds, origin)) {
+        continue;
+      }
       proximityInputKm = distanceKm;
     } else {
       // No customer GPS: skip proximity filter; use neutral P via synthetic distance.
-      proximityInputKm = (1 - kNeutralProximityWhenNoOrigin) * maxSearchRadiusKm;
+      proximityInputKm =
+          (1 - kNeutralProximityWhenNoOrigin) * maxSearchRadiusKm;
     }
 
-    final available = requestedSchedule == null ? profile.isAvailableNow(at)
-        : profile.effectiveWeeklyAvailability.coversRequest(requestedSchedule) && availabilityByProvider?[profile.providerId] == true;
-    if(requestedSchedule != null && !available)continue;
+    final available = requestedSchedule == null
+        ? profile.isAvailableNow(at)
+        : profile.effectiveWeeklyAvailability.coversRequest(
+                requestedSchedule,
+              ) &&
+              !requestedSchedule.periods.any(
+                (p) => profile.unavailableBetween(p.$1, p.$2),
+              ) &&
+              availabilityByProvider?[profile.providerId] == true;
+    if (requestedSchedule != null && !available) continue;
     final isNew = isColdStartProvider(
       reviewCount: profile.reviewCount,
       averageRating: profile.averageRating,

@@ -5,6 +5,7 @@ import 'provider_employment.dart';
 import 'provider_certification.dart';
 import 'provider_portfolio_project.dart';
 import 'provider_weekly_availability.dart';
+import '../data/panabo_barangays.dart';
 
 /// Service provider profile stored in `serviceProviders` (matches Firestore schema).
 class ServiceProviderProfile {
@@ -43,6 +44,9 @@ class ServiceProviderProfile {
     this.eligibleServiceIds,
     this.eligibleServiceExpiries = const {},
     this.marketplacePolicyVersion = 0,
+    this.baseBarangayId,
+    this.serviceBarangayIds = const [],
+    this.timeOff = const [],
   });
 
   final String providerId;
@@ -69,11 +73,27 @@ class ServiceProviderProfile {
   final List<String>? eligibleServiceIds;
   final Map<String, dynamic> eligibleServiceExpiries;
   final int marketplacePolicyVersion;
+  final String? baseBarangayId;
+  final List<String> serviceBarangayIds;
+  String get serviceCoverageLabel => panaboBarangays
+      .where((b) => serviceBarangayIds.contains(b['id']))
+      .map((b) => b['name'] as String)
+      .join(', ');
+  final List<Map<String, dynamic>> timeOff;
+  bool unavailableBetween(DateTime start, DateTime end) => timeOff.any((b) {
+    int? ms(dynamic value) => value is Timestamp
+        ? value.millisecondsSinceEpoch
+        : (value as num?)?.toInt();
+    final a = ms(b['startMs'] ?? b['start']), z = ms(b['endMs'] ?? b['end']);
+    return a == null ||
+        z == null ||
+        start.millisecondsSinceEpoch < z && a < end.millisecondsSinceEpoch;
+  });
   bool canOfferService(String serviceId) {
     if (eligibleServiceIds == null) return isVerifiedProvider;
     final expires = eligibleServiceExpiries[serviceId] as num?;
     return isVerifiedProvider &&
-        marketplacePolicyVersion == 2 &&
+        marketplacePolicyVersion == 3 &&
         eligibleServiceIds!.contains(serviceId) &&
         expires != null &&
         expires >= DateTime.now().millisecondsSinceEpoch;
@@ -120,6 +140,10 @@ class ServiceProviderProfile {
 
   /// Whether the provider is within working hours right now (availability score A).
   bool isAvailableNow([DateTime? now]) =>
+      !unavailableBetween(
+        now ?? DateTime.now(),
+        (now ?? DateTime.now()).add(const Duration(milliseconds: 1)),
+      ) &&
       effectiveWeeklyAvailability.isAvailableNow(now);
 
   String get _diditNormalized => diditStatus.trim().toLowerCase();
@@ -227,6 +251,11 @@ class ServiceProviderProfile {
       userId: data['userId'] as String? ?? id,
       bio: data['bio'] as String? ?? '',
       serviceArea: data['serviceArea'] as String? ?? '',
+      baseBarangayId: data['baseBarangayId'] as String?,
+      serviceBarangayIds: List<String>.from(data['serviceBarangayIds'] ?? []),
+      timeOff: (data['timeOff'] as List? ?? [])
+          .map((b) => Map<String, dynamic>.from(b as Map))
+          .toList(),
       location: data['location'] as GeoPoint? ?? const GeoPoint(0, 0),
       serviceRadiusKm: (data['serviceRadiusKm'] as num?)?.toDouble() ?? 5,
       averageRating: (data['averageRating'] as num?)?.toDouble() ?? 0,
@@ -303,7 +332,9 @@ class ServiceProviderProfile {
       'userId': userId,
       'bio': bio,
       'serviceArea': serviceArea,
-      'location': location,
+      'location': baseBarangayId == null ? null : location,
+      'baseBarangayId': baseBarangayId,
+      'serviceBarangayIds': serviceBarangayIds,
       'serviceRadiusKm': serviceRadiusKm,
       'averageRating': averageRating,
       'completedBookings': completedBookings,

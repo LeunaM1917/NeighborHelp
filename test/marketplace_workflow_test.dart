@@ -23,8 +23,8 @@ void main() {
       isFalse,
     );
     expect(isSupportedService('Cleaning', 'House Cleaning'), isTrue);
-    for(final service in MarketingFeaturedServices.all) {
-      expect(isSupportedService(service.categoryName,service.title),isTrue);
+    for (final service in MarketingFeaturedServices.all) {
+      expect(isSupportedService(service.categoryName, service.title), isTrue);
     }
     for (final category in MarketingServiceCatalog.categories) {
       expect(category.services, isNotEmpty);
@@ -72,6 +72,9 @@ void main() {
       expect(
         Booking.fromFirestore('pending', {
           'status': 'Pending',
+          'scheduledDate': Timestamp.fromDate(
+            DateTime.now().add(const Duration(days: 1)),
+          ),
         }).canCustomerCancel,
         isTrue,
       );
@@ -93,14 +96,14 @@ void main() {
     expect(profile({}).canOfferService('s'), isFalse);
     expect(
       profile({
-        'marketplacePolicyVersion': 2,
+        'marketplacePolicyVersion': 3,
         'eligibleServiceExpiries': {'s': DateTime(2000).millisecondsSinceEpoch},
       }).canOfferService('s'),
       isFalse,
     );
     expect(
       profile({
-        'marketplacePolicyVersion': 2,
+        'marketplacePolicyVersion': 3,
         'eligibleServiceExpiries': {'s': DateTime(2099).millisecondsSinceEpoch},
       }).canOfferService('s'),
       isTrue,

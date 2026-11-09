@@ -52,7 +52,8 @@ enum ProviderProfileRequirementId {
   reviews,
 }
 
-typedef ProviderProfileRequirementHandler = void Function(ProviderProfileRequirementId id);
+typedef ProviderProfileRequirementHandler =
+    void Function(ProviderProfileRequirementId id);
 
 /// Opens the screen or tab where the provider can complete [id].
 void navigateToProviderProfileRequirement(
@@ -65,7 +66,11 @@ void navigateToProviderProfileRequirement(
   switch (id) {
     case ProviderProfileRequirementId.profilePhoto:
       if (profile != null) {
-        ProviderOverviewSettingsScreen.open(context, appUser: appUser, profile: profile);
+        ProviderOverviewSettingsScreen.open(
+          context,
+          appUser: appUser,
+          profile: profile,
+        );
       } else {
         onNavigateToTab?.call(4);
       }
@@ -76,7 +81,11 @@ void navigateToProviderProfileRequirement(
     case ProviderProfileRequirementId.overview:
     case ProviderProfileRequirementId.serviceArea:
       if (profile != null) {
-        ProviderOverviewSettingsScreen.open(context, appUser: appUser, profile: profile);
+        ProviderOverviewSettingsScreen.open(
+          context,
+          appUser: appUser,
+          profile: profile,
+        );
       } else {
         onNavigateToTab?.call(4);
       }
@@ -122,7 +131,9 @@ void navigateToProviderProfileRequirement(
       ProviderPortfolioFlow.open(
         context,
         providerId: profile.providerId,
-        initial: stored.isNotEmpty ? stored.first : profile.effectivePortfolioProjects.firstOrNull,
+        initial: stored.isNotEmpty
+            ? stored.first
+            : profile.effectivePortfolioProjects.firstOrNull,
         editIndex: stored.isNotEmpty ? 0 : null,
       );
       return;
@@ -176,7 +187,8 @@ List<ProviderProfileRequirement> buildProviderProfileRequirements({
   final hasCerts = p?.hasApprovedCertifications ?? false;
   final hasOther = p?.otherExperiences.isNotEmpty ?? false;
   final hasLinked = p?.linkedAccounts.isNotEmpty ?? false;
-  final hasArea = p?.serviceArea.trim().isNotEmpty ?? false;
+  final hasArea =
+      p?.baseBarangayId != null && (p?.serviceBarangayIds.isNotEmpty ?? false);
   final hasService = services.isNotEmpty;
   const reviewGoal = 5;
   final reviewDone = reviewCount.clamp(0, reviewGoal);
@@ -227,7 +239,8 @@ List<ProviderProfileRequirement> buildProviderProfileRequirements({
     ProviderProfileRequirement(
       id: ProviderProfileRequirementId.certifications,
       title: 'TESDA certifications',
-      subtitle: 'Required for every offered service. The System Administrator checks matching TESDA credentials.',
+      subtitle:
+          'Required for every offered service. The System Administrator checks matching TESDA credentials.',
       weightPercent: 6,
       done: hasCerts,
     ),
@@ -346,14 +359,22 @@ class ProviderProfileProgressPanel extends StatelessWidget {
                     children: [
                       Text(
                         '$pct% complete',
-                        style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700, color: FigmaColors.gray900),
+                        style: GoogleFonts.inter(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: FigmaColors.gray900,
+                        ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         incomplete == 0
                             ? profileCompletionEncouragement(pct)
                             : '$incomplete item${incomplete == 1 ? '' : 's'} left — tap to finish',
-                        style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray600, height: 1.35),
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: FigmaColors.gray600,
+                          height: 1.35,
+                        ),
                       ),
                     ],
                   ),
@@ -404,10 +425,19 @@ class _ProfileCompletionRing extends StatelessWidget {
           CircleAvatar(
             radius: 28,
             backgroundColor: FigmaColors.gray200,
-            backgroundImage: photoUrl?.trim().isNotEmpty == true ? NetworkImage(photoUrl!.trim()) : null,
+            backgroundImage: photoUrl?.trim().isNotEmpty == true
+                ? NetworkImage(photoUrl!.trim())
+                : null,
             child: photoUrl?.trim().isNotEmpty == true
                 ? null
-                : Text(initials, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700, color: FigmaColors.gray700)),
+                : Text(
+                    initials,
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: FigmaColors.gray700,
+                    ),
+                  ),
           ),
         ],
       ),
@@ -416,7 +446,11 @@ class _ProfileCompletionRing extends StatelessWidget {
 }
 
 String _initials(String name) {
-  final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+  final parts = name
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((p) => p.isNotEmpty)
+      .toList();
   if (parts.isEmpty) return '?';
   if (parts.length == 1) return parts.first[0].toUpperCase();
   return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
@@ -464,7 +498,8 @@ Future<void> showProviderProfileCompletionDialog(
             percent: pct,
             items: items,
             scrollController: scrollController,
-            onRequirementTap: (id) => _completionItemTap(ctx, id, onRequirementTap),
+            onRequirementTap: (id) =>
+                _completionItemTap(ctx, id, onRequirementTap),
             onClose: () => Navigator.pop(ctx),
           ),
         ),
@@ -485,7 +520,8 @@ Future<void> showProviderProfileCompletionDialog(
             appUser: appUser,
             percent: pct,
             items: items,
-            onRequirementTap: (id) => _completionItemTap(ctx, id, onRequirementTap),
+            onRequirementTap: (id) =>
+                _completionItemTap(ctx, id, onRequirementTap),
             onClose: () => Navigator.pop(ctx),
           ),
         ),
@@ -521,7 +557,12 @@ class _ProfileCompletionDialog extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _ProfileCompletionSidebar(appUser: appUser, percent: percent),
-                Expanded(child: _ProfileCompletionChecklist(items: items, onTap: onRequirementTap)),
+                Expanded(
+                  child: _ProfileCompletionChecklist(
+                    items: items,
+                    onTap: onRequirementTap,
+                  ),
+                ),
               ],
             ),
             Positioned(
@@ -569,7 +610,10 @@ class _ProfileCompletionSheet extends StatelessWidget {
           Container(
             width: 40,
             height: 4,
-            decoration: BoxDecoration(color: FigmaColors.gray300, borderRadius: BorderRadius.circular(2)),
+            decoration: BoxDecoration(
+              color: FigmaColors.gray300,
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(8, 4, 4, 0),
@@ -585,10 +629,19 @@ class _ProfileCompletionSheet extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('$percent% complete', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700)),
+                      Text(
+                        '$percent% complete',
+                        style: GoogleFonts.inter(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                       Text(
                         profileCompletionEncouragement(percent),
-                        style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray600),
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: FigmaColors.gray600,
+                        ),
                       ),
                     ],
                   ),
@@ -612,7 +665,10 @@ class _ProfileCompletionSheet extends StatelessWidget {
 }
 
 class _ProfileCompletionSidebar extends StatelessWidget {
-  const _ProfileCompletionSidebar({required this.appUser, required this.percent});
+  const _ProfileCompletionSidebar({
+    required this.appUser,
+    required this.percent,
+  });
 
   final AppUser appUser;
   final int percent;
@@ -646,14 +702,18 @@ class _ProfileCompletionSidebar extends StatelessWidget {
                 CircleAvatar(
                   radius: 46,
                   backgroundColor: FigmaColors.gray200,
-                  backgroundImage: appUser.profilePhotoUrl?.trim().isNotEmpty == true
+                  backgroundImage:
+                      appUser.profilePhotoUrl?.trim().isNotEmpty == true
                       ? NetworkImage(appUser.profilePhotoUrl!.trim())
                       : null,
                   child: appUser.profilePhotoUrl?.trim().isNotEmpty == true
                       ? null
                       : Text(
                           _initials(appUser.fullName),
-                          style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.w700),
+                          style: GoogleFonts.inter(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                 ),
               ],
@@ -662,13 +722,21 @@ class _ProfileCompletionSidebar extends StatelessWidget {
           const SizedBox(height: 20),
           Text(
             '$percent% complete',
-            style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w800, color: FigmaColors.gray900),
+            style: GoogleFonts.inter(
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              color: FigmaColors.gray900,
+            ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
           Text(
             profileCompletionEncouragement(percent),
-            style: GoogleFonts.inter(fontSize: 14, color: FigmaColors.gray600, height: 1.4),
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              color: FigmaColors.gray600,
+              height: 1.4,
+            ),
             textAlign: TextAlign.center,
           ),
         ],
@@ -689,10 +757,12 @@ class _ProfileCompletionChecklist extends StatefulWidget {
   final ScrollController? scrollController;
 
   @override
-  State<_ProfileCompletionChecklist> createState() => _ProfileCompletionChecklistState();
+  State<_ProfileCompletionChecklist> createState() =>
+      _ProfileCompletionChecklistState();
 }
 
-class _ProfileCompletionChecklistState extends State<_ProfileCompletionChecklist> {
+class _ProfileCompletionChecklistState
+    extends State<_ProfileCompletionChecklist> {
   bool _showCompleted = false;
 
   @override
@@ -707,12 +777,20 @@ class _ProfileCompletionChecklistState extends State<_ProfileCompletionChecklist
       children: [
         Text(
           'Complete your profile',
-          style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.w700, color: rc.primary),
+          style: GoogleFonts.inter(
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+            color: rc.primary,
+          ),
         ),
         const SizedBox(height: 8),
         Text(
           'A complete profile helps customers trust you and improves your visibility in search.',
-          style: GoogleFonts.inter(fontSize: 14, color: FigmaColors.gray600, height: 1.45),
+          style: GoogleFonts.inter(
+            fontSize: 14,
+            color: FigmaColors.gray600,
+            height: 1.45,
+          ),
         ),
         const SizedBox(height: 20),
         for (final item in pending) ...[
@@ -727,8 +805,14 @@ class _ProfileCompletionChecklistState extends State<_ProfileCompletionChecklist
               child: Row(
                 children: [
                   Text(
-                    _showCompleted ? 'Hide completed (${completed.length})' : 'Show completed (${completed.length})',
-                    style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: FigmaColors.gray800),
+                    _showCompleted
+                        ? 'Hide completed (${completed.length})'
+                        : 'Show completed (${completed.length})',
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: FigmaColors.gray800,
+                    ),
                   ),
                   const SizedBox(width: 4),
                   Icon(
@@ -743,11 +827,18 @@ class _ProfileCompletionChecklistState extends State<_ProfileCompletionChecklist
           if (_showCompleted) ...[
             Text(
               'Nicely done! These items are checked off the list.',
-              style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray500),
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: FigmaColors.gray500,
+              ),
             ),
             const SizedBox(height: 8),
             for (final item in completed) ...[
-              _RequirementTile(item: item, onTap: () => widget.onTap(item.id), completedStyle: true),
+              _RequirementTile(
+                item: item,
+                onTap: () => widget.onTap(item.id),
+                completedStyle: true,
+              ),
               const Divider(height: 1, color: FigmaColors.gray100),
             ],
           ],
@@ -762,7 +853,10 @@ class _ProfileCompletionChecklistState extends State<_ProfileCompletionChecklist
               foregroundColor: FigmaColors.white,
               padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
             ),
-            child: Text('Close', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+            child: Text(
+              'Close',
+              style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+            ),
           ),
         ),
       ],
@@ -795,10 +889,18 @@ class _RequirementTile extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(top: 2),
                 child: item.done
-                    ? const Icon(Icons.check_circle, color: FigmaColors.navy, size: 22)
+                    ? const Icon(
+                        Icons.check_circle,
+                        color: FigmaColors.navy,
+                        size: 22,
+                      )
                     : Icon(
-                        item.partial ? Icons.radio_button_checked : Icons.circle_outlined,
-                        color: item.partial ? FigmaColors.gray500 : FigmaColors.gray400,
+                        item.partial
+                            ? Icons.radio_button_checked
+                            : Icons.circle_outlined,
+                        color: item.partial
+                            ? FigmaColors.gray500
+                            : FigmaColors.gray400,
                         size: 22,
                       ),
               ),
@@ -812,13 +914,19 @@ class _RequirementTile extends StatelessWidget {
                       style: GoogleFonts.inter(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
-                        color: completedStyle ? FigmaColors.gray700 : FigmaColors.gray900,
+                        color: completedStyle
+                            ? FigmaColors.gray700
+                            : FigmaColors.gray900,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       item.subtitle,
-                      style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray500, height: 1.35),
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: FigmaColors.gray500,
+                        height: 1.35,
+                      ),
                     ),
                   ],
                 ),
@@ -826,15 +934,26 @@ class _RequirementTile extends StatelessWidget {
               if (!item.done && item.weightPercent > 0)
                 Text(
                   '+${item.weightPercent}%',
-                  style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: FigmaColors.navy),
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: FigmaColors.navy,
+                  ),
                 )
               else if (item.progressDetail != null)
                 Text(
                   item.progressDetail!,
-                  style: GoogleFonts.inter(fontSize: 12, color: FigmaColors.gray500),
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: FigmaColors.gray500,
+                  ),
                 ),
               const SizedBox(width: 4),
-              const Icon(Icons.chevron_right, color: FigmaColors.gray400, size: 20),
+              const Icon(
+                Icons.chevron_right,
+                color: FigmaColors.gray400,
+                size: 20,
+              ),
             ],
           ),
         ),

@@ -4,6 +4,11 @@ class Inquiry {
   Inquiry(this.id, this.data);
   final String id;
   final Map<String, dynamic> data;
+  int unreadFor(String uid) =>
+      (data[uid == customerId ? 'customerUnreadCount' : 'providerUnreadCount']
+              as num?)
+          ?.toInt() ??
+      0;
   String get customerId => data['customerId'] as String;
   String get providerId => data['providerId'] as String;
   String get serviceId => data['serviceId'] as String;
@@ -15,7 +20,8 @@ class Inquiry {
   bool get hasDiscussion =>
       (data['customerMessageCount'] as num? ?? 0) > 0 &&
       (data['providerMessageCount'] as num? ?? 0) > 0;
-  List<String> get blockedBy => List<String>.from(data['blockedBy'] as List? ?? const []);
+  List<String> get blockedBy =>
+      List<String>.from(data['blockedBy'] as List? ?? const []);
   bool get isBlocked => blockedBy.isNotEmpty;
   DateTime get updatedAt =>
       (data['updatedAt'] as Timestamp?)?.toDate() ?? DateTime(2000);

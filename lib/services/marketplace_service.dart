@@ -4,6 +4,30 @@ import '../constants/functions_config.dart';
 import '../models/inquiry.dart';
 
 class MarketplaceService {
+  static Future<String> bookingInquiry(String bookingId) async {
+    Map<String, dynamic> result;
+    do {
+      result = await command('inquiryCommand', {
+        'action': 'bookingThread',
+        'bookingId': bookingId,
+      });
+    } while (result['hasMore'] == true);
+    return result['inquiryId'] as String;
+  }
+
+  static Future<void> syncBookingConversations() async {
+    String cursor = '';
+    bool more;
+    do {
+      final result = await command('inquiryCommand', {
+        'action': 'syncBookings',
+        'cursor': cursor,
+      });
+      more = result['hasMore'] == true;
+      cursor = result['cursor'] as String? ?? '';
+    } while (more);
+  }
+
   static final _db = FirebaseFirestore.instance;
   static Future<Map<String, dynamic>> command(
     String name,

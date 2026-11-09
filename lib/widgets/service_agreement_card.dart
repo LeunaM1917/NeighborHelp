@@ -15,6 +15,9 @@ Future<bool> reviewAndRespondToOffer(
 }) async {
   final current = await FirestoreService().getBooking(booking.bookingId);
   if (current == null || !context.mounted) return false;
+  if (current.isExpired) {
+    throw StateError('This offer expired. Discuss and send a new offer.');
+  }
   if (accept) {
     if (current.agreement == null) {
       throw StateError(
@@ -56,7 +59,7 @@ class OfferChangeButton extends StatelessWidget {
             controller: reason,
             maxLength: 3000,
             maxLines: 4,
-            decoration:  InputDecoration(
+            decoration: InputDecoration(
               hintText:
                   'Explain the scope, price or schedule changes needed. The customer must send a revised offer.',
             ),
@@ -174,11 +177,23 @@ class ServiceAgreementCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(context.tr('Service agreement'),
+            if (booking.isPending || booking.isExpired)
+              Semantics(
+                liveRegion: true,
+                child: Text(
+                  booking.isExpired
+                      ? 'Offer expired. Discuss a new schedule and send a new offer to continue.'
+                      : 'Respond by ${DateFormat('MMM d, yyyy h:mm a').format(booking.offerDeadline.toUtc().add(const Duration(hours: 8)))} Manila time. Unanswered offers expire after 72 hours or when work starts, whichever comes first.',
+                ),
+              ),
+            Text(
+              context.tr('Service agreement'),
               style: Theme.of(context).textTheme.titleMedium,
             ),
             Text(
-              booking.providerAcceptedAt == null
+              booking.isExpired
+                  ? 'Expired without provider acceptance'
+                  : booking.providerAcceptedAt == null
                   ? 'Offered by customer · awaiting provider acceptance'
                   : 'Accepted by both parties',
             ),
@@ -204,7 +219,7 @@ class ServiceAgreementCard extends StatelessWidget {
                 } catch (_) {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                       SnackBar(
+                      SnackBar(
                         content: Text(
                           'Could not download. You can copy the agreement text above.',
                         ),

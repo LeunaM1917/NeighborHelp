@@ -1,0 +1,51 @@
+{
+  "recordedAtUtc": "2026-11-09T08:08:17.243623+00:00",
+  "scope": "Unified protected conversations, Panabo barangay-only provider locations, time off, offer expiry and accessibility",
+  "checks": {
+    "flutterAnalyze": "passed",
+    "flutterTests": 151,
+    "nodeUnitTests": 15,
+    "firebaseDemoEmulatorTests": 82,
+    "webRelease": "passed",
+    "androidArm64Release": "passed"
+  },
+  "accessibility": {
+    "narrowWidthPixels": 320,
+    "textScales": [
+      1,
+      2,
+      3
+    ],
+    "automatedChecks": [
+      "target sizes",
+      "target labels",
+      "text contrast",
+      "keyboard sending",
+      "keyboard dialog dismissal",
+      "large-text selection dialog",
+      "map alternative list",
+      "expired offer copy"
+    ]
+  },
+  "catalog": {
+    "barangayCount": 40,
+    "version": 1,
+    "sourceSha256": "10606e46cd7b4b34a61f4975f3568bb3c11a48fa355cbe3c4d78c3737e0fcfa9",
+    "source": "https://github.com/bendlikeabamboo/barangay-boundaries-repository/blob/main/2023-10-24/hierarchical_t0p005/barangays.geojson"
+  },
+  "androidApk": {
+    "path": "build/app/outputs/flutter-apk/app-release.apk",
+    "bytes": 27143971,
+    "sha256": "776034f08e7d993635fc3ea4d9e1c3cd29260df4d9291685f690c5cc976ab9a3"
+  },
+  "production": {
+    "deployed": false,
+    "migrationRun": false
+  },
+  "remainingManualValidation": [
+    "Actual TalkBack/VoiceOver and browser screen-reader use",
+    "Native review of new helper translations",
+    "City confirmation of indicative barangay coverage near boundaries",
+    "Coordinated production rollout and reviewed location migration"
+  ]
+}

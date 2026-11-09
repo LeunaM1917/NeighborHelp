@@ -3,6 +3,7 @@ import '../../../utils/service_search.dart';
 import '../../../services/provider_recommendation_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import '../../../utils/barangay_coverage.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../figma_ui/figma_colors.dart';
@@ -31,7 +32,11 @@ enum _BrowseListFilter { all, topRated, nearest, mostBooked, newest }
 enum _BrowseSort { recommended, priceLow, priceHigh, rating }
 
 class CustomerBrowseTab extends StatefulWidget {
-  const CustomerBrowseTab({super.key, required this.appUser, this.scrollController});
+  const CustomerBrowseTab({
+    super.key,
+    required this.appUser,
+    this.scrollController,
+  });
 
   final AppUser appUser;
   final ScrollController? scrollController;
@@ -80,14 +85,34 @@ class _CustomerBrowseTabState extends State<CustomerBrowseTab> {
     });
   }
 
-  List<CustomerBrowseServiceItem> _filterAndSort(List<CustomerBrowseServiceItem> items) {
-    var list = items.where((s) => matchesServiceFilters(price: s.price, rating: s.rating,
-      area: s.serviceArea, profile: s.profile, location: _location, priceFilter: _priceFilter,
-      ratingFilter: _ratingFilter, availability: _availabilityFilter)).toList();
+  List<CustomerBrowseServiceItem> _filterAndSort(
+    List<CustomerBrowseServiceItem> items,
+  ) {
+    var list = items
+        .where(
+          (s) => matchesServiceFilters(
+            price: s.price,
+            rating: s.rating,
+            area: s.serviceArea,
+            profile: s.profile,
+            location: _location,
+            priceFilter: _priceFilter,
+            ratingFilter: _ratingFilter,
+            availability: _availabilityFilter,
+          ),
+        )
+        .toList();
 
     final origin = geoPointOrNull(widget.appUser.location);
     if (origin != null && !isDefaultSignupLocation(origin)) {
-      list = list.where((s) => _straightLineKm(origin, s) <= _radiusKm && _straightLineKm(origin, s) <= (s.profile?.serviceRadiusKm ?? 0)).toList();
+      list = list
+          .where(
+            (s) =>
+                _straightLineKm(origin, s) <= _radiusKm &&
+                (s.profile != null &&
+                    barangaysCover(s.profile!.serviceBarangayIds, origin)),
+          )
+          .toList();
     }
     if (_query.isNotEmpty) {
       list = list
@@ -142,11 +167,22 @@ class _CustomerBrowseTabState extends State<CustomerBrowseTab> {
         break;
       case _BrowseSort.recommended:
         if (_listFilter == _BrowseListFilter.all) {
-          final profiles = {for (final item in list) if (item.profile != null) item.profile!.providerId: item.profile!};
-          final ranked = rankProvidersByRecommendation(providers: profiles.values.toList(), customerOrigin: widget.appUser.location, maxSearchRadiusKm: _radiusKm);
+          final profiles = {
+            for (final item in list)
+              if (item.profile != null) item.profile!.providerId: item.profile!,
+          };
+          final ranked = rankProvidersByRecommendation(
+            providers: profiles.values.toList(),
+            customerOrigin: widget.appUser.location,
+            maxSearchRadiusKm: _radiusKm,
+          );
           final rank = {for (final r in ranked) r.profile.providerId: r.rank};
           list.removeWhere((s) => !rank.containsKey(s.listing?.providerId));
-          list.sort((a, b) => rank[a.listing!.providerId]!.compareTo(rank[b.listing!.providerId]!));
+          list.sort(
+            (a, b) => rank[a.listing!.providerId]!.compareTo(
+              rank[b.listing!.providerId]!,
+            ),
+          );
         }
         break;
     }
@@ -193,7 +229,20 @@ class _CustomerBrowseTabState extends State<CustomerBrowseTab> {
                       onSubmitted: (_) => _applyFilters(),
                     ),
                     const SizedBox(height: 36),
-                    OutlinedButton.icon(onPressed:()=>Navigator.push<void>(context,MaterialPageRoute(builder:(_)=>ScheduledProviderSearchScreen(appUser:widget.appUser))),icon:const Icon(Icons.event_available),label:const Text('Find providers available for your work schedule')),
+                    OutlinedButton.icon(
+                      onPressed: () => Navigator.push<void>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ScheduledProviderSearchScreen(
+                            appUser: widget.appUser,
+                          ),
+                        ),
+                      ),
+                      icon: const Icon(Icons.event_available),
+                      label: const Text(
+                        'Find providers available for your work schedule',
+                      ),
+                    ),
                     LayoutBuilder(
                       builder: (context, c) {
                         final twoColumn = c.maxWidth >= _twoColumnMinWidth;
@@ -209,7 +258,10 @@ class _CustomerBrowseTabState extends State<CustomerBrowseTab> {
                             children: [
                               Expanded(child: categories),
                               const SizedBox(width: _columnGap),
-                              const SizedBox(width: _sidebarWidth, child: sidebar),
+                              const SizedBox(
+                                width: _sidebarWidth,
+                                child: sidebar,
+                              ),
                             ],
                           );
                         }
@@ -233,22 +285,28 @@ class _CustomerBrowseTabState extends State<CustomerBrowseTab> {
                       rating: _ratingFilter,
                       availability: _availabilityFilter,
                       onCategory: (v) => setState(() => _categoryFilter = v),
-                      onLocation: (v) => setState(() => _location = v ?? 'Panabo City'),
-                      onClearLocation: () => setState(() => _location = 'Panabo City'),
+                      onLocation: (v) =>
+                          setState(() => _location = v ?? 'Panabo City'),
+                      onClearLocation: () =>
+                          setState(() => _location = 'Panabo City'),
                       onPrice: (v) => setState(() => _priceFilter = v),
                       onRating: (v) => setState(() => _ratingFilter = v),
-                      onAvailability: (v) => setState(() => _availabilityFilter = v),
+                      onAvailability: (v) =>
+                          setState(() => _availabilityFilter = v),
                       onApply: _applyFilters,
                     ),
                     const SizedBox(height: 32),
                     DataStreamBuilder<List<ServiceListing>>(
- label: 'services', onRetry: () => FirestoreService().retryDataLoads(),
+                      label: 'services',
+                      onRetry: () => FirestoreService().retryDataLoads(),
                       stream: firestore.activeServicesStream(),
                       builder: (context, serviceSnap) {
                         if (isStreamWaiting(serviceSnap)) {
                           return const Padding(
                             padding: EdgeInsets.symmetric(vertical: 48),
-                            child: LoadingIndicator(message: 'Loading services…'),
+                            child: LoadingIndicator(
+                              message: 'Loading services…',
+                            ),
                           );
                         }
                         if (serviceSnap.hasError) {
@@ -260,15 +318,19 @@ class _CustomerBrowseTabState extends State<CustomerBrowseTab> {
                         }
 
                         return DataStreamBuilder<List<ServiceProviderProfile>>(
- label: 'providers', onRetry: () => FirestoreService().retryDataLoads(),
+                          label: 'providers',
+                          onRetry: () => FirestoreService().retryDataLoads(),
                           stream: firestore.serviceProvidersStream(),
                           builder: (context, providerSnap) {
                             return DataStreamBuilder<List<AppUser>>(
- label: 'profiles', onRetry: () => FirestoreService().retryDataLoads(),
+                              label: 'profiles',
+                              onRetry: () =>
+                                  FirestoreService().retryDataLoads(),
                               stream: firestore.allUsersStream(),
                               builder: (context, userSnap) {
                                 final Map<String, AppUser> users = {
-                                  for (final u in userSnap.data ?? []) u.userId: u,
+                                  for (final u in userSnap.data ?? [])
+                                    u.userId: u,
                                 };
                                 final allItems = buildCustomerBrowseServices(
                                   live: serviceSnap.data ?? [],
@@ -282,10 +344,14 @@ class _CustomerBrowseTabState extends State<CustomerBrowseTab> {
                                 final safePage = _page.clamp(0, totalPages - 1);
                                 final pageItems = filtered.isEmpty
                                     ? <CustomerBrowseServiceItem>[]
-                                    : filtered.skip(safePage * _pageSize).take(_pageSize).toList();
+                                    : filtered
+                                          .skip(safePage * _pageSize)
+                                          .take(_pageSize)
+                                          .toList();
 
                                 return Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
                                   children: [
                                     _AllServicesHeader(
                                       total: filtered.length,
@@ -301,7 +367,9 @@ class _CustomerBrowseTabState extends State<CustomerBrowseTab> {
                                     if (pageItems.isEmpty)
                                       FigmaEmptyState(
                                         icon: Icons.search_off_outlined,
-                                        title: _query.isEmpty ? 'No services yet' : 'No matches',
+                                        title: _query.isEmpty
+                                            ? 'No services yet'
+                                            : 'No matches',
                                         message: _query.isEmpty
                                             ? 'Providers are adding listings — check back soon.'
                                             : 'Try different filters or search terms.',
@@ -312,23 +380,27 @@ class _CustomerBrowseTabState extends State<CustomerBrowseTab> {
                                           final cols = gridC.maxWidth >= 1100
                                               ? 4
                                               : gridC.maxWidth >= 820
-                                                  ? 3
-                                                  : gridC.maxWidth >= 520
-                                                      ? 2
-                                                      : 1;
+                                              ? 3
+                                              : gridC.maxWidth >= 520
+                                              ? 2
+                                              : 1;
                                           return GridView.builder(
                                             shrinkWrap: true,
-                                            physics: const NeverScrollableScrollPhysics(),
-                                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                                              crossAxisCount: cols,
-                                              mainAxisSpacing: 20,
-                                              crossAxisSpacing: 20,
-                                              mainAxisExtent: 340,
-                                            ),
+                                            physics:
+                                                const NeverScrollableScrollPhysics(),
+                                            gridDelegate:
+                                                SliverGridDelegateWithFixedCrossAxisCount(
+                                                  crossAxisCount: cols,
+                                                  mainAxisSpacing: 20,
+                                                  crossAxisSpacing: 20,
+                                                  mainAxisExtent: 340,
+                                                ),
                                             itemCount: pageItems.length,
                                             itemBuilder: (context, i) {
                                               final item = pageItems[i];
-                                              final saved = _saved.contains(item.title);
+                                              final saved = _saved.contains(
+                                                item.title,
+                                              );
                                               return _BrowseServiceCard(
                                                 item: item,
                                                 saved: saved,
@@ -341,7 +413,8 @@ class _CustomerBrowseTabState extends State<CustomerBrowseTab> {
                                                     }
                                                   });
                                                 },
-                                                onTap: () => _openService(context, item),
+                                                onTap: () =>
+                                                    _openService(context, item),
                                               );
                                             },
                                           );
@@ -352,7 +425,8 @@ class _CustomerBrowseTabState extends State<CustomerBrowseTab> {
                                       _BrowsePagination(
                                         page: safePage,
                                         totalPages: totalPages,
-                                        onPage: (p) => setState(() => _page = p),
+                                        onPage: (p) =>
+                                            setState(() => _page = p),
                                       ),
                                     ],
                                   ],
@@ -397,7 +471,10 @@ class _BrowseHero extends StatelessWidget {
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [rc.tint, FigmaColors.tintGreen2.withValues(alpha: 0.55)],
+                  colors: [
+                    rc.tint,
+                    FigmaColors.tintGreen2.withValues(alpha: 0.55),
+                  ],
                 ),
               ),
             ),
@@ -424,12 +501,21 @@ class _BrowseHero extends StatelessWidget {
               children: [
                 Text(
                   'Browse services',
-                  style: GoogleFonts.inter(fontSize: 36, fontWeight: FontWeight.w700, color: FigmaColors.gray900, height: 1.1),
+                  style: GoogleFonts.inter(
+                    fontSize: 36,
+                    fontWeight: FontWeight.w700,
+                    color: FigmaColors.gray900,
+                    height: 1.1,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   'Search by category, service, or provider near you.',
-                  style: GoogleFonts.inter(fontSize: 16, color: FigmaColors.gray600, height: 1.45),
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    color: FigmaColors.gray600,
+                    height: 1.45,
+                  ),
                 ),
                 const SizedBox(height: 24),
                 AppSearchField(
@@ -458,7 +544,10 @@ class _BrowseHousesPainter extends CustomPainter {
 
     void drawHouse(double x, double w, double h) {
       final base = Rect.fromLTWH(x, size.height - h, w, h * 0.65);
-      canvas.drawRRect(RRect.fromRectAndRadius(base, const Radius.circular(4)), house);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(base, const Radius.circular(4)),
+        house,
+      );
       final path = Path()
         ..moveTo(x - 5, base.top)
         ..lineTo(x + w / 2, base.top - h * 0.32)
@@ -475,7 +564,8 @@ class _BrowseHousesPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _BrowseHousesPainter old) => old.accent != accent;
+  bool shouldRepaint(covariant _BrowseHousesPainter old) =>
+      old.accent != accent;
 }
 
 class _BrowseFilterBar extends StatelessWidget {
@@ -550,18 +640,28 @@ class _BrowseFilterBar extends StatelessWidget {
             const SizedBox(width: 4),
             IconButton(
               onPressed: onClearLocation,
-              icon: const Icon(Icons.close, size: 18, color: FigmaColors.gray500),
+              icon: const Icon(
+                Icons.close,
+                size: 18,
+                color: FigmaColors.gray500,
+              ),
               tooltip: 'Reset location',
               visualDensity: VisualDensity.compact,
               style: IconButton.styleFrom(
                 backgroundColor: FigmaColors.white,
                 side: const BorderSide(color: FigmaColors.gray200),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
             ),
           ],
         ),
-        _FilterChipDropdown(label: '${radiusKm.toInt()} km radius', items: const ['5 km', '10 km', '15 km', '25 km', '50 km'], onSelected: (v) => onRadius(double.parse(v.split(' ').first))),
+        _FilterChipDropdown(
+          label: '${radiusKm.toInt()} km radius',
+          items: const ['5 km', '10 km', '15 km', '25 km', '50 km'],
+          onSelected: (v) => onRadius(double.parse(v.split(' ').first)),
+        ),
         _FilterChipDropdown(
           label: price ?? 'Price Range',
           items: const ['Any price', 'Under ₱300', '₱300 – ₱500', '₱500+'],
@@ -583,10 +683,15 @@ class _BrowseFilterBar extends StatelessWidget {
             backgroundColor: rc.primary,
             foregroundColor: rc.onPrimary,
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
             elevation: 0,
           ),
-          child: Text('Apply Filters', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)),
+          child: Text(
+            'Apply Filters',
+            style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600),
+          ),
         ),
       ],
     );
@@ -612,7 +717,10 @@ class _FilterChipDropdown extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       itemBuilder: (context) => [
         for (final item in items)
-          PopupMenuItem(value: item, child: Text(item, style: GoogleFonts.inter(fontSize: 14))),
+          PopupMenuItem(
+            value: item,
+            child: Text(item, style: GoogleFonts.inter(fontSize: 14)),
+          ),
       ],
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -624,9 +732,19 @@ class _FilterChipDropdown extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(label, style: GoogleFonts.inter(fontSize: 14, color: FigmaColors.gray800)),
+            Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: FigmaColors.gray800,
+              ),
+            ),
             const SizedBox(width: 4),
-            const Icon(Icons.keyboard_arrow_down, size: 18, color: FigmaColors.gray500),
+            const Icon(
+              Icons.keyboard_arrow_down,
+              size: 18,
+              color: FigmaColors.gray500,
+            ),
           ],
         ),
       ),
@@ -637,7 +755,10 @@ class _FilterChipDropdown extends StatelessWidget {
 // --- Categories + sidebar ---
 
 class _BrowseCategoriesBlock extends StatelessWidget {
-  const _BrowseCategoriesBlock({required this.appUser, required this.onViewAll});
+  const _BrowseCategoriesBlock({
+    required this.appUser,
+    required this.onViewAll,
+  });
 
   final AppUser appUser;
   final VoidCallback onViewAll;
@@ -655,14 +776,22 @@ class _BrowseCategoriesBlock extends StatelessWidget {
             Expanded(
               child: Text(
                 'Browse by category',
-                style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w700, color: FigmaColors.gray900),
+                style: GoogleFonts.inter(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: FigmaColors.gray900,
+                ),
               ),
             ),
             TextButton(
               onPressed: onViewAll,
               child: Text(
                 'View all categories',
-                style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: rc.primary),
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: rc.primary,
+                ),
               ),
             ),
           ],
@@ -732,7 +861,11 @@ class _BrowseCategoryTileState extends State<_BrowseCategoryTile> {
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: border, width: _hover ? 2 : 1),
               boxShadow: [
-                BoxShadow(color: Colors.black.withValues(alpha: _hover ? 0.06 : 0.03), blurRadius: 10, offset: const Offset(0, 3)),
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: _hover ? 0.06 : 0.03),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
+                ),
               ],
             ),
             child: Column(
@@ -741,8 +874,15 @@ class _BrowseCategoryTileState extends State<_BrowseCategoryTile> {
                 Container(
                   width: 44,
                   height: 44,
-                  decoration: BoxDecoration(color: widget.category.bg, borderRadius: BorderRadius.circular(8)),
-                  child: Icon(widget.category.icon, size: 24, color: widget.category.fg),
+                  decoration: BoxDecoration(
+                    color: widget.category.bg,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    widget.category.icon,
+                    size: 24,
+                    color: widget.category.fg,
+                  ),
                 ),
                 const SizedBox(height: 10),
                 Text(
@@ -750,12 +890,20 @@ class _BrowseCategoryTileState extends State<_BrowseCategoryTile> {
                   textAlign: TextAlign.center,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: FigmaColors.gray900, height: 1.2),
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: FigmaColors.gray900,
+                    height: 1.2,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   '${widget.category.serviceCount} services',
-                  style: GoogleFonts.inter(fontSize: 12, color: FigmaColors.gray500),
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: FigmaColors.gray500,
+                  ),
                 ),
               ],
             ),
@@ -770,10 +918,26 @@ class _BrowseInsightSidebar extends StatelessWidget {
   const _BrowseInsightSidebar();
 
   static const _cards = [
-    (Icons.verified_outlined, 'Verified providers', 'Every provider is reviewed and background-checked.'),
-    (Icons.payments_outlined, 'Clear pricing', 'See rates upfront before you send a booking request.'),
-    (Icons.lock_outline, 'Secure bookings', 'Book and message safely through NeighborHelp.'),
-    (Icons.favorite_outline, 'Support your neighborhood', 'Help local providers grow their business nearby.'),
+    (
+      Icons.verified_outlined,
+      'Verified providers',
+      'Every provider is reviewed and background-checked.',
+    ),
+    (
+      Icons.payments_outlined,
+      'Clear pricing',
+      'See rates upfront before you send a booking request.',
+    ),
+    (
+      Icons.lock_outline,
+      'Secure bookings',
+      'Book and message safely through NeighborHelp.',
+    ),
+    (
+      Icons.favorite_outline,
+      'Support your neighborhood',
+      'Help local providers grow their business nearby.',
+    ),
   ];
 
   @override
@@ -791,7 +955,10 @@ class _BrowseInsightSidebar extends StatelessWidget {
                 Container(
                   width: 40,
                   height: 40,
-                  decoration: BoxDecoration(color: rc.tint, borderRadius: BorderRadius.circular(10)),
+                  decoration: BoxDecoration(
+                    color: rc.tint,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                   child: Icon(_cards[i].$1, size: 22, color: rc.primary),
                 ),
                 const SizedBox(width: 12),
@@ -801,12 +968,20 @@ class _BrowseInsightSidebar extends StatelessWidget {
                     children: [
                       Text(
                         _cards[i].$2,
-                        style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700, color: FigmaColors.gray900),
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: FigmaColors.gray900,
+                        ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         _cards[i].$3,
-                        style: GoogleFonts.inter(fontSize: 12, color: FigmaColors.gray600, height: 1.4),
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: FigmaColors.gray600,
+                          height: 1.4,
+                        ),
                       ),
                     ],
                   ),
@@ -844,7 +1019,11 @@ class _AllServicesHeader extends StatelessWidget {
       children: [
         Text(
           'All services',
-          style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.w700, color: FigmaColors.gray900),
+          style: GoogleFonts.inter(
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+            color: FigmaColors.gray900,
+          ),
         ),
         const SizedBox(height: 14),
         LayoutBuilder(
@@ -894,7 +1073,11 @@ class _AllServicesHeader extends StatelessWidget {
             }
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [chips, const SizedBox(height: 12), Align(alignment: Alignment.centerRight, child: sortControl)],
+              children: [
+                chips,
+                const SizedBox(height: 12),
+                Align(alignment: Alignment.centerRight, child: sortControl),
+              ],
             );
           },
         ),
@@ -904,7 +1087,11 @@ class _AllServicesHeader extends StatelessWidget {
 }
 
 class _ListFilterChip extends StatelessWidget {
-  const _ListFilterChip({required this.label, required this.selected, required this.onTap});
+  const _ListFilterChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
 
   final String label;
   final bool selected;
@@ -923,7 +1110,9 @@ class _ListFilterChip extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: selected ? rc.primary : FigmaColors.gray200),
+            border: Border.all(
+              color: selected ? rc.primary : FigmaColors.gray200,
+            ),
           ),
           child: Text(
             label,
@@ -946,11 +1135,11 @@ class _SortDropdown extends StatelessWidget {
   final ValueChanged<_BrowseSort> onSort;
 
   String get _label => switch (sort) {
-        _BrowseSort.recommended => 'Recommended',
-        _BrowseSort.priceLow => 'Price: Low to High',
-        _BrowseSort.priceHigh => 'Price: High to Low',
-        _BrowseSort.rating => 'Highest Rated',
-      };
+    _BrowseSort.recommended => 'Recommended',
+    _BrowseSort.priceLow => 'Price: Low to High',
+    _BrowseSort.priceHigh => 'Price: High to Low',
+    _BrowseSort.rating => 'Highest Rated',
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -960,16 +1149,42 @@ class _SortDropdown extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('Sort by: ', style: GoogleFonts.inter(fontSize: 14, color: FigmaColors.gray600)),
-          Text(_label, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: FigmaColors.gray900)),
-          const Icon(Icons.keyboard_arrow_down, size: 18, color: FigmaColors.gray600),
+          Text(
+            'Sort by: ',
+            style: GoogleFonts.inter(fontSize: 14, color: FigmaColors.gray600),
+          ),
+          Text(
+            _label,
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: FigmaColors.gray900,
+            ),
+          ),
+          const Icon(
+            Icons.keyboard_arrow_down,
+            size: 18,
+            color: FigmaColors.gray600,
+          ),
         ],
       ),
       itemBuilder: (context) => [
-        const PopupMenuItem(value: _BrowseSort.recommended, child: Text('Recommended')),
-        const PopupMenuItem(value: _BrowseSort.priceLow, child: Text('Price: Low to High')),
-        const PopupMenuItem(value: _BrowseSort.priceHigh, child: Text('Price: High to Low')),
-        const PopupMenuItem(value: _BrowseSort.rating, child: Text('Highest Rated')),
+        const PopupMenuItem(
+          value: _BrowseSort.recommended,
+          child: Text('Recommended'),
+        ),
+        const PopupMenuItem(
+          value: _BrowseSort.priceLow,
+          child: Text('Price: Low to High'),
+        ),
+        const PopupMenuItem(
+          value: _BrowseSort.priceHigh,
+          child: Text('Price: High to Low'),
+        ),
+        const PopupMenuItem(
+          value: _BrowseSort.rating,
+          child: Text('Highest Rated'),
+        ),
       ],
     );
   }
@@ -1001,7 +1216,11 @@ class _BrowseServiceCardState extends State<_BrowseServiceCard> {
     final item = widget.item;
     final ratingText = item.rating > 0 ? item.rating.toStringAsFixed(1) : '—';
     final avatarBg = item.providerAvatarColor ?? rc.tint;
-    final initial = item.providerInitial ?? (item.providerName.isNotEmpty ? item.providerName[0].toUpperCase() : '?');
+    final initial =
+        item.providerInitial ??
+        (item.providerName.isNotEmpty
+            ? item.providerName[0].toUpperCase()
+            : '?');
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
@@ -1017,7 +1236,9 @@ class _BrowseServiceCardState extends State<_BrowseServiceCard> {
           child: DecoratedBox(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: _hover ? rc.primary : FigmaColors.gray200),
+              border: Border.all(
+                color: _hover ? rc.primary : FigmaColors.gray200,
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1027,22 +1248,34 @@ class _BrowseServiceCardState extends State<_BrowseServiceCard> {
                     fit: StackFit.expand,
                     children: [
                       ClipRRect(
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
-                        child: FigmaNetworkImage(url: item.imageUrl, fit: BoxFit.cover),
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(11),
+                        ),
+                        child: FigmaNetworkImage(
+                          url: item.imageUrl,
+                          fit: BoxFit.cover,
+                        ),
                       ),
                       if (item.verified)
                         Positioned(
                           top: 10,
                           left: 10,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: rc.primary,
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
                               'Verified',
-                              style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: rc.onPrimary),
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: rc.onPrimary,
+                              ),
                             ),
                           ),
                         ),
@@ -1054,8 +1287,12 @@ class _BrowseServiceCardState extends State<_BrowseServiceCard> {
                           shape: const CircleBorder(),
                           child: IconButton(
                             icon: Icon(
-                              widget.saved ? Icons.bookmark : Icons.bookmark_border,
-                              color: widget.saved ? rc.primary : FigmaColors.gray600,
+                              widget.saved
+                                  ? Icons.bookmark
+                                  : Icons.bookmark_border,
+                              color: widget.saved
+                                  ? rc.primary
+                                  : FigmaColors.gray600,
                               size: 20,
                             ),
                             onPressed: widget.onToggleSave,
@@ -1075,14 +1312,21 @@ class _BrowseServiceCardState extends State<_BrowseServiceCard> {
                         item.title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700, color: FigmaColors.gray900),
+                        style: GoogleFonts.inter(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: FigmaColors.gray900,
+                        ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         item.category,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray500),
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: FigmaColors.gray500,
+                        ),
                       ),
                       const SizedBox(height: 10),
                       Row(
@@ -1090,9 +1334,18 @@ class _BrowseServiceCardState extends State<_BrowseServiceCard> {
                           CircleAvatar(
                             radius: 12,
                             backgroundColor: avatarBg,
-                            backgroundImage: item.providerPhotoUrl != null ? NetworkImage(item.providerPhotoUrl!) : null,
+                            backgroundImage: item.providerPhotoUrl != null
+                                ? NetworkImage(item.providerPhotoUrl!)
+                                : null,
                             child: item.providerPhotoUrl == null
-                                ? Text(initial, style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w700, color: rc.primary))
+                                ? Text(
+                                    initial,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: rc.primary,
+                                    ),
+                                  )
                                 : null,
                           ),
                           const SizedBox(width: 8),
@@ -1101,7 +1354,11 @@ class _BrowseServiceCardState extends State<_BrowseServiceCard> {
                               item.providerName,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500, color: FigmaColors.gray800),
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: FigmaColors.gray800,
+                              ),
                             ),
                           ),
                         ],
@@ -1109,16 +1366,27 @@ class _BrowseServiceCardState extends State<_BrowseServiceCard> {
                       const SizedBox(height: 10),
                       Row(
                         children: [
-                          const Icon(Icons.star_rounded, size: 16, color: Color(0xFFEAB308)),
+                          const Icon(
+                            Icons.star_rounded,
+                            size: 16,
+                            color: Color(0xFFEAB308),
+                          ),
                           const SizedBox(width: 4),
                           Text(
                             '$ratingText (${item.reviews})',
-                            style: GoogleFonts.inter(fontSize: 12, color: FigmaColors.gray600),
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: FigmaColors.gray600,
+                            ),
                           ),
                           const Spacer(),
                           Text(
                             '₱${item.price.toStringAsFixed(0)}',
-                            style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w700, color: rc.primary),
+                            style: GoogleFonts.inter(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: rc.primary,
+                            ),
                           ),
                         ],
                       ),
@@ -1169,7 +1437,13 @@ class _BrowsePagination extends StatelessWidget {
             if (n == null)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: Text('…', style: GoogleFonts.inter(fontSize: 14, color: FigmaColors.gray500)),
+                child: Text(
+                  '…',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    color: FigmaColors.gray500,
+                  ),
+                ),
               )
             else
               _PageNumber(
@@ -1190,7 +1464,11 @@ class _BrowsePagination extends StatelessWidget {
 }
 
 class _PageArrow extends StatelessWidget {
-  const _PageArrow({required this.icon, required this.enabled, required this.onTap});
+  const _PageArrow({
+    required this.icon,
+    required this.enabled,
+    required this.onTap,
+  });
 
   final IconData icon;
   final bool enabled;
@@ -1200,7 +1478,10 @@ class _PageArrow extends StatelessWidget {
   Widget build(BuildContext context) {
     return IconButton(
       onPressed: enabled ? onTap : null,
-      icon: Icon(icon, color: enabled ? FigmaColors.gray700 : FigmaColors.gray300),
+      icon: Icon(
+        icon,
+        color: enabled ? FigmaColors.gray700 : FigmaColors.gray300,
+      ),
       style: IconButton.styleFrom(
         backgroundColor: FigmaColors.white,
         side: const BorderSide(color: FigmaColors.gray200),

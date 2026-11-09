@@ -11,7 +11,7 @@ module.exports=({db,functions})=>async(data,context)=>{
     if(actor?.accountStatus !== 'Active' || !contract || ![contract.customerId,contract.providerId].includes(uid)) fail('permission-denied','Only the active contract participants may close it.');
     if(contract.status === 'ended') return {ended:true};
     const bookings=await tx.get(db.collection('bookings').where('contractId','==',id));
-    if(bookings.docs.some(d=>active(d.data()) || d.data().status === 'Pending')) fail('failed-precondition','Complete or cancel the outstanding work before closing this contract.');
+    if(bookings.docs.some(d=>active(d.data()) || d.data().status === 'Pending' && !require('./offer_expiry').expired(d.data()))) fail('failed-precondition','Complete or cancel the outstanding work before closing this contract.');
     tx.update(ref,{status:'ended',endedAt:FieldValue.serverTimestamp(),endedByUserId:uid,endedByRole:uid === contract.customerId ? 'customer' : 'provider',updatedAt:FieldValue.serverTimestamp()});
     tx.create(db.collection('auditLogs').doc(),{actorId:uid,actorRole:actor.role,action:'contract.end',collection:'contracts',referenceId:id,createdAt:FieldValue.serverTimestamp()});
     return {ended:true};

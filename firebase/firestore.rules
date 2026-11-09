@@ -30,6 +30,7 @@ service cloud.firestore {
       allow read: if isAdmin() || (signedIn() && request.auth.uid == id);
       allow create: if signedIn() && request.auth.uid == id
         && request.resource.data.role in ['Customer', 'Provider']
+        && (request.resource.data.role != 'Provider' || (request.resource.data.get('location', null) == null && request.resource.data.get('address', null) == null))
         && request.resource.data.accountStatus == 'Active'
         && request.resource.data.get('isVerified', false) == false
         && request.resource.data.get('verificationStatus', 'Pending') == 'Pending'
@@ -38,6 +39,7 @@ service cloud.firestore {
         && request.resource.data.get('verificationProvider', '') == '';
       allow update: if actorValid() && (isAdmin() || (signedIn() && request.auth.uid == id
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(ownerProfileFields())
+        && (resource.data.role != 'Provider' || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['address', 'location']))
         && (activeUser() || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['accountAppeal', 'accountAppealSubmittedAt', 'updatedAt', 'updatedBy']))));
       // Account deletion needs a retention review; never orphan its transaction records.
       allow delete: if false;
@@ -48,9 +50,9 @@ service cloud.firestore {
     }
     // Public projection contains display information only, never private IDs/contact details.
     match /publicProfiles/{id} { allow read: if activeUser(); allow write: if false; }
-    match /publicProviders/{id} { allow read: if activeUser(); allow write: if false; }
+    match /publicProviders/{id} { allow read: if activeUser() && resource.data.get('locationPolicyVersion', 0) == 1; allow write: if false; }
     function providerEditable() {
-      return ['bio', 'serviceArea', 'location', 'serviceRadiusKm', 'education', 'educationHistory', 'employmentHistory',
+      return ['bio', 'education', 'educationHistory', 'employmentHistory',
         'portfolioUrls', 'portfolioProjects', 'videoIntroUrl', 'certifications', 'certificationHistory', 'approvedCertificationIds',
         'otherExperiences', 'linkedAccounts', 'profileTraits', 'weeklyAvailability', 'updatedAt', 'updatedBy'];
     }
@@ -62,6 +64,11 @@ service cloud.firestore {
     match /serviceProviders/{id} {
       allow read: if isAdmin() || (signedIn() && request.auth.uid == id);
       allow create: if owns(id) && get(userPath()).data.role == 'Provider' && request.resource.data.userId == id
+        && request.resource.data.get('location', null) == null
+        && request.resource.data.get('baseBarangayId', null) == null
+        && request.resource.data.get('serviceBarangayIds', []).size() == 0
+        && request.resource.data.get('timeOff', []).size() == 0
+        && request.resource.data.get('locationPolicyVersion', 0) == 0
         && request.resource.data.isVerified == false
         && request.resource.data.get('verificationStatus', 'Pending') == 'Pending'
         && request.resource.data.get('diditStatus', '') == ''
@@ -141,13 +148,7 @@ service cloud.firestore {
     }
     match /messages/{id} {
       allow read: if activeUser() && (resource.data.senderId == request.auth.uid || resource.data.receiverId == request.auth.uid);
-      allow create: if participant(request.resource.data.bookingId)
-        && request.resource.data.senderId == request.auth.uid
-        && request.resource.data.receiverId in [get(bookingPath(request.resource.data.bookingId)).data.customerId, get(bookingPath(request.resource.data.bookingId)).data.providerId]
-        && request.resource.data.receiverId != request.auth.uid
-        && request.resource.data.messageType in ['Text', 'Image']
-        && request.resource.data.isRead == false
-        && request.resource.data.get('messageText', '').size() <= 6000;
+      allow create: if false;
       allow update: if owns(resource.data.receiverId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']) && request.resource.data.isRead == true;
       allow delete: if false;

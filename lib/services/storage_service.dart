@@ -21,8 +21,12 @@ class StorageService {
     }
     final format = ImageUploadFormat.inspect(bytes);
     final permit = await MarketplaceService.command('inquiryCommand', {
-      'action': 'authorizeUpload', 'inquiryId': inquiryId,
-      'permitId': FirebaseFirestore.instance.collection('inquiryUploads').doc().id,
+      'action': 'authorizeUpload',
+      'inquiryId': inquiryId,
+      'permitId': FirebaseFirestore.instance
+          .collection('inquiryUploads')
+          .doc()
+          .id,
       'extension': format.extension,
     });
     final ref = _storage.ref(
@@ -59,14 +63,8 @@ class StorageService {
     required String senderId,
     required Uint8List bytes,
   }) async {
-    if (bytes.length > 5 * 1024 * 1024) {
-      throw ArgumentError('Choose an image up to 5 MB.');
-    }
-    final ref = _storage.ref(
-      'messages/$bookingId/$senderId/${DateTime.now().microsecondsSinceEpoch}.jpg',
-    );
-    await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
-    return 'gs://${ref.bucket}/${ref.fullPath}';
+    final id = await MarketplaceService.bookingInquiry(bookingId);
+    return uploadInquiryImage(inquiryId: id, senderId: senderId, bytes: bytes);
   }
 
   Future<String> readableUrl(String value) => value.startsWith('gs://')

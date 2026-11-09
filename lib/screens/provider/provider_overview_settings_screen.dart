@@ -1,6 +1,5 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../utils/geo_location.dart';
-import '../../widgets/profile_location_editor.dart';
+import '../../widgets/provider_barangay_editor.dart';
+import '../../services/marketplace_service.dart';
 import '../../utils/image_upload.dart';
 import '../../widgets/profile_avatar.dart';
 import '../../widgets/enable_notifications_button.dart';
@@ -57,7 +56,10 @@ class ProviderOverviewSettingsScreen extends StatefulWidget {
       builder: (ctx) => providerThemed(
         Dialog(
           backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 24,
+            vertical: 28,
+          ),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 640, maxHeight: 920),
             child: Material(
@@ -77,27 +79,29 @@ class ProviderOverviewSettingsScreen extends StatefulWidget {
   }
 
   @override
-  State<ProviderOverviewSettingsScreen> createState() => _ProviderOverviewSettingsScreenState();
+  State<ProviderOverviewSettingsScreen> createState() =>
+      _ProviderOverviewSettingsScreenState();
 }
 
-class _ProviderOverviewSettingsScreenState extends State<ProviderOverviewSettingsScreen> {
+class _ProviderOverviewSettingsScreenState
+    extends State<ProviderOverviewSettingsScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _name;
   late final TextEditingController _phone;
   late final TextEditingController _email;
-  late final TextEditingController _address;
+  String? _baseId;
+  late Set<String> _serviceIds;
   late final TextEditingController _bio;
-  late double _radiusKm;
   late Set<String> _selectedTraits;
   String? _photoUrl;
   bool _saving = false;
   bool _uploadingPhoto = false;
-  GeoPoint? _mapLocation;
 
   @override
   void initState() {
     super.initState();
-    _mapLocation = geoPointOrNull(widget.profile.location);
+    _baseId = widget.profile.baseBarangayId;
+    _serviceIds = widget.profile.serviceBarangayIds.toSet();
     _photoUrl = widget.appUser.profilePhotoUrl;
     _name = TextEditingController(text: widget.appUser.fullName);
     _phone = TextEditingController(
@@ -106,14 +110,11 @@ class _ProviderOverviewSettingsScreenState extends State<ProviderOverviewSetting
           : '',
     );
     _email = TextEditingController(text: widget.appUser.email);
-    final addr = widget.appUser.address?.trim().isNotEmpty == true
-        ? widget.appUser.address!
-        : widget.profile.serviceArea;
-    _address = TextEditingController(text: addr);
     _bio = TextEditingController(text: widget.profile.bio);
     _bio.addListener(() => setState(() {}));
-    _radiusKm = widget.profile.serviceRadiusKm > 0 ? widget.profile.serviceRadiusKm : 20;
-    _selectedTraits = ProviderProfileTraits.normalize(widget.profile.profileTraits).toSet();
+    _selectedTraits = ProviderProfileTraits.normalize(
+      widget.profile.profileTraits,
+    ).toSet();
   }
 
   @override
@@ -121,14 +122,17 @@ class _ProviderOverviewSettingsScreenState extends State<ProviderOverviewSetting
     _name.dispose();
     _phone.dispose();
     _email.dispose();
-    _address.dispose();
     _bio.dispose();
     super.dispose();
   }
 
   Future<void> _pickPhoto() async {
     final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery, maxWidth: 1200, imageQuality: 85);
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1200,
+      imageQuality: 85,
+    );
     if (picked == null || !mounted) return;
 
     setState(() => _uploadingPhoto = true);
@@ -146,9 +150,9 @@ class _ProviderOverviewSettingsScreenState extends State<ProviderOverviewSetting
       );
       if (!mounted) return;
       setState(() => _photoUrl = url);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile photo updated')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Profile photo updated')));
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -174,26 +178,23 @@ class _ProviderOverviewSettingsScreenState extends State<ProviderOverviewSetting
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
-      final address = _address.text.trim();
+      await MarketplaceService.command('providerArea', {
+        'baseBarangayId': _baseId,
+        'serviceBarangayIds': _serviceIds.toList(),
+      });
       final traits = ProviderProfileTraits.normalize(_selectedTraits.toList());
       await FirestoreService().updateUserProfile(
         userId: widget.appUser.userId,
         data: {
           'fullName': _name.text.trim(),
-          'contactNumber': _phone.text.trim().isEmpty ? null : _phone.text.trim(),
-          'address': address.isEmpty ? null : address,
-          'location': _mapLocation,
+          'contactNumber': _phone.text.trim().isEmpty
+              ? null
+              : _phone.text.trim(),
         },
       );
       await FirestoreService().updateServiceProvider(
         providerId: widget.appUser.userId,
-        data: {
-          'bio': _bio.text.trim(),
-          'serviceArea': address,
-          'location': _mapLocation,
-          'serviceRadiusKm': _radiusKm,
-          'profileTraits': traits,
-        },
+        data: {'bio': _bio.text.trim(), 'profileTraits': traits},
       );
       if (!mounted) return;
       Navigator.pop(context, true);
@@ -221,15 +222,17 @@ class _ProviderOverviewSettingsScreenState extends State<ProviderOverviewSetting
   Widget build(BuildContext context) {
     final rc = context.roleColors;
     final verified = widget.profile.isVerifiedProvider;
-    final approved = widget.profile.verificationStatus.toLowerCase() == 'approved' || verified;
+    final approved =
+        widget.profile.verificationStatus.toLowerCase() == 'approved' ||
+        verified;
 
     final body = Form(
       key: _formKey,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-              const EnableNotificationsButton(),
-              const AppPreferencesPanel(),
+          const EnableNotificationsButton(),
+          const AppPreferencesPanel(),
           if (!widget.inDialog)
             AppPageHeader(
               title: 'Profile settings',
@@ -242,6 +245,7 @@ class _ProviderOverviewSettingsScreenState extends State<ProviderOverviewSetting
               child: Row(
                 children: [
                   IconButton(
+                    tooltip: widget.inDialog ? 'Close profile settings' : 'Back',
                     onPressed: () => Navigator.pop(context),
                     icon: const Icon(Icons.close_rounded),
                   ),
@@ -251,11 +255,17 @@ class _ProviderOverviewSettingsScreenState extends State<ProviderOverviewSetting
                       children: [
                         Text(
                           'Profile settings',
-                          style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w800),
+                          style: GoogleFonts.inter(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                         Text(
                           'Update your provider account information',
-                          style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray600),
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            color: FigmaColors.gray600,
+                          ),
                         ),
                       ],
                     ),
@@ -264,15 +274,25 @@ class _ProviderOverviewSettingsScreenState extends State<ProviderOverviewSetting
               ),
             ),
           const SizedBox(height: 16),
-          _profileSummaryCard(context, rc, approved: approved, verified: verified),
+          _profileSummaryCard(
+            context,
+            rc,
+            approved: approved,
+            verified: verified,
+          ),
           const SizedBox(height: 20),
           _field(
             label: 'Full name',
             helper: 'This is the name that will be shown to your clients.',
             field: TextFormField(
               controller: _name,
-              validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter your full name' : null,
-              decoration: _inputDecoration(context, prefixIcon: Icons.person_outline),
+              validator: (v) => (v == null || v.trim().isEmpty)
+                  ? 'Enter your full name'
+                  : null,
+              decoration: _inputDecoration(
+                context,
+                prefixIcon: Icons.person_outline,
+              ),
             ),
           ),
           const SizedBox(height: 18),
@@ -282,13 +302,17 @@ class _ProviderOverviewSettingsScreenState extends State<ProviderOverviewSetting
             field: TextFormField(
               controller: _phone,
               keyboardType: TextInputType.phone,
-              decoration: _inputDecoration(context, prefixIcon: Icons.phone_outlined),
+              decoration: _inputDecoration(
+                context,
+                prefixIcon: Icons.phone_outlined,
+              ),
             ),
           ),
           const SizedBox(height: 18),
           _field(
             label: 'Email address',
-            helper: 'Your email address is used for login and important notifications.',
+            helper:
+                'Your email address is used for login and important notifications.',
             field: TextFormField(
               controller: _email,
               enabled: false,
@@ -301,20 +325,14 @@ class _ProviderOverviewSettingsScreenState extends State<ProviderOverviewSetting
             ),
           ),
           const SizedBox(height: 18),
-          _field(
-            label: 'Address / City',
-            helper: 'This helps clients in your area find and trust you.',
-            field: TextFormField(
-              controller: _address,
-              decoration: _inputDecoration(context, prefixIcon: Icons.place_outlined),
-            ),
+          ProviderBarangayEditor(
+            baseId: _baseId,
+            serviceIds: _serviceIds,
+            onChanged: (base, ids) => setState(() {
+              _baseId = base;
+              _serviceIds = ids;
+            }),
           ),
-          const SizedBox(height: 18),
-          ProfileLocationEditor(address: _address, location: _mapLocation,
-            providerLocation: true,
-            onChanged: (point) => setState(() => _mapLocation = point)),
-          const SizedBox(height: 18),
-          _serviceRadiusField(rc),
           const SizedBox(height: 18),
           _field(
             label: 'Bio / About me',
@@ -323,13 +341,15 @@ class _ProviderOverviewSettingsScreenState extends State<ProviderOverviewSetting
               controller: _bio,
               maxLines: 4,
               maxLength: ProviderProfileTraits.maxBioLength,
-              decoration: _inputDecoration(
-                context,
-                prefixIcon: Icons.edit_outlined,
-                alignLabelWithHint: true,
-              ).copyWith(
-                counterText: '${_bio.text.length} / ${ProviderProfileTraits.maxBioLength}',
-              ),
+              decoration:
+                  _inputDecoration(
+                    context,
+                    prefixIcon: Icons.edit_outlined,
+                    alignLabelWithHint: true,
+                  ).copyWith(
+                    counterText:
+                        '${_bio.text.length} / ${ProviderProfileTraits.maxBioLength}',
+                  ),
             ),
           ),
           const SizedBox(height: 18),
@@ -342,7 +362,9 @@ class _ProviderOverviewSettingsScreenState extends State<ProviderOverviewSetting
                   onPressed: _saving ? null : () => Navigator.pop(context),
                   style: OutlinedButton.styleFrom(
                     minimumSize: const Size.fromHeight(48),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
                   child: const Text('Cancel'),
                 ),
@@ -355,15 +377,23 @@ class _ProviderOverviewSettingsScreenState extends State<ProviderOverviewSetting
                     backgroundColor: rc.primary,
                     foregroundColor: rc.onPrimary,
                     minimumSize: const Size.fromHeight(48),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
                   child: _saving
                       ? const SizedBox(
                           width: 22,
                           height: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: FigmaColors.white),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: FigmaColors.white,
+                          ),
                         )
-                      : Text('Save changes', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+                      : Text(
+                          'Save changes',
+                          style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+                        ),
                 ),
               ),
             ],
@@ -407,7 +437,13 @@ class _ProviderOverviewSettingsScreenState extends State<ProviderOverviewSetting
     required bool verified,
   }) {
     final initials = widget.appUser.fullName.isNotEmpty
-        ? widget.appUser.fullName.trim().split(RegExp(r'\s+')).map((p) => p[0]).take(2).join().toUpperCase()
+        ? widget.appUser.fullName
+              .trim()
+              .split(RegExp(r'\s+'))
+              .map((p) => p[0])
+              .take(2)
+              .join()
+              .toUpperCase()
         : 'P';
 
     return AppSurfaceCard(
@@ -420,17 +456,32 @@ class _ProviderOverviewSettingsScreenState extends State<ProviderOverviewSetting
                 clipBehavior: Clip.none,
                 children: [
                   ProfileAvatar(
-                    radius: 40, backgroundColor: rc.tint, photoUrl: _photoUrl,
-                    fallback: Text(initials, style: GoogleFonts.inter(
-                      fontSize: 26, fontWeight: FontWeight.w700, color: rc.primary)),
+                    radius: 40,
+                    backgroundColor: rc.tint,
+                    photoUrl: _photoUrl,
+                    fallback: Text(
+                      initials,
+                      style: GoogleFonts.inter(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w700,
+                        color: rc.primary,
+                      ),
+                    ),
                   ),
                   Positioned(
                     right: -2,
                     bottom: -2,
                     child: Container(
                       padding: const EdgeInsets.all(5),
-                      decoration: const BoxDecoration(color: FigmaColors.navy, shape: BoxShape.circle),
-                      child: const Icon(Icons.photo_camera_outlined, size: 14, color: FigmaColors.white),
+                      decoration: const BoxDecoration(
+                        color: FigmaColors.navy,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.photo_camera_outlined,
+                        size: 14,
+                        color: FigmaColors.white,
+                      ),
                     ),
                   ),
                 ],
@@ -444,14 +495,25 @@ class _ProviderOverviewSettingsScreenState extends State<ProviderOverviewSetting
                         height: 14,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.photo_camera_outlined, size: 16, color: FigmaColors.navy),
+                    : const Icon(
+                        Icons.photo_camera_outlined,
+                        size: 16,
+                        color: FigmaColors.navy,
+                      ),
                 label: Text(
                   'Change photo',
-                  style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: FigmaColors.navy),
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: FigmaColors.navy,
+                  ),
                 ),
                 style: OutlinedButton.styleFrom(
                   side: const BorderSide(color: FigmaColors.navy),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   visualDensity: VisualDensity.compact,
                 ),
               ),
@@ -463,18 +525,41 @@ class _ProviderOverviewSettingsScreenState extends State<ProviderOverviewSetting
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.appUser.fullName.isNotEmpty ? widget.appUser.fullName : 'Service provider',
-                  style: GoogleFonts.inter(fontSize: 17, fontWeight: FontWeight.w800),
+                  widget.appUser.fullName.isNotEmpty
+                      ? widget.appUser.fullName
+                      : 'Service provider',
+                  style: GoogleFonts.inter(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
                 const SizedBox(height: 4),
-                Text('Service Provider', style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray600)),
+                Text(
+                  'Service Provider',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    color: FigmaColors.gray600,
+                  ),
+                ),
                 const SizedBox(height: 10),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    if (approved) _badge('Approved', FigmaColors.tintBlue, FigmaColors.navy, Icons.check_circle),
-                    if (verified) _badge('Verified', FigmaColors.tintBlue, FigmaColors.navy, Icons.verified),
+                    if (approved)
+                      _badge(
+                        'Approved',
+                        FigmaColors.tintBlue,
+                        FigmaColors.navy,
+                        Icons.check_circle,
+                      ),
+                    if (verified)
+                      _badge(
+                        'Verified',
+                        FigmaColors.tintBlue,
+                        FigmaColors.navy,
+                        Icons.verified,
+                      ),
                   ],
                 ),
               ],
@@ -488,13 +573,23 @@ class _ProviderOverviewSettingsScreenState extends State<ProviderOverviewSetting
   Widget _badge(String label, Color bg, Color fg, IconData icon) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 14, color: fg),
           const SizedBox(width: 4),
-          Text(label, style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: fg)),
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: fg,
+            ),
+          ),
         ],
       ),
     );
@@ -506,12 +601,20 @@ class _ProviderOverviewSettingsScreenState extends State<ProviderOverviewSetting
       children: [
         Text(
           'Work style',
-          style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: FigmaColors.gray800),
+          style: GoogleFonts.inter(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: FigmaColors.gray800,
+          ),
         ),
         const SizedBox(height: 6),
         Text(
           'Choose traits that describe how you work with clients. These appear on your overview.',
-          style: GoogleFonts.inter(fontSize: 12, color: FigmaColors.gray500, height: 1.4),
+          style: GoogleFonts.inter(
+            fontSize: 12,
+            color: FigmaColors.gray500,
+            height: 1.4,
+          ),
         ),
         const SizedBox(height: 12),
         Wrap(
@@ -529,12 +632,18 @@ class _ProviderOverviewSettingsScreenState extends State<ProviderOverviewSetting
                 labelStyle: GoogleFonts.inter(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: _selectedTraits.contains(opt.label) ? opt.foreground : FigmaColors.gray700,
+                  color: _selectedTraits.contains(opt.label)
+                      ? opt.foreground
+                      : FigmaColors.gray700,
                 ),
                 side: BorderSide(
-                  color: _selectedTraits.contains(opt.label) ? opt.foreground.withValues(alpha: 0.4) : FigmaColors.gray300,
+                  color: _selectedTraits.contains(opt.label)
+                      ? opt.foreground.withValues(alpha: 0.4)
+                      : FigmaColors.gray300,
                 ),
-                backgroundColor: _selectedTraits.contains(opt.label) ? opt.background : FigmaColors.white,
+                backgroundColor: _selectedTraits.contains(opt.label)
+                    ? opt.background
+                    : FigmaColors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
               ),
           ],
@@ -543,61 +652,33 @@ class _ProviderOverviewSettingsScreenState extends State<ProviderOverviewSetting
     );
   }
 
-  Widget _serviceRadiusField(RolePalette rc) {
-    return _field(
-      label: 'Service radius',
-      helper: 'How far you are willing to travel for on-site jobs.',
-      field: Container(
-        padding: const EdgeInsets.fromLTRB(12, 8, 14, 4),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: FigmaColors.gray300),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Icon(Icons.my_location_outlined, size: 20, color: rc.primary),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    '${_radiusKm.toStringAsFixed(0)} km',
-                    style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: FigmaColors.gray800),
-                  ),
-                  Slider(
-                    value: _radiusKm,
-                    min: 1,
-                    max: 30,
-                    divisions: 29,
-                    activeColor: rc.primary,
-                    inactiveColor: rc.primary.withValues(alpha: 0.2),
-                    thumbColor: rc.primary,
-                    label: '${_radiusKm.toStringAsFixed(0)} km',
-                    onChanged: (v) => setState(() => _radiusKm = v),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _field({required String label, required String helper, required Widget field}) {
+  Widget _field({
+    required String label,
+    required String helper,
+    required Widget field,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: FigmaColors.gray800)),
+        Text(
+          label,
+          style: GoogleFonts.inter(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: FigmaColors.gray800,
+          ),
+        ),
         const SizedBox(height: 8),
         field,
         const SizedBox(height: 6),
-        Text(helper, style: GoogleFonts.inter(fontSize: 12, color: FigmaColors.gray500, height: 1.35)),
+        Text(
+          helper,
+          style: GoogleFonts.inter(
+            fontSize: 12,
+            color: FigmaColors.gray500,
+            height: 1.35,
+          ),
+        ),
       ],
     );
   }
@@ -611,7 +692,9 @@ class _ProviderOverviewSettingsScreenState extends State<ProviderOverviewSetting
   }) {
     final rc = context.roleColors;
     return InputDecoration(
-      prefixIcon: prefixIcon != null ? Icon(prefixIcon, size: 20, color: rc.primary) : null,
+      prefixIcon: prefixIcon != null
+          ? Icon(prefixIcon, size: 20, color: rc.primary)
+          : null,
       filled: filled,
       fillColor: fillColor,
       alignLabelWithHint: alignLabelWithHint,

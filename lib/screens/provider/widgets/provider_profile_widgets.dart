@@ -781,7 +781,7 @@ class ProviderBusinessProfileCard extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               _detailRow('Service area', profile.serviceArea.isNotEmpty ? profile.serviceArea : '—'),
-              _detailRow('Service radius', '${profile.serviceRadiusKm.toStringAsFixed(0)} km'),
+              _detailRow('Coverage', '${profile.serviceBarangayIds.length} selected barangays'),
               _detailRow('Rating', profile.averageRating > 0 ? profile.averageRating.toStringAsFixed(1) : '—'),
               _detailRow('Completed jobs', '${profile.completedBookings}'),
               _detailRow('Verification', verified ? 'Verified' : profile.verificationStatus),

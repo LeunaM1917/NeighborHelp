@@ -13,6 +13,7 @@ import '../utils/geo_location.dart';
 import '../utils/customer_map_data.dart';
 import 'data_stream_builder.dart';
 import 'profile_location_editor.dart';
+import 'provider_map_alternative.dart';
 import '../screens/customer/scheduled_provider_search_screen.dart';
 export '../utils/customer_map_data.dart' show NearbyMapPin;
 
@@ -85,7 +86,17 @@ class _YourAreaMapCardState extends State<YourAreaMapCard> {
           Wrap(
             spacing: 8,
             children: [
-              FilledButton.tonalIcon(onPressed:()=>Navigator.push<void>(context,MaterialPageRoute(builder:(_)=>ScheduledProviderSearchScreen(appUser:widget.appUser))),icon:const Icon(Icons.event_available),label:const Text('Find providers for a date')),
+              FilledButton.tonalIcon(
+                onPressed: () => Navigator.push<void>(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        ScheduledProviderSearchScreen(appUser: widget.appUser),
+                  ),
+                ),
+                icon: const Icon(Icons.event_available),
+                label: const Text('Find providers for a date'),
+              ),
               TextButton.icon(
                 onPressed: _saving ? null : _setLocation,
                 icon: const Icon(Icons.my_location),
@@ -155,13 +166,14 @@ class _YourAreaMapCardState extends State<YourAreaMapCard> {
                     ),
                     if (missing > 0)
                       Text(
-                        '$missing provider(s) still need to set their service-base pin before they can appear on this map.',
+                        '$missing provider(s) still need to select their barangays before they can appear on this map.',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     if (pins.isEmpty && missing == 0)
                       const Text(
-                        'No providers with a saved service location cover this area yet.',
+                        'No providers with selected service barangays cover this area yet.',
                       ),
+                    ProviderMapAlternative(pins: pins),
                   ],
                 );
               },

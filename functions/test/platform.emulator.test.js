@@ -66,7 +66,8 @@ test('customer map pins stay private while an eligible provider service base rea
   await ops.auditServiceProviders.run({before:{exists:true,data:()=>profile},after:{exists:true,data:()=>updated}},
     {params:{id:'provider'},eventId:'provider-pin'});
   const projection=(await db.doc('publicProviders/provider').get()).data();
-  assert.deepEqual(projection.location,{latitude:7.31,longitude:125.61});
+  const base=require('../provider_area').base(updated);
+  assert.deepEqual(projection.location,{latitude:base.latitude,longitude:base.longitude});
 });
 test('a device moves to its current signed-in user and cannot be unregistered by another account', async () => {
   const data={token:'test-device-token-with-sufficient-length',platform:'web'};
@@ -97,7 +98,7 @@ test('policy maintenance hides unsupported listings and refreshes expiry-bound p
   assert.equal((await db.doc('services/unsupported').get()).data().isActive,false);
   assert.equal((await db.doc('bookings/history').get()).data().totalFee,500);
   const projection=(await db.doc('publicProviders/provider').get()).data();
-  assert.equal(projection.marketplacePolicyVersion,2);assert.deepEqual(projection.eligibleServiceIds,['valid']);assert.ok(projection.eligibleServiceExpiries.valid>Date.now());
+  assert.equal(projection.marketplacePolicyVersion,3);assert.deepEqual(projection.eligibleServiceIds,['valid']);assert.ok(projection.eligibleServiceExpiries.valid>Date.now());
   await db.doc('serviceProviders/provider').update({approvedCertificationIds:[]});
   await ops.enforceMarketplacePolicy.run({});
   assert.equal((await db.doc('services/valid').get()).data().isActive,false);assert.equal((await db.doc('publicProviders/provider').get()).exists,false);

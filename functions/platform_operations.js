@@ -11,22 +11,24 @@ module.exports = function platformOperations({ db, admin, functions, region, mes
     isVerified: Boolean(u.isVerified), verificationStatus: u.verificationStatus || 'Pending',
     createdAt: u.createdAt?.toMillis() || 0, updatedAt: u.updatedAt?.toMillis() || 0 });
   async function publicProvider(id, p) {
+    const area=require('./provider_area').publicArea(p);
+    if(!area)return null;
     const owner = (await db.collection('users').doc(p.userId || id).get()).data();
     if (owner?.accountStatus !== 'Active' || !(p.isVerified || p.verificationStatus === 'Approved')) return null;
     const services = await db.collection('services').where('providerId', '==', id).get();
     const eligible = services.docs.filter(d => { const s = d.data(); return s.isActive && s.approvalStatus === 'Approved' && hasMatchingCertificate(p, s.category, s.serviceTitle); });
     if (!eligible.length) return null;
     const {serviceFamily,eligibleCertificate} = require('./marketplace_policy');
-    const result = { providerId: id, marketplacePolicyVersion:2, eligibleServiceIds: eligible.map(d => d.id),eligibleServiceExpiries:{} };
+    const result = { providerId: id, marketplacePolicyVersion:3, eligibleServiceIds: eligible.map(d => d.id),eligibleServiceExpiries:{},...area };
     for(const doc of eligible) {
       const s=doc.data(), family=serviceFamily(s.category,s.serviceTitle);
       const certificates=(p.certificationHistory || []).filter(c => eligibleCertificate(c,new Set(p.approvedCertificationIds || []),family));
       result.eligibleServiceExpiries[doc.id]=Math.max(...certificates.map(c => new Date(`${c.expirationDate}T23:59:59.999+08:00`).getTime()));
     }
-    for (const field of ['userId', 'bio', 'serviceArea', 'serviceRadiusKm', 'averageRating', 'reviewCount', 'completedBookings', 'acceptedBookings',
+    for (const field of ['userId', 'bio', 'averageRating', 'reviewCount', 'completedBookings', 'acceptedBookings',
       'isVerified', 'verificationStatus', 'education', 'educationHistory', 'employmentHistory', 'portfolioUrls', 'portfolioProjects',
       'videoIntroUrl', 'otherExperiences', 'linkedAccounts', 'profileTraits', 'weeklyAvailability', 'approvedCertificationIds']) if (p[field] !== undefined) result[field] = p[field];
-    result.location = p.location ? { latitude: p.location.latitude, longitude: p.location.longitude } : null;
+    result.timeOff=(p.timeOff||[]).filter(b=>b.end?.toMillis()>Date.now()).map(b=>({startMs:b.start.toMillis(),endMs:b.end.toMillis()}));
     result.createdAt = p.createdAt?.toMillis() || 0;
     result.updatedAt = p.updatedAt?.toMillis() || 0;
     result.certificationHistory = (p.certificationHistory || []).filter(c => (p.approvedCertificationIds || []).includes(c.id)).map(c => ({ id: c.id, name: c.name || '', provider: c.provider || '', issueDate: c.issueDate || '', expirationDate: c.expirationDate || '', status: 'Approved' }));
@@ -51,6 +53,13 @@ module.exports = function platformOperations({ db, admin, functions, region, mes
   out.certificateCommand = functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'}).https.onCall(require('./certificate_commands')({db, functions}));
   out.contractCommand = functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'}).https.onCall(require('./contract_commands')({db,functions}));
   out.providerAvailability = functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'}).https.onCall(require('./availability_command')({db,functions}));
+  out.providerTimeOff=functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK==='true'}).https.onCall(require('./time_off_commands')({db,functions}));
+  out.providerArea=functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK==='true'}).https.onCall(require('./provider_area').command({db,functions}));
+  out.migrateProviderLocations=functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK==='true'}).https.onCall(async(data,context)=>{
+    await assertAdmin(context);
+    return require('./provider_location_migration')(db,{cursor:String(data.cursor||''),apply:data.apply===true});
+  });
+  out.expireContractOffers=functions.region(region).pubsub.schedule('every 15 minutes').onRun(()=>require('./offer_expiry').sweep(db));
   out.agreementCommand = functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'}).https.onCall(require('./agreement_commands')({db,functions}));
   out.paymentCommand = functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'}).https.onCall(require('./payment_commands')({db,functions}));
   out.reportCommand = functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'}).https.onCall(require('./report_commands')({db,functions}));
@@ -104,7 +113,9 @@ module.exports = function platformOperations({ db, admin, functions, region, mes
     const a = change.before.data(), b = change.after.data();
     const statusChanged = a.status !== b.status;
     const requestChanged = JSON.stringify(a.rescheduleRequest || null) !== JSON.stringify(b.rescheduleRequest || null);
-    if (!statusChanged && !requestChanged && a.scheduledDate.toMillis() === b.scheduledDate.toMillis()) return null;
+    // Expiry notifications are committed with the transition, once per participant.
+    if(b.status==='Expired')return null;
+    if (!statusChanged && !requestChanged && a.scheduledDate?.toMillis?.() === b.scheduledDate?.toMillis?.()) return null;
     const title = statusChanged ? `Booking ${b.status}` : b.rescheduleRequest ? 'Reschedule requested' : 'Reschedule response';
     const message = statusChanged ? b.status === 'Changes Requested' ? `The provider requested changes: ${b.changeRequest}. Discuss the changes and send a new offer.` : `Your booking is now ${b.status.toLowerCase()}.` : b.rescheduleRequest ? 'The customer proposed a new date. Open the booking to respond.' : 'Open your booking to check the agreed schedule.';
     await Promise.all([b.customerId, b.providerId].filter(uid => uid !== b.updatedBy).map(uid => notify(context.eventId, uid, title, message, change.after.id, 'Booking Update')));

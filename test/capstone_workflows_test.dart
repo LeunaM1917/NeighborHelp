@@ -122,7 +122,7 @@ void main() {
       final profile = ServiceProviderProfile.fromFirestore('p', {
         'isVerified': true,
         'eligibleServiceIds': ['cleaning'],
-        'marketplacePolicyVersion': 2,
+        'marketplacePolicyVersion': 3,
         'eligibleServiceExpiries': {
           'cleaning': DateTime(2099).millisecondsSinceEpoch,
         },

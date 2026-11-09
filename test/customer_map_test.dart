@@ -1,3 +1,5 @@
+import 'package:neighbor_help/data/panabo_barangays.dart';
+import 'package:neighbor_help/utils/barangay_coverage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -71,11 +73,13 @@ void main() {
     String id, {
     GeoPoint? point,
     double radius = 15,
+    List<String> barangays = const [],
   }) => ServiceProviderProfile.fromFirestore(id, {
     'userId': id,
     'isVerified': true,
     'location': point,
     'serviceRadiusKm': radius,
+    'serviceBarangayIds': barangays,
   });
   final origin = GeoPoint(
     kDefaultPanaboLatLng.latitude,
@@ -119,7 +123,7 @@ void main() {
     },
   );
   test(
-    'provider radius and customer search radius still exclude out-of-coverage locations',
+    'selected service barangays and estimated search radius exclude out-of-coverage locations',
     () {
       final result = CustomerProviderDiscovery(
         providers: [
@@ -129,6 +133,12 @@ void main() {
             'outside-base',
             point: const GeoPoint(7.35, 125.684),
             radius: 1,
+            barangays: [
+              panaboBarangays.firstWhere(
+                    (b) => !barangaysCover([b['id'] as String], origin),
+                  )['id']
+                  as String,
+            ],
           ),
         ],
         origin: origin,
