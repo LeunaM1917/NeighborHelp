@@ -209,7 +209,7 @@ bool _matchesFilter(Booking booking, _RequestFilter filter) {
     case _RequestFilter.all:
       return true;
     case _RequestFilter.inProgress:
-      return s == 'pending' || s == 'accepted' || s == 'in progress';
+      return s == 'pending' || s == 'accepted' || s == 'in progress' || s == 'awaiting confirmation';
     case _RequestFilter.completed:
       return s == 'completed' || s == 'milestone complete';
     case _RequestFilter.cancelled:
@@ -221,6 +221,7 @@ String _displayStatus(String status) {
   final s = status.toLowerCase();
   if (s == 'completed') return 'Completed';
   if (s == 'cancelled' || s == 'canceled') return 'Cancelled';
+  if (s == 'awaiting confirmation') return 'Awaiting Confirmation';
   if (s == 'in progress' || s == 'accepted' || s == 'pending') return 'In Progress';
   return status;
 }

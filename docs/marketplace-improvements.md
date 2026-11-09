@@ -1,0 +1,58 @@
+# Marketplace improvements and rollout
+
+Implemented locally on 2026-11-09. The academic DOCX is unchanged. No production deployment, live database migration, Firebase console registration, legal approval, real-user pilot or new human labels were performed.
+
+## Scheduling and matching
+
+Open **Find providers for a date** from Your Area, or **Match a date and work schedule** from Find providers. Browse also links to this search. Choose a work location, Manila start time, consecutive workdays and hours per day. Results require both weekly-hour coverage for every work period and a server check against accepted, ongoing or awaiting-confirmation bookings. The map and ranked list use the same eligible results. An overnight shift belongs to the day on which it starts. Requests that overrun a shift or include a disabled day are excluded.
+
+There is a fixed 15-minute gap between separate jobs, counted once between appointments. This is a scheduling allowance, not a measured travel-time guarantee. Distance remains Haversine/straight-line; discuss actual travel in the inquiry. Search results are snapshots; use Refresh availability. A failed availability check displays a retry state, never a fabricated available result. Offer creation validates weekly hours; acceptance and amended-schedule acceptance recheck hours and conflicting bookings under the provider schedule lock. Pending offers reserve no time. Default schedules for profiles without configured hours remain the existing weekday/Saturday defaults; providers should review their hours before a pilot.
+
+Production weights stay 0.40 proximity + 0.30 rating + 0.20 availability + 0.10 completion. Qualification, identity, service coverage and requested-window availability are hard eligibility requirements in scheduled search. No ranking model was trained on invented human judgments.
+
+## Completion and reviews
+
+Provider: **Start the job → Report work finished**. Fixed-price work can be reported when its deliverables are ready, including before the agreed end time. Daily work follows its agreed end time, unless both parties accept a suitable amendment. A proposed amendment must be resolved before completion is reported.
+
+Customer: **Confirm work complete** after inspecting the agreement, or **Request corrections** with specific details. Corrections return the job to In Progress and are recorded in workEvents. Only customer confirmation sets the completed timestamp, increments completion credit and unlocks mutual reviews. Awaiting Confirmation remains outstanding work and prevents closing the contract. The requested response period is 72 hours; nothing auto-completes when it expires. Use the existing booking report action for an unresolved case. Existing historical Completed/Milestone Complete records remain completed; they are not retroactively reopened.
+
+A strong model prediction that differs from a review's stars shows **Edit review / Post as written**. Choosing Post as written preserves the person's exact rating and wording. An acknowledgment flag records that choice. A model prediction is an advisory estimate, not proof the review is dishonest or wrong. Reviews remain limited to participants on completed work.
+
+## Amendments and payment records
+
+The contract panel offers **Propose amendment** on accepted or ongoing work. Either participant may propose full revised scope, materials, price, days, payment arrangement and completion criteria. The complete server-generated amendment includes the prior agreement fingerprint and the reason. The proposer accepts that text; only the other participant may accept it. Rejection or withdrawal leaves the current terms in force. One proposal may be pending at a time. Acceptance rechecks the base fingerprint, account eligibility, certification, working hours, conflicts and payment totals.
+
+Original contract text is retained, booking agreementVersions contains each accepted version with both acceptance timestamps, and amendments retains proposals and outcomes. The current booking points to the latest mutually accepted text; the contract retains its original text plus a currentAgreement pointer. Both participants can inspect and download records. Cancellation records a pending proposal as superseded. Once work has started, amendments retain its original start, hours per day and already agreed days; they can add days or change scope/price with consent. They cannot silently rewrite work already performed.
+
+**Record payment made** records the customer's statement of an actual direct payment. The provider must separately acknowledge actual receipt, or dispute the report with reasons. The customer can withdraw an unacknowledged report. Only received records count toward received totals; pending reports reserve the remaining amount to prevent concurrent over-reporting. Confirmation cannot be replayed to credit twice. A reduced amendment cannot undercut acknowledged or pending payment amounts. Payment and job statuses are independent. These records do not move money, verify a bank transfer, provide escrow, settle a contested refund or replace lawful dispute handling. Keep credentials and full account numbers out of references. Refunds remain a documented matter for the parties/admin; no automatic refund processing was added.
+
+## Inquiry safety and moderation
+
+The inquiry safety menu supports Block/Unblock and Report to administrator before hiring. Either person's block prevents both directions of messaging, new photos, new offers and acceptance of an outstanding offer in that inquiry. Only each person can remove their own block. Historical conversations and existing accepted-contract records remain accessible. Reports include the reporter's explanation and a disclosed snapshot of the most recent 10 messages; administrators see that text evidence in the report queue, without gaining general access to unrelated private chats. Photo attachments are identified in the text snapshot but original private images remain participant-only. For a photo-based complaint, agree on a separate authorized evidence-sharing process; this implementation does not give administrators unrestricted media access.
+
+Server limits per account: 30 new comparison inquiries/day, 30 messages/minute and 500/day, 20 photo permissions/hour and 60/day, 10 reports/day, and 60 availability batches/minute (up to 30 providers each). Retrying the same message ID or payment ID does not debit the operation twice. The inquiry UI retains the ID for a retry after uncertain delivery; payment reporting retains a retry ID for the same payload while its widget remains open. After an interrupted session, refresh visible records before entering another report. Limits use fixed server-time buckets; opening an existing inquiry and marking read do not consume a new-inquiry quota.
+
+Photo uploads require a short-lived, one-use server permit. Storage checks the active account, conversation membership, current block state, permit, file type and 5 MB size limit. Firestore clients cannot forge permits, contract versions, payment records, work events, rate limits or report evidence. A bounded scheduled cleanup removes expired rate-limit and upload-permit documents; for a large rollout, configure Firestore TTL on expiresAt in those two collection groups to avoid cleanup backlog.
+
+Booking reports now use reportCommand rather than a client pre-read/write; only actual participants can report the other party. Admin resolution also uses that command, requires a reason and records an audit entry. Reports remain read-only to clients, including administrators. Older app builds that wrote reports directly must be replaced with this version.
+
+## App Check staging
+
+The Flutter client includes firebase_app_check with Play Integrity on Android, App Attest with Device Check fallback on Apple platforms, and reCAPTCHA v3 on web. Activation is off by default until the real Firebase apps are registered and tested. Emulator builds skip it. Follow the official [Flutter setup](https://firebase.google.com/docs/app-check/flutter/default-providers) and [Cloud Functions enforcement](https://firebase.google.com/docs/app-check/cloud-functions) instructions.
+
+1. Register the correct Firebase Android/web apps and attestation providers, SHA-256 signing information and permitted web domains. Use the real signing configuration for distributed Android builds. Confirm legitimate clients can obtain tokens; do not ship debug attestation or debug tokens in release builds.
+2. Build registered clients with `--dart-define=APP_CHECK_ENABLED=true`. Web also needs `--dart-define=APP_CHECK_WEB_SITE_KEY=YOUR_REGISTERED_PUBLIC_SITE_KEY`. A site key is a public identifier; do not supply a reCAPTCHA secret to Flutter. Existing Maps/Firebase secret configuration files were not changed.
+3. Distribute and monitor verified-request metrics before enforcement. Test sign-in, inquiries, uploads, reviews, payments, amendments and notifications on actual target devices and browsers. The local emulator cannot validate Play Integrity or real reCAPTCHA attestation.
+4. After valid-client coverage is established, set `ENFORCE_APP_CHECK=true` in the deployed Functions environment for the callable commands in platform_operations and submitMilestoneReview, then deploy those functions in a controlled rollout. Do not turn this on before updated valid clients are available. Enable Firestore/Storage App Check enforcement separately in the Firebase console after monitoring their metrics. App Check supplements authentication/rules and quotas; it does not replace them. Disabling server enforcement for rollback does not require removing authentication, participant checks or rate limits.
+
+No console enforcement was enabled here. Device/browser attestation and a real-device notification/connectivity pilot remain outstanding.
+
+Deploy the matching Functions, Firestore/Storage rules and updated client together in a planned update window after staging verification. Previous clients lack the customer confirmation screen and upload-permit flow and cannot safely exercise the new workflow. Require those clients to update before letting new work start; do not ship the server transition alone while expecting old clients to confirm completion. Refresh older public provider projections with the existing policy-maintenance job as needed. Accepted historical agreements and prices are retained; no destructive migration is required.
+
+## Verification and local pilot
+
+Run the normal unit, Flutter and demo Firebase emulator suites. The added tests cover complete daily windows and overnight shifts, travel gaps, concurrent acceptances, customer-only completion, corrections and single completion credit, mutual amendment consent and preserved originals, partial/concurrent payments and duplicate acknowledgments, rate limits, block enforcement, upload permits, report authorization, private records and review warnings.
+
+Use the [Panabo pilot protocol and local-data collection workflow](pilot/README.md). It contains session tasks, observation format, consent/redaction instructions and a local review freezer that requires two independent human labels and native-speaker verification for Cebuano. Actual team labels, native-language review, sessions and qualified legal review cannot be generated by the software. The tools do not silently promote an experimental model or alter the manuscript.
+
+Before a live rollout, review this actual workflow and agreement template with qualified Philippine counsel. The code records the parties' consent; it does not establish that every job or contractual term complies with all applicable laws.

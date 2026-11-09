@@ -99,6 +99,10 @@ service cloud.firestore {
     match /bookings/{id} {
       allow read: if isAdmin() || (activeUser() && (resource.data.customerId == request.auth.uid || resource.data.providerId == request.auth.uid));
       allow write: if false;
+      match /{recordType}/{recordId} {
+        allow read: if recordType in ['workEvents', 'amendments', 'agreementVersions', 'payments'] && (isAdmin() || participant(id));
+        allow write: if false;
+      }
     }
     match /providerSchedules/{id} { allow read, write: if false; }
     match /inquiries/{id} {
@@ -115,14 +119,7 @@ service cloud.firestore {
     }
     match /bookingUserReports/{id} {
       allow read: if isAdmin();
-      allow create: if participant(request.resource.data.bookingId)
-        && request.resource.data.reporterId == request.auth.uid
-        && request.resource.data.reportedUserId in [get(bookingPath(request.resource.data.bookingId)).data.customerId, get(bookingPath(request.resource.data.bookingId)).data.providerId]
-        && request.resource.data.reportedUserId != request.auth.uid
-        && request.resource.data.get('status', 'Pending') == 'Pending'
-        && request.resource.data.reason is string && request.resource.data.reason.size() >= 3;
-      allow update: if isAdmin() && actorValid();
-      allow delete: if false;
+      allow write: if false;
     }
     match /messages/{id} {
       allow read: if activeUser() && (resource.data.senderId == request.auth.uid || resource.data.receiverId == request.auth.uid);

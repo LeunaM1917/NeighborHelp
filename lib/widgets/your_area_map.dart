@@ -13,6 +13,7 @@ import '../utils/geo_location.dart';
 import '../utils/customer_map_data.dart';
 import 'data_stream_builder.dart';
 import 'profile_location_editor.dart';
+import '../screens/customer/scheduled_provider_search_screen.dart';
 export '../utils/customer_map_data.dart' show NearbyMapPin;
 
 class YourAreaMapCard extends StatefulWidget {
@@ -84,6 +85,7 @@ class _YourAreaMapCardState extends State<YourAreaMapCard> {
           Wrap(
             spacing: 8,
             children: [
+              FilledButton.tonalIcon(onPressed:()=>Navigator.push<void>(context,MaterialPageRoute(builder:(_)=>ScheduledProviderSearchScreen(appUser:widget.appUser))),icon:const Icon(Icons.event_available),label:const Text('Find providers for a date')),
               TextButton.icon(
                 onPressed: _saving ? null : _setLocation,
                 icon: const Icon(Icons.my_location),

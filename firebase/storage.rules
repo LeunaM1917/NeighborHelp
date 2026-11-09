@@ -36,8 +36,16 @@ service firebase.storage {
     }
     match /inquiries/{inquiryId}/{senderId}/{fileName} {
       function participant() { return active() && request.auth.uid in firestore.get(/databases/(default)/documents/inquiries/$(inquiryId)).data.participantIds; }
+      function uploadAllowed() {
+        let permitId = fileName.split('[.]')[0];
+        let thread = firestore.get(/databases/(default)/documents/inquiries/$(inquiryId)).data;
+        let permit = thread.uploadPermits[request.auth.uid];
+        return permit.permitId == permitId && permit.expiresAt > request.time && permit.used == false
+          && fileName == permitId + '.' + permit.extension
+          && thread.get('blockedBy', []).size() == 0;
+      }
       allow read: if participant();
-      allow create: if resource == null && participant() && request.auth.uid == senderId && image();
+      allow create: if resource == null && participant() && request.auth.uid == senderId && image() && uploadAllowed();
       allow update, delete: if false;
     }
   }

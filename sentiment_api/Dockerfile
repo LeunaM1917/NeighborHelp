@@ -2,11 +2,13 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+ARG SENTIMENT_ARTIFACT_DIR=LSTM_train
+ARG SENTIMENT_MODEL_FILENAME=neighborhelp_lstm_sentiment.keras
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    SENTIMENT_MODEL_PATH=/models/neighborhelp_lstm_sentiment.keras \
-    SENTIMENT_VOCABULARY_PATH=/models/vocabulary.json \
-    SENTIMENT_MODEL_VERSION=neighborhelp_lstm_sentiment.keras
+    SENTIMENT_MODEL_PATH=/models/${SENTIMENT_MODEL_FILENAME} \
+    SENTIMENT_VOCABULARY_PATH=/models/vocabulary.json
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
@@ -16,7 +18,7 @@ COPY sentiment_api/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY sentiment_api/main.py sentiment_api/vocabulary.py /app/
-COPY LSTM_train/neighborhelp_lstm_sentiment.keras LSTM_train/vocabulary.json /models/
+COPY ${SENTIMENT_ARTIFACT_DIR}/ /models/
 
 EXPOSE 8080
 

@@ -8,6 +8,7 @@ import '../../services/marketplace_service.dart';
 import '../../services/storage_service.dart';
 import '../../services/firestore_service.dart';
 import '../../widgets/chat_image.dart';
+import '../../widgets/work_completion_card.dart';
 import '../customer/contract_offer_screen.dart';
 import '../customer/customer_booking_detail_screen.dart';
 import '../provider/provider_booking_detail_screen.dart';
@@ -90,6 +91,41 @@ class _InquiryScreenState extends State<InquiryScreen> {
   final _text = TextEditingController();
   bool _sending = false;
   bool _markingRead = false;
+  Map<String,String>? _retryMessage;
+  Future<void> _retrySend() async {
+    final message = _retryMessage;
+    if (_sending || message == null) return;
+    setState(()=>_sending=true);
+    try {
+      await MarketplaceService.send(widget.inquiryId,text:message['text']!,mediaUrl:message['mediaUrl']!,messageId:message['messageId']);
+      if (_text.text.trim() == message['text']) _text.clear();
+      _retryMessage=null;
+    } catch(e) {
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e is StateError?e.message.toString():'Could not confirm delivery. Check your connection and retry.')));
+    } finally {if(mounted)setState(()=>_sending=false);}
+  }
+  Future<void> _safetyAction(String action) async {
+    String? reason;
+    if (action == 'report') {
+      final share = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+        title: const Text('Report this inquiry?'),
+        content: const Text('Your explanation and the latest 10 messages will be shared with the system administrator as evidence. Use blocking separately to stop messages and new offers.'),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Back')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Continue report'))],
+      ));
+      if (share != true || !mounted) return;
+      reason = await askRecordedReason(context, 'Explain the concern');
+      if (reason == null) return;
+    }
+    try {
+      await MarketplaceService.command('inquiryCommand', {'action': action, 'inquiryId': widget.inquiryId,
+        if (reason != null) 'reason': reason,
+        if (action == 'report') 'reportId': FirebaseFirestore.instance.collection('bookingUserReports').doc().id});
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(action == 'report' ? 'Report submitted to the system administrator.' : action == 'block' ? 'Conversation blocked.' : 'Your block was removed.')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e is StateError ? e.message.toString() : 'Could not save the action. Retry.')));
+    }
+  }
   @override
   void dispose() {
     _text.dispose();
@@ -114,11 +150,16 @@ class _InquiryScreenState extends State<InquiryScreen> {
           bytes: await picked.readAsBytes(),
         );
       }
+      final messageId = _retryMessage?['text'] == (photo ? '' : _text.text.trim()) && _retryMessage?['mediaUrl'] == media
+          ? _retryMessage!['messageId']! : FirebaseFirestore.instance.collection('inquiries').doc().id;
+      _retryMessage={'messageId':messageId,'text':photo?'':_text.text.trim(),'mediaUrl':media};
       await MarketplaceService.send(
         widget.inquiryId,
         text: photo ? '' : _text.text.trim(),
         mediaUrl: media,
+        messageId: messageId,
       );
+      _retryMessage=null;
       if (!photo) _text.clear();
     } catch (e) {
       if (mounted) {
@@ -165,6 +206,10 @@ class _InquiryScreenState extends State<InquiryScreen> {
       }
       return Scaffold(
         appBar: AppBar(
+          actions: [if(t != null) PopupMenuButton<String>(tooltip:'Conversation safety',onSelected:_safetyAction,itemBuilder:(_)=>[
+            PopupMenuItem(value:t.blockedBy.contains(widget.appUser.userId)?'unblock':'block',child:Text(t.blockedBy.contains(widget.appUser.userId)?'Unblock conversation':'Block conversation')),
+            const PopupMenuItem(value:'report',child:Text('Report to administrator')),
+          ])],
           title: Text(
             t == null
                 ? 'Service inquiry'
@@ -187,6 +232,7 @@ class _InquiryScreenState extends State<InquiryScreen> {
                     constraints: const BoxConstraints(maxWidth: 1000),
                     child: Column(
                       children: [
+                        if(t.isBlocked) const Padding(padding:EdgeInsets.all(12),child:Text('This conversation is blocked. Messages and new offers are paused. You can still view history and report a concern.')),
                         Padding(
                           padding: const EdgeInsets.all(12),
                           child: Text(
@@ -200,7 +246,7 @@ class _InquiryScreenState extends State<InquiryScreen> {
                             child: Column(
                               children: [
                                 FilledButton.icon(
-                                  onPressed: t.hasDiscussion
+                                  onPressed: t.hasDiscussion && !t.isBlocked
                                       ? () => Navigator.push(
                                           context,
                                           MaterialPageRoute<void>(
@@ -225,6 +271,7 @@ class _InquiryScreenState extends State<InquiryScreen> {
                           ),
                         _InquiryOffers(appUser: widget.appUser, inquiry: t),
                         const Divider(),
+                        if(_retryMessage != null && !t.isBlocked)TextButton.icon(onPressed:_sending?null:_retrySend,icon:const Icon(Icons.refresh),label:const Text('Retry message with uncertain delivery')),
                         Expanded(
                           child:
                               StreamBuilder<
@@ -315,7 +362,7 @@ class _InquiryScreenState extends State<InquiryScreen> {
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               IconButton(
-                                onPressed: _sending
+                                onPressed: _sending || t.isBlocked
                                     ? null
                                     : () => _send(photo: true),
                                 icon: const Icon(
@@ -325,6 +372,7 @@ class _InquiryScreenState extends State<InquiryScreen> {
                               ),
                               Expanded(
                                 child: TextField(
+                                  enabled: !t.isBlocked && !_sending,
                                   controller: _text,
                                   maxLength: 6000,
                                   minLines: 1,
@@ -337,7 +385,7 @@ class _InquiryScreenState extends State<InquiryScreen> {
                                 ),
                               ),
                               IconButton(
-                                onPressed: _sending ? null : _send,
+                                onPressed: _sending || t.isBlocked ? null : _send,
                                 icon: _sending
                                     ? const SizedBox(
                                         width: 20,

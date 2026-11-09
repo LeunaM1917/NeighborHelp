@@ -2,7 +2,7 @@
 
 const crypto = require('node:crypto');
 const complete = b => ['completed', 'milestone complete'].includes(String(b.status).toLowerCase());
-const active = b => ['accepted', 'in progress'].includes(String(b.status).toLowerCase());
+const active = b => ['accepted', 'in progress', 'awaiting confirmation'].includes(String(b.status).toLowerCase());
 const millis = v => v && typeof v.toMillis === 'function' ? v.toMillis() : Number(v);
 function windowFor(b) {
   const start = millis(b.scheduledDate);

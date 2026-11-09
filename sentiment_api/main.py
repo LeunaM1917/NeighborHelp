@@ -1,4 +1,5 @@
 import logging
+import json
 import os
 from functools import lru_cache
 from pathlib import Path
@@ -11,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 
-from vocabulary import clean_review_text, load_vocabulary_index, text_to_sequence
+from vocabulary import clean_review_text, clean_review_text_unicode, load_vocabulary_index, text_to_sequence
 
 
 logger = logging.getLogger("neighborhelp-sentiment")
@@ -54,12 +55,17 @@ class PredictSentimentResponse(BaseModel):
     review_id: Optional[str] = None
     provider_id: Optional[str] = None
     model_version: str
+    model_family: str = "lstm"
 
 
 class SentimentArtifacts(BaseModel):
     model: object
     word_index: Optional[Dict[str, int]]
     model_version: str
+    preprocessing: str = "legacy_ascii_v1"
+    languages: List[str] = Field(default_factory=list)
+    approved_for_production: Optional[bool] = None
+    model_family: str = "lstm"
 
     class Config:
         arbitrary_types_allowed = True
@@ -114,10 +120,29 @@ def get_artifacts() -> SentimentArtifacts:
         )
 
     logger.info("Loading sentiment model from %s", MODEL_PATH)
-    model = tf.keras.models.load_model(MODEL_PATH, compile=False)
+    metadata_path = Path(os.getenv("SENTIMENT_METADATA_PATH", str(MODEL_PATH.with_suffix(".metadata.json"))))
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8")) if metadata_path.exists() else {}
+    if metadata and metadata.get("labels") != LABELS:
+        raise RuntimeError("Model metadata label order must be negative, neutral, positive.")
+    preprocessing = metadata.get("preprocessing", "legacy_ascii_v1")
+    if preprocessing not in {"legacy_ascii_v1", "unicode_v1"}:
+        raise RuntimeError("Unsupported model preprocessing version.")
+    model_family = metadata.get("model_family", "lstm")
+    if model_family == "tfidf_logistic" and MODEL_PATH.suffix == ".joblib":
+        # Only load locally trained/reviewed artifacts, never files uploaded by API users.
+        import joblib
+        model = joblib.load(MODEL_PATH)
+        if list(model.classes_) != [0, 1, 2]:
+            raise RuntimeError("Linear model class order must match the declared label order.")
+    elif model_family == "lstm" and MODEL_PATH.suffix == ".keras":
+        model = tf.keras.models.load_model(MODEL_PATH, compile=False)
+    else:
+        raise RuntimeError("Unsupported model artifact or family.")
 
     word_index = None
-    if VOCABULARY_PATH.exists():
+    if model_family == "tfidf_logistic":
+        pass
+    elif VOCABULARY_PATH.exists():
         word_index = load_vocabulary_index(VOCABULARY_PATH)
         logger.info("Loaded vocabulary (%d tokens) from %s", len(word_index), VOCABULARY_PATH)
     elif TOKENIZER_PATH.exists():
@@ -127,14 +152,15 @@ def get_artifacts() -> SentimentArtifacts:
             f"Numeric-input model requires vocabulary at '{VOCABULARY_PATH}' or tokenizer.json."
         )
 
-    version = os.getenv("SENTIMENT_MODEL_VERSION") or MODEL_PATH.name
+    version = os.getenv("SENTIMENT_MODEL_VERSION") or metadata.get("model_version") or MODEL_PATH.name
     logger.info(
         "Sentiment model loaded. raw_text_input=%s vocab=%s",
         model_accepts_raw_text(model),
         word_index is not None,
     )
 
-    return SentimentArtifacts(model=model, word_index=word_index, model_version=version)
+    return SentimentArtifacts(model=model, word_index=word_index, model_version=version, preprocessing=preprocessing,model_family=model_family,
+                             languages=metadata.get("languages", []), approved_for_production=metadata.get("approved_for_production"))
 
 
 def predict_probabilities(model: tf.keras.Model, features: np.ndarray) -> np.ndarray:
@@ -149,7 +175,7 @@ def predict_probabilities(model: tf.keras.Model, features: np.ndarray) -> np.nda
         raise RuntimeError(f"Unexpected model output size: {probs.size}. Expected 3 classes.")
 
     total = float(np.sum(probs))
-    if total <= 0:
+    if total <= 0 or not np.all(np.isfinite(probs)) or np.any(probs < 0):
         raise RuntimeError("Model returned non-positive probability sum.")
     return probs / total
 
@@ -178,10 +204,11 @@ def warmup_model() -> None:
 
 
 @app.get("/health")
-def health() -> Dict[str, str]:
+def health() -> Dict[str, object]:
     try:
         artifacts = get_artifacts()
-        return {"status": "ok", "model_version": artifacts.model_version}
+        return {"status": "ok", "model_version": artifacts.model_version, "preprocessing":artifacts.preprocessing,
+                "trained_languages":artifacts.languages,"approved_for_production":artifacts.approved_for_production,"model_family":artifacts.model_family}
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"Model unavailable: {exc}") from exc
 
@@ -190,12 +217,17 @@ def health() -> Dict[str, str]:
 def predict_sentiment(payload: PredictSentimentRequest) -> PredictSentimentResponse:
     try:
         artifacts = get_artifacts()
-        cleaned = clean_review_text(payload.review_text)
+        cleaned = clean_review_text_unicode(payload.review_text) if artifacts.preprocessing == "unicode_v1" else clean_review_text(payload.review_text)
         if len(cleaned) < 2:
             raise HTTPException(status_code=400, detail="review_text too short after cleaning")
-        tokenizer = load_tokenizer(TOKENIZER_PATH) if TOKENIZER_PATH.exists() else None
-        features = preprocess_for_model(artifacts.model, artifacts.word_index, tokenizer, cleaned)
-        probs = predict_probabilities(artifacts.model, features)
+        if artifacts.model_family == "tfidf_logistic":
+            probs = np.asarray(artifacts.model.predict_proba([cleaned])[0],dtype=np.float64)
+            if probs.shape != (3,) or not np.all(np.isfinite(probs)) or np.any(probs < 0) or not np.isclose(np.sum(probs),1):
+                raise RuntimeError("Invalid classifier probabilities.")
+        else:
+            tokenizer = load_tokenizer(TOKENIZER_PATH) if TOKENIZER_PATH.exists() else None
+            features = preprocess_for_model(artifacts.model, artifacts.word_index, tokenizer, cleaned)
+            probs = predict_probabilities(artifacts.model, features)
     except HTTPException:
         raise
     except Exception as exc:
@@ -219,4 +251,5 @@ def predict_sentiment(payload: PredictSentimentRequest) -> PredictSentimentRespo
         review_id=payload.review_id,
         provider_id=payload.provider_id,
         model_version=artifacts.model_version,
+        model_family=artifacts.model_family,
     )

@@ -2,7 +2,7 @@ const { before, after, beforeEach, test } = require('node:test');
 const fs = require('node:fs');
 const path = require('node:path');
 const { initializeTestEnvironment, assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
-const { doc, setDoc, updateDoc, getDoc, getDocs, collection, query, where, or, and, GeoPoint } = require('firebase/firestore');
+const { doc, setDoc, updateDoc, getDoc, getDocs, collection, query, where, or, and, GeoPoint, Timestamp } = require('firebase/firestore');
 const { ref, uploadBytes, getBytes } = require('firebase/storage');
 let env;
 before(async () => {
@@ -127,7 +127,7 @@ test('profile photos allow owner image uploads but reject cross-account writes, 
 
 test('inquiries, messages and attachments are private to their actual participants and cannot be forged',async()=>{
   await env.withSecurityRulesDisabled(async c=>{
-    await setDoc(doc(c.firestore(),'inquiries','thread'),{customerId:'customer',providerId:'provider',participantIds:['customer','provider']});
+    await setDoc(doc(c.firestore(),'inquiries','thread'),{customerId:'customer',providerId:'provider',participantIds:['customer','provider'],blockedBy:[],uploadPermits:{customer:{permitId:'photo',extension:'png',expiresAt:Timestamp.fromMillis(Date.now()+600000),used:false}}});
     await setDoc(doc(c.firestore(),'inquiries','thread','messages','m'),{senderId:'customer',text:'Private requirements'});
   });
   for(const uid of ['customer','provider']) {
@@ -148,6 +148,23 @@ test('inquiries, messages and attachments are private to their actual participan
   await assertSucceeds(getBytes(ref(env.authenticatedContext('provider').storage(),'inquiries/thread/customer/photo.png')));
   await assertFails(getBytes(ref(env.authenticatedContext('stranger').storage(),'inquiries/thread/customer/photo.png')));
   await assertFails(uploadBytes(ref(env.authenticatedContext('provider').storage(),'inquiries/thread/customer/fake.png'),bytes,{contentType:'image/png'}));
+  await assertFails(uploadBytes(ref(env.authenticatedContext('customer').storage(),'inquiries/thread/customer/no-permit.png'),bytes,{contentType:'image/png'}));
+});
+
+test('blocks revoke an issued upload permit and private contract records cannot be forged',async()=>{
+  await env.withSecurityRulesDisabled(async c=>{
+    await setDoc(doc(c.firestore(),'inquiries','blocked'),{participantIds:['customer','provider'],blockedBy:['provider'],uploadPermits:{customer:{permitId:'blocked-photo',extension:'png',expiresAt:Timestamp.fromMillis(Date.now()+600000),used:false}}});
+    for(const name of ['payments','amendments','agreementVersions','workEvents'])await setDoc(doc(c.firestore(),'bookings','booking',name,'record'),{status:'Actual server record'});
+    await setDoc(doc(c.firestore(),'bookingUserReports','report'),{bookingId:'booking',evidence:[{text:'Preserved evidence'}],status:'open'});
+  });
+  await assertFails(uploadBytes(ref(env.authenticatedContext('customer').storage(),'inquiries/blocked/customer/blocked-photo.png'),new Uint8Array([137,80,78,71]),{contentType:'image/png'}));
+  for(const name of ['payments','amendments','agreementVersions','workEvents']) {
+    for(const uid of ['customer','provider','admin'])await assertSucceeds(getDoc(doc(env.authenticatedContext(uid).firestore(),'bookings','booking',name,'record')));
+    await assertFails(getDoc(doc(env.authenticatedContext('stranger').firestore(),'bookings','booking',name,'record')));
+    await assertFails(updateDoc(doc(env.authenticatedContext('customer').firestore(),'bookings','booking',name,'record'),{status:'Forged'}));
+  }
+  await assertFails(updateDoc(doc(env.authenticatedContext('admin').firestore(),'bookingUserReports','report'),{evidence:[]}));
+  await assertFails(getDoc(doc(env.authenticatedContext('customer').firestore(),'rateLimits','private')));
 });
 
 test('providers cannot publish custom services or reintroduce hourly listings',async()=>{

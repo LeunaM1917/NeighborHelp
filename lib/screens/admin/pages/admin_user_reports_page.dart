@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -51,7 +52,7 @@ class _AdminUserReportsPageState extends State<AdminUserReportsPage> {
     final q = _search.trim().toLowerCase();
     if (q.isNotEmpty) {
       list = list.where((r) {
-        return r.bookingId.toLowerCase().contains(q) ||
+        return r.contextLabel.toLowerCase().contains(q) ||
             r.reason.toLowerCase().contains(q) ||
             r.reporterId.toLowerCase().contains(q) ||
             r.reportedUserId.toLowerCase().contains(q);
@@ -98,8 +99,8 @@ class _AdminUserReportsPageState extends State<AdminUserReportsPage> {
                       text: TextSpan(
                         style: GoogleFonts.inter(fontSize: 14, color: FigmaColors.gray800),
                         children: [
-                          const TextSpan(text: 'Booking ID: ', style: TextStyle(fontWeight: FontWeight.w600)),
-                          TextSpan(text: report.bookingId),
+                          TextSpan(text: report.inquiryId.isNotEmpty ? 'Inquiry: ' : 'Booking ID: ', style: const TextStyle(fontWeight: FontWeight.w600)),
+                          TextSpan(text: report.contextLabel),
                         ],
                       ),
                     ),
@@ -126,6 +127,11 @@ class _AdminUserReportsPageState extends State<AdminUserReportsPage> {
                     const SizedBox(height: 8),
                     adminDetailLine('Reason', report.reason),
                     if (report.details.isNotEmpty) adminDetailLine('Details', report.details),
+                    if (report.evidence.isNotEmpty) ...[
+                      const Text('Reported conversation evidence',style:TextStyle(fontWeight:FontWeight.w600)),
+                      for(final message in report.evidence.reversed)
+                        Padding(padding:const EdgeInsets.symmetric(vertical:6),child:SelectableText('${message['senderId']} · ${message['sentAt'] is Timestamp ? timeFmt.format((message['sentAt'] as Timestamp).toDate()) : ''}\n${message['text'] ?? ''}${(message['mediaUrl'] as String? ?? '').isNotEmpty ? '\n[Photo attached; private conversation media]' : ''}')),
+                    ],
                     if (booking != null) adminDetailLine('Booking status', booking.status),
                     if (report.adminNotes.isNotEmpty) adminDetailLine('Admin notes', report.adminNotes),
                     const SizedBox(height: 14),
@@ -133,7 +139,7 @@ class _AdminUserReportsPageState extends State<AdminUserReportsPage> {
                       controller: notesController,
                       maxLines: 3,
                       decoration: const InputDecoration(
-                        labelText: 'Admin notes (optional)',
+                        labelText: 'Decision notes (at least 10 characters)',
                         alignLabelWithHint: true,
                         border: OutlineInputBorder(),
                       ),
@@ -154,7 +160,7 @@ class _AdminUserReportsPageState extends State<AdminUserReportsPage> {
                     foregroundColor: FigmaColors.red600,
                     side: const BorderSide(color: FigmaColors.red600),
                   ),
-                  onPressed: () async {
+                  onPressed: notesController.text.trim().length < 10 ? null : () async {
                     chosenAction = 'dismiss';
                     Navigator.pop(ctx);
                   },
@@ -162,7 +168,7 @@ class _AdminUserReportsPageState extends State<AdminUserReportsPage> {
                 ),
                 FilledButton(
                   style: FilledButton.styleFrom(backgroundColor: FigmaColors.green),
-                  onPressed: () async {
+                  onPressed: notesController.text.trim().length < 10 ? null : () async {
                     chosenAction = 'resolve';
                     Navigator.pop(ctx);
                   },
@@ -398,7 +404,7 @@ class _AdminUserReportsPageState extends State<AdminUserReportsPage> {
                                                   reporter: usersById[r.reporterId],
                                                   reported: usersById[r.reportedUserId],
                                                 ),
-                                                child: Text(r.bookingId, style: GoogleFonts.inter(color: FigmaColors.navy)),
+                                                child: Text(r.contextLabel, style: GoogleFonts.inter(color: FigmaColors.navy)),
                                               ),
                                             ),
                                             DataCell(

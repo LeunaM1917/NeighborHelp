@@ -2,6 +2,8 @@
 
 Customers discuss a job with providers before sending a fixed amount or daily rate offer. Each accepted offer creates its own service agreement. The System Administrator checks TESDA credentials; providers and legacy verification accounts cannot approve certificates. The academic paper is unchanged.
 
+The subsequent [marketplace improvements](marketplace-improvements.md) add schedule search, customer confirmation, versioned amendments, payment acknowledgments and inquiry safety. Their workflow and rollout requirements supersede older descriptions below where applicable.
+
 ## Pricing and agreements
 
 - Fixed pricing charges the proposed amount once. Daily pricing multiplies the proposed rate by the agreed number of working days, rounded to centavos on the server.

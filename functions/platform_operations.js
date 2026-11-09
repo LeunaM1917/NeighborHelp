@@ -45,10 +45,21 @@ module.exports = function platformOperations({ db, admin, functions, region, mes
     await db.collection('notifications').doc(eventKey(`${key}:${userId}`)).create({ userId, title, message, relatedBookingId: bookingId,
       notificationType: type, isRead: false, createdAt: stamp() }).catch(e => { if (e.code !== 6) throw e; });
   }
-  out.bookingCommand = functions.region(region).https.onCall(require('./booking_commands')({ db, admin, functions }));
-  out.inquiryCommand = functions.region(region).https.onCall(require('./inquiry_commands')({db, functions}));
-  out.certificateCommand = functions.region(region).https.onCall(require('./certificate_commands')({db, functions}));
-  out.contractCommand = functions.region(region).https.onCall(require('./contract_commands')({db,functions}));
+  out.bookingCommand = functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'}).https.onCall(require('./booking_commands')({ db, admin, functions }));
+  out.inquiryCommand = functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'}).https.onCall(require('./inquiry_commands')({db, functions}));
+  out.certificateCommand = functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'}).https.onCall(require('./certificate_commands')({db, functions}));
+  out.contractCommand = functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'}).https.onCall(require('./contract_commands')({db,functions}));
+  out.providerAvailability = functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'}).https.onCall(require('./availability_command')({db,functions}));
+  out.agreementCommand = functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'}).https.onCall(require('./agreement_commands')({db,functions}));
+  out.paymentCommand = functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'}).https.onCall(require('./payment_commands')({db,functions}));
+  out.reportCommand = functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'}).https.onCall(require('./report_commands')({db,functions}));
+  out.cleanupAbuseLimits=functions.region(region).pubsub.schedule('every 6 hours').onRun(async()=>{
+    for(const collection of ['rateLimits','inquiryUploads']) {
+      const expired=await db.collection(collection).where('expiresAt','<',Timestamp.now()).limit(450).get();
+      if(!expired.empty){const batch=db.batch();for(const doc of expired.docs)batch.delete(doc.ref);await batch.commit();}
+    }
+    return null;
+  });
   // Refresh old projections and hide expired/unsupported listings without deleting history.
   out.enforceMarketplacePolicy = functions.region(region).pubsub.schedule('every 6 hours').onRun(async () => {
     const providers=await db.collection('serviceProviders').get();
@@ -63,7 +74,7 @@ module.exports = function platformOperations({ db, admin, functions, region, mes
     }
     return null;
   });
-  out.registerPushDevice = functions.region(region).https.onCall(async (data, context) => {
+  out.registerPushDevice = functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'}).https.onCall(async (data, context) => {
     if (!context.auth) fail('unauthenticated', 'Sign in required.');
     const uid = context.auth.uid, token = String(data?.token || '');
     if (token.length < 20 || token.length > 4096) fail('invalid-argument', 'Invalid device token.');
@@ -147,7 +158,7 @@ module.exports = function platformOperations({ db, admin, functions, region, mes
     }
     return null;
   });
-  out.queueAnnouncement = functions.region(region).https.onCall(async (data, context) => {
+  out.queueAnnouncement = functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'}).https.onCall(async (data, context) => {
     await assertAdmin(context);
     const title = String(data?.title || '').trim(), message = String(data?.message || '').trim();
     const when = Number(data?.scheduledAt);
@@ -183,7 +194,7 @@ module.exports = function platformOperations({ db, admin, functions, region, mes
     }
     return null;
   });
-  out.adminDataOperation = functions.region(region).https.onCall(async (data, context) => {
+  out.adminDataOperation = functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'}).https.onCall(async (data, context) => {
     await assertAdmin(context);
     const { action, collection } = data || {};
     const allowed = ['bookings', 'services', 'reviews', 'notifications', 'bookingUserReports', 'auditLogs', 'users', 'serviceProviders'];
@@ -220,7 +231,7 @@ module.exports = function platformOperations({ db, admin, functions, region, mes
       return { count: ids.length };
     });
   });
-  out.recordSessionEvent = functions.region(region).https.onCall(async (data, context) => {
+  out.recordSessionEvent = functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'}).https.onCall(async (data, context) => {
     if (!context.auth) fail('unauthenticated', 'Sign in required.');
     const user = (await db.collection('users').doc(context.auth.uid).get()).data();
     if (!user || user.accountStatus !== 'Active') fail('permission-denied', 'Account is restricted.');
@@ -229,7 +240,7 @@ module.exports = function platformOperations({ db, admin, functions, region, mes
     return { ok: true };
   });
   // Read-through for historical profiles, so rollout never depends on a data migration.
-  out.getPublicDirectory = functions.region(region).https.onCall(async (data, context) => {
+  out.getPublicDirectory = functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'}).https.onCall(async (data, context) => {
     if (!context.auth) fail('unauthenticated', 'Sign in required.');
     const actor = (await db.collection('users').doc(context.auth.uid).get()).data();
     if (actor?.accountStatus !== 'Active') fail('permission-denied', 'An active account is required.');
@@ -242,7 +253,7 @@ module.exports = function platformOperations({ db, admin, functions, region, mes
     const docs = await query.get();
     return { records: docs.docs.map(d => publicProfile(d.id, d.data())), after: docs.size === 500 ? docs.docs.at(-1).id : null };
   });
-  out.getPublicProviders = functions.region(region).https.onCall(async (data, context) => {
+  out.getPublicProviders = functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'}).https.onCall(async (data, context) => {
     if (!context.auth) fail('unauthenticated', 'Sign in required.');
     const actor = (await db.collection('users').doc(context.auth.uid).get()).data();
     if (actor?.accountStatus !== 'Active') fail('permission-denied', 'An active account is required.');

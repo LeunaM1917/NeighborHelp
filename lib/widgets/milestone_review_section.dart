@@ -62,6 +62,15 @@ class _MilestoneReviewSectionState extends State<MilestoneReviewSection> {
         reviewerRole: widget.reviewerRole,
         rating: _rating,
         comment: _commentController.text.trim().isEmpty ? null : _commentController.text.trim(),
+        onSentimentWarning: (warning) async {
+          if (!mounted) return false;
+          return await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+            title: const Text('Review your feedback'), content: Text(warning), actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Edit review')),
+              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Post as written')),
+            ],
+          )) ?? false;
+        },
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

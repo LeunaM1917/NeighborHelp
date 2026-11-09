@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'marketplace_service.dart';
 import 'package:flutter/foundation.dart';
 import '../utils/image_upload.dart';
 
@@ -18,8 +20,13 @@ class StorageService {
       throw ArgumentError('Choose an image up to 5 MB.');
     }
     final format = ImageUploadFormat.inspect(bytes);
+    final permit = await MarketplaceService.command('inquiryCommand', {
+      'action': 'authorizeUpload', 'inquiryId': inquiryId,
+      'permitId': FirebaseFirestore.instance.collection('inquiryUploads').doc().id,
+      'extension': format.extension,
+    });
     final ref = _storage.ref(
-      'inquiries/$inquiryId/$senderId/${DateTime.now().microsecondsSinceEpoch}.${format.extension}',
+      'inquiries/$inquiryId/$senderId/${permit['fileName']}',
     );
     await ref.putData(bytes, SettableMetadata(contentType: format.contentType));
     return 'gs://${ref.bucket}/${ref.fullPath}';

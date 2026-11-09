@@ -171,7 +171,7 @@ class _ProviderServicesTabState extends State<ProviderServicesTab> {
                         final inquiries = bookings
                             .where((b) {
                               final s = b.status.toLowerCase();
-                              return s == 'pending' || s == 'accepted' || s == 'in progress';
+                              return s == 'pending' || s == 'accepted' || s == 'in progress' || s == 'awaiting confirmation';
                             })
                             .length;
                         final completed = bookings.where((b) => b.isCompleted).length;

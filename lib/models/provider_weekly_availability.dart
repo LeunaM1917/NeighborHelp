@@ -1,3 +1,5 @@
+import 'requested_work_schedule.dart';
+
 /// Provider weekly schedule stored in `serviceProviders.weeklyAvailability`.
 class ProviderDaySchedule {
   const ProviderDaySchedule({
@@ -18,7 +20,10 @@ class ProviderDaySchedule {
     );
   }
 
-  factory ProviderDaySchedule.fromDynamic(dynamic raw, {required ProviderDaySchedule fallback}) {
+  factory ProviderDaySchedule.fromDynamic(
+    dynamic raw, {
+    required ProviderDaySchedule fallback,
+  }) {
     if (raw is Map) {
       final map = Map<String, dynamic>.from(raw);
       return ProviderDaySchedule(
@@ -34,10 +39,10 @@ class ProviderDaySchedule {
   }
 
   Map<String, dynamic> toMap() => {
-        'enabled': enabled,
-        'start': start,
-        'end': end,
-      };
+    'enabled': enabled,
+    'start': start,
+    'end': end,
+  };
 }
 
 class ProviderWeeklyAvailability {
@@ -53,26 +58,63 @@ class ProviderWeeklyAvailability {
     'Sunday',
   ];
 
-  static const weekdayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+  static const weekdayNames = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+  ];
 
   final Map<String, ProviderDaySchedule> days;
 
   ProviderDaySchedule scheduleFor(String day) =>
       days[day] ?? ProviderWeeklyAvailability.defaults.days[day]!;
 
-  ProviderWeeklyAvailability updateDay(String day, ProviderDaySchedule schedule) {
+  ProviderWeeklyAvailability updateDay(
+    String day,
+    ProviderDaySchedule schedule,
+  ) {
     return ProviderWeeklyAvailability(days: {...days, day: schedule});
   }
 
   static final defaults = ProviderWeeklyAvailability(
     days: {
-      'Monday': const ProviderDaySchedule(enabled: true, start: '8:00 AM', end: '5:00 PM'),
-      'Tuesday': const ProviderDaySchedule(enabled: true, start: '8:00 AM', end: '5:00 PM'),
-      'Wednesday': const ProviderDaySchedule(enabled: true, start: '8:30 AM', end: '5:30 PM'),
-      'Thursday': const ProviderDaySchedule(enabled: true, start: '8:00 AM', end: '5:00 PM'),
-      'Friday': const ProviderDaySchedule(enabled: true, start: '8:00 AM', end: '5:00 PM'),
-      'Saturday': const ProviderDaySchedule(enabled: true, start: '9:00 AM', end: '1:00 PM'),
-      'Sunday': const ProviderDaySchedule(enabled: false, start: '8:00 AM', end: '5:00 PM'),
+      'Monday': const ProviderDaySchedule(
+        enabled: true,
+        start: '8:00 AM',
+        end: '5:00 PM',
+      ),
+      'Tuesday': const ProviderDaySchedule(
+        enabled: true,
+        start: '8:00 AM',
+        end: '5:00 PM',
+      ),
+      'Wednesday': const ProviderDaySchedule(
+        enabled: true,
+        start: '8:30 AM',
+        end: '5:30 PM',
+      ),
+      'Thursday': const ProviderDaySchedule(
+        enabled: true,
+        start: '8:00 AM',
+        end: '5:00 PM',
+      ),
+      'Friday': const ProviderDaySchedule(
+        enabled: true,
+        start: '8:00 AM',
+        end: '5:00 PM',
+      ),
+      'Saturday': const ProviderDaySchedule(
+        enabled: true,
+        start: '9:00 AM',
+        end: '1:00 PM',
+      ),
+      'Sunday': const ProviderDaySchedule(
+        enabled: false,
+        start: '8:00 AM',
+        end: '5:00 PM',
+      ),
     },
   );
 
@@ -100,7 +142,10 @@ class ProviderWeeklyAvailability {
     }
     if (on.isEmpty) return 'No days set';
     if (on.length == 7) return 'Every day';
-    if (on.length >= 2 && on.first == 'Mon' && on.last == 'Sat' && on.length == 6) {
+    if (on.length >= 2 &&
+        on.first == 'Mon' &&
+        on.last == 'Sat' &&
+        on.length == 6) {
       return 'Mon – Sat';
     }
     return on.join(', ');
@@ -136,28 +181,59 @@ class ProviderWeeklyAvailability {
 
   /// Whether [now] falls on an enabled day within that day's start–end window.
   bool isAvailableNow([DateTime? now]) {
-    final at = now ?? DateTime.now();
-    final dayName = dayOrder[at.weekday - 1];
-    final day = scheduleFor(dayName);
-    if (!day.enabled) return false;
-    final start = minutesFromTimeLabel(day.start);
-    final end = minutesFromTimeLabel(day.end);
-    if (start == null || end == null) return false;
-    final current = at.hour * 60 + at.minute;
-    if (end >= start) {
-      return current >= start && current <= end;
+    // Explicit [now] remains a wall-clock value for existing schedule demos.
+    final at = now ?? DateTime.now().toUtc().add(const Duration(hours: 8));
+    final wall = DateTime.utc(
+      at.year,
+      at.month,
+      at.day,
+      at.hour,
+      at.minute,
+      at.second,
+    );
+    return _coversWallPeriod(wall, wall.add(const Duration(milliseconds: 1)));
+  }
+
+  bool coversRequest(RequestedWorkSchedule request) => request.periods.every(
+    (period) => _coversWallPeriod(
+      period.$1.toUtc().add(const Duration(hours: 8)),
+      period.$2.toUtc().add(const Duration(hours: 8)),
+    ),
+  );
+
+  bool _coversWallPeriod(DateTime from, DateTime to) {
+    if (!to.isAfter(from)) return false;
+    final midnight = DateTime.utc(from.year, from.month, from.day);
+    var cursor = from;
+    for (final offset in [-1, 0, 1]) {
+      final base = midnight.add(Duration(days: offset));
+      final schedule = scheduleFor(dayOrder[base.weekday - 1]);
+      final start = minutesFromTimeLabel(schedule.start),
+          end = minutesFromTimeLabel(schedule.end);
+      if (!schedule.enabled || start == null || end == null || start == end) {
+        continue;
+      }
+      final shiftStart = base.add(Duration(minutes: start));
+      final shiftEnd = base.add(
+        Duration(minutes: end + (end < start ? 1440 : 0)),
+      );
+      if (!shiftStart.isAfter(cursor) && shiftEnd.isAfter(cursor)) {
+        cursor = shiftEnd;
+      }
     }
-    // Overnight window (e.g. 10:00 PM – 2:00 AM).
-    return current >= start || current <= end;
+    return !cursor.isBefore(to);
   }
 
   /// Parses labels like `8:00 AM` / `5:30 PM` into minutes from midnight.
   static int? minutesFromTimeLabel(String label) {
-    final match = RegExp(r'^(\d{1,2}):(\d{2})\s*(AM|PM)$', caseSensitive: false)
-        .firstMatch(label.trim());
+    final match = RegExp(
+      r'^(\d{1,2}):(\d{2})\s*(AM|PM)$',
+      caseSensitive: false,
+    ).firstMatch(label.trim());
     if (match == null) return null;
     var hour = int.parse(match.group(1)!);
     final minute = int.parse(match.group(2)!);
+    if (hour < 1 || hour > 12 || minute > 59) return null;
     final period = match.group(3)!.toUpperCase();
     if (period == 'AM') {
       if (hour == 12) hour = 0;

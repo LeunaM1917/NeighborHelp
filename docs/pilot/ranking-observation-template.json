@@ -1,0 +1,38 @@
+{
+  "conducted": false,
+  "data_origin": "real consented pilot observation; fill only after an actual session",
+  "query_id": "anonymous-request-id",
+  "group_id": "same underlying job; keep variants together across splits",
+  "captured_at_before_outcome": "",
+  "request": {
+    "required_qualification": "",
+    "scheduled_start_utc": "",
+    "number_of_days": null,
+    "hours_per_day": null,
+    "max_search_radius_km": null,
+    "location_redacted": true
+  },
+  "candidates": [],
+  "candidate_format": {
+    "provider_id": "anonymous-provider-id",
+    "identity_verified": null,
+    "certificate_verified": null,
+    "account_active": null,
+    "service_matches": null,
+    "distance_km": null,
+    "service_radius_km": null,
+    "available_for_every_requested_period": null,
+    "availability_checked_at_utc": "",
+    "bayesian_rating": null,
+    "review_count": null,
+    "completed_bookings": null,
+    "accepted_bookings": null,
+    "reviewer_1_grade": null,
+    "reviewer_2_grade": null,
+    "relevance": null,
+    "label_source": "",
+    "adjudication_notes": ""
+  },
+  "observed_task_outcome_recorded_separately": "",
+  "warning": "Never substitute later outcomes, current profile totals or algorithm scores for independently judged search-time features and labels."
+}

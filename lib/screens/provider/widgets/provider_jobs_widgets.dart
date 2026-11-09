@@ -19,7 +19,7 @@ ProviderJobStatusBucket jobStatusBucket(Booking booking) {
     return ProviderJobStatusBucket.inProgress;
   }
   if (s == 'accepted' || booking.canStartJob) return ProviderJobStatusBucket.accepted;
-  if (s == 'in progress') return ProviderJobStatusBucket.inProgress;
+  if (s == 'in progress' || s == 'awaiting confirmation') return ProviderJobStatusBucket.inProgress;
   if (s == 'pending') {
     final hours = DateTime.now().difference(booking.createdAt.toDate()).inHours;
     if (hours < 48) return ProviderJobStatusBucket.newRequest;
@@ -37,7 +37,7 @@ String jobStatusLabel(Booking booking) {
     case ProviderJobStatusBucket.accepted:
       return 'Accepted';
     case ProviderJobStatusBucket.inProgress:
-      return 'In Progress';
+      return booking.isAwaitingConfirmation ? 'Awaiting Confirmation' : 'In Progress';
     case ProviderJobStatusBucket.completed:
       return 'Completed';
     case ProviderJobStatusBucket.cancelled:
@@ -281,7 +281,7 @@ class ProviderJobsFilterBar extends StatelessWidget {
   final ValueChanged<String> onCategoryChanged;
   final ValueChanged<String> onSortChanged;
 
-  static const statusOptions = ['All statuses', 'New', 'Pending', 'Accepted', 'In Progress', 'Completed', 'Cancelled'];
+  static const statusOptions = ['All statuses', 'New', 'Pending', 'Accepted', 'In Progress', 'Awaiting Confirmation', 'Completed', 'Cancelled'];
   static const sortOptions = ['Newest first', 'Oldest first', 'Date: soonest', 'Date: latest'];
 
   @override
@@ -712,7 +712,7 @@ class _ProviderJobTableRowState extends State<ProviderJobTableRow> {
                       if (mounted) setState(() => _busy = false);
                     },
                     style: _filledActionStyle(rc),
-                    child: const Text('Complete milestone'),
+                    child: const Text('Report work finished'),
                   ),
                   const SizedBox(width: 8),
                   OutlinedButton(

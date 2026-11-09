@@ -38,6 +38,9 @@ class Booking {
     this.customerAcceptedHash,
     this.providerAcceptedHash,
     this.changeRequest,
+    this.completionReportedAt,
+    this.completionResponseDueAt,
+    this.correctionRequest,
   });
 
   final String bookingId;
@@ -87,6 +90,9 @@ class Booking {
   final String? customerAcceptedHash;
   final String? providerAcceptedHash;
   final String? changeRequest;
+  final Timestamp? completionReportedAt;
+  final Timestamp? completionResponseDueAt;
+  final String? correctionRequest;
 
   factory Booking.fromFirestore(String id, Map<String, dynamic> data) {
     return Booking(
@@ -129,6 +135,9 @@ class Booking {
       customerAcceptedHash: data['customerAcceptedHash'] as String?,
       providerAcceptedHash: data['providerAcceptedHash'] as String?,
       changeRequest: data['changeRequest'] as String?,
+      completionReportedAt: data['completionReportedAt'] as Timestamp?,
+      completionResponseDueAt: data['completionResponseDueAt'] as Timestamp?,
+      correctionRequest: data['correctionRequest'] as String?,
     );
   }
 
@@ -137,6 +146,7 @@ class Booking {
   bool get isPending => statusNormalized == 'pending';
   bool get isAccepted => statusNormalized == 'accepted';
   bool get isInProgress => statusNormalized == 'in progress';
+  bool get isAwaitingConfirmation => statusNormalized == 'awaiting confirmation';
   bool get isCancelled =>
       statusNormalized == 'cancelled' || statusNormalized == 'canceled';
   bool get wasCancelledByProvider =>
@@ -177,6 +187,7 @@ class Booking {
   /// Provider may complete only after the work window from actual start has elapsed.
   bool get canCompleteMilestone {
     if (!isInProgress || startedAt == null) return false;
+    if (pricingType == 'fixed') return true;
     final end = workEndsAt;
     if (end == null) return false;
     return !DateTime.now().isBefore(end);

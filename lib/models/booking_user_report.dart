@@ -17,6 +17,8 @@ class BookingUserReport {
     required this.createdAt,
     this.adminNotes = '',
     this.resolvedAt,
+    this.inquiryId = '',
+    this.evidence = const [],
   });
 
   final String reportId;
@@ -31,6 +33,9 @@ class BookingUserReport {
   final Timestamp createdAt;
   final String adminNotes;
   final Timestamp? resolvedAt;
+  final String inquiryId;
+  final List<Map<String, dynamic>> evidence;
+  String get contextLabel => inquiryId.isNotEmpty ? 'Inquiry $inquiryId' : bookingId;
 
   static const statusOpen = 'open';
   static const statusResolved = 'resolved';
@@ -50,6 +55,8 @@ class BookingUserReport {
       createdAt: data['createdAt'] as Timestamp? ?? Timestamp.now(),
       adminNotes: (data['adminNotes'] as String?)?.trim() ?? '',
       resolvedAt: data['resolvedAt'] as Timestamp?,
+      inquiryId: data['inquiryId'] as String? ?? '',
+      evidence: (data['evidence'] as List? ?? const []).map((e)=>Map<String,dynamic>.from(e as Map)).toList(),
     );
   }
 

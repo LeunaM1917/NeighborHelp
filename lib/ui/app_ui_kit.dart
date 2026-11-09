@@ -289,7 +289,7 @@ class BookingStatusTracker extends StatelessWidget {
     final lower = s.toLowerCase();
     if (lower == 'cancelled' || lower == 'canceled') return -1;
     if (lower == 'completed' || lower == 'milestone complete') return 3;
-    if (lower == 'in progress') return 2;
+    if (lower == 'in progress' || lower == 'awaiting confirmation') return 2;
     if (lower == 'accepted') return 1;
     return 0;
   }

@@ -23,6 +23,7 @@ import '../constants/functions_config.dart';
 import '../utils/message_thread.dart';
 import '../utils/service_certification_policy.dart';
 import '../utils/session_data_cache.dart';
+import 'marketplace_service.dart';
 
 /// Shared Firestore access for the app session.
 ///
@@ -884,29 +885,11 @@ class FirestoreService {
     }
     final trimmedDetails = details.trim();
 
-    final reportId = '${bookingId}_${reporterId}_$reportedUserId';
-    final ref = _db
-        .collection(FirestoreCollections.bookingUserReports)
-        .doc(reportId);
-
-    final existing = await ref.get();
-    if (existing.exists) {
-      throw StateError('You have already submitted a report for this booking.');
-    }
-
-    await ref.set({
+    await MarketplaceService.command('reportCommand', {
+      'action': 'reportBooking',
       'bookingId': bookingId,
-      'reportId': reportId,
-      'reporterId': reporterId,
-      'reporterRole': reporterRole,
-      'reportedUserId': reportedUserId,
-      'reportedRole': reportedRole,
       'reason': trimmedReason,
       'details': trimmedDetails,
-      'status': BookingUserReport.statusOpen,
-      'createdAt': FieldValue.serverTimestamp(),
-      'adminNotes': '',
-      'resolvedAt': null,
     });
   }
 
@@ -915,6 +898,7 @@ class FirestoreService {
     return _cache('allBookingUserReports', () {
       return _db
           .collection(FirestoreCollections.bookingUserReports)
+          .orderBy('createdAt', descending: true)
           .limit(250)
           .snapshots()
           .map((s) {
@@ -939,15 +923,11 @@ class FirestoreService {
       throw StateError('Invalid report status.');
     }
 
-    await _db
-        .collection(FirestoreCollections.bookingUserReports)
-        .doc(reportId)
-        .update({
+    await MarketplaceService.command('reportCommand', {
+          'action': 'resolve',
+          'reportId': reportId,
           'status': normalized,
           'adminNotes': adminNotes.trim(),
-          'resolvedAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-          'updatedBy': FirebaseAuth.instance.currentUser?.uid,
         });
   }
 
@@ -1419,6 +1399,7 @@ class FirestoreService {
     required String reviewerRole,
     required int rating,
     String? comment,
+    Future<bool> Function(String warning)? onSentimentWarning,
   }) async {
     final authUid = FirebaseAuth.instance.currentUser?.uid;
     if (authUid == null) {
@@ -1447,7 +1428,7 @@ class FirestoreService {
 
     if (!fresh.isMilestoneComplete) {
       throw StateError(
-        'Reviews unlock after the provider marks the milestone complete (current status: ${fresh.status}).',
+        'Reviews unlock after the customer confirms the reported work is complete (current status: ${fresh.status}).',
       );
     }
     if (role == 'customer' && fresh.customerId != authUid) {
@@ -1472,33 +1453,42 @@ class FirestoreService {
     final trimmedComment = comment?.trim();
 
     try {
-      await _submitMilestoneReviewCallable(
+      final result = await _submitMilestoneReviewCallable(
         bookingId: fresh.bookingId,
         reviewerRole: role,
         rating: rating,
         comment: trimmedComment,
       );
+      if (result['requiresConfirmation'] == true) {
+        final proceed = await onSentimentWarning?.call(result['warning'] as String) ?? true;
+        if (!proceed) throw StateError('Review kept as a draft. You can edit it and submit again.');
+        await _submitMilestoneReviewCallable(bookingId: fresh.bookingId, reviewerRole: role, rating: rating,
+          comment: trimmedComment, confirmSentimentMismatch: true);
+      }
     } on FirebaseFunctionsException catch (e) {
       throw StateError(_milestoneReviewFunctionsMessage(e));
     }
   }
 
-  Future<void> _submitMilestoneReviewCallable({
+  Future<Map<String, dynamic>> _submitMilestoneReviewCallable({
     required String bookingId,
     required String reviewerRole,
     required int rating,
     String? comment,
+    bool confirmSentimentMismatch = false,
   }) async {
     final functions = FirebaseFunctions.instanceFor(
       region: kNeighborHelpFunctionsRegion,
     );
     final callable = functions.httpsCallable('submitMilestoneReview');
-    await callable.call(<String, dynamic>{
+    final result = await callable.call(<String, dynamic>{
       'bookingId': bookingId,
       'reviewerRole': reviewerRole,
       'rating': rating,
+      'confirmSentimentMismatch': confirmSentimentMismatch,
       if (comment != null && comment.isNotEmpty) 'comment': comment,
     });
+    return Map<String, dynamic>.from(result.data as Map);
   }
 
   String _milestoneReviewFunctionsMessage(FirebaseFunctionsException e) {

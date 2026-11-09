@@ -12,6 +12,8 @@ import '../theme/role_theme.dart';
 import '../ui/app_ui_kit.dart';
 import 'milestone_feedback_details.dart';
 import 'service_agreement_card.dart';
+import 'work_completion_card.dart';
+import 'contract_records_card.dart';
 
 /// Contract summary, milestone history, and optional end-contract action.
 class ContractPanel extends StatefulWidget {
@@ -138,6 +140,8 @@ class _ContractPanelState extends State<ContractPanel> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         ServiceAgreementCard(booking: widget.booking),
+                        WorkCompletionCard(booking: widget.booking, asCustomer: widget.viewerRole == 'customer'),
+                        ContractRecordsCard(booking: widget.booking, viewerId: widget.appUser.userId),
                         Row(
                           children: [
                             Container(

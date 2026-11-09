@@ -103,7 +103,7 @@ class _CustomerBookingsTabState extends State<CustomerBookingsTab> {
     final s = b.status.toLowerCase();
     if (s == 'cancelled' || s == 'canceled') return _BookingBucket.cancelled;
     if (s == 'completed' || s == 'milestone complete') return _BookingBucket.completed;
-    if (s == 'in progress') return _BookingBucket.inProgress;
+    if (s == 'in progress' || s == 'awaiting confirmation') return _BookingBucket.inProgress;
     return _BookingBucket.upcoming;
   }
 

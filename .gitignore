@@ -50,3 +50,8 @@ android/secrets.properties
 /android/.kotlin/
 /functions/*-audit.log
 /functions/emulator-test.log
+
+# Local ML datasets and experiment checkpoints (provenance stays in reports).
+/ml/data/
+/ml/runs/
+/ml/.venv/

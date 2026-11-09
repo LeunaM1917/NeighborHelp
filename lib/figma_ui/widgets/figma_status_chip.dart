@@ -37,6 +37,7 @@ class FigmaStatusChip extends StatelessWidget {
       case 'canceled':
         return (FigmaColors.red50, FigmaColors.red600);
       case 'in progress':
+      case 'awaiting confirmation':
       case 'accepted':
         return (FigmaColors.tintBlue, FigmaColors.navy);
       default:

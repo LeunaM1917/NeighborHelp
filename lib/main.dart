@@ -1,4 +1,5 @@
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -22,6 +23,16 @@ Future<void> main() async {
       apiKey: 'demo-api-key', appId: '1:1234567890:web:neighborhelp', messagingSenderId: '1234567890',
       projectId: 'demo-neighborhelp', storageBucket: 'demo-neighborhelp.appspot.com',
     ) : DefaultFirebaseOptions.currentPlatform);
+    const appCheckEnabled = bool.fromEnvironment('APP_CHECK_ENABLED');
+    if (!useEmulators && appCheckEnabled) {
+      const siteKey = String.fromEnvironment('APP_CHECK_WEB_SITE_KEY');
+      if (kIsWeb && siteKey.isEmpty) throw StateError('APP_CHECK_WEB_SITE_KEY is required when App Check is enabled on web.');
+      await FirebaseAppCheck.instance.activate(
+        webProvider: kIsWeb ? ReCaptchaV3Provider(siteKey) : null,
+        androidProvider: AndroidProvider.playIntegrity,
+        appleProvider: AppleProvider.appAttestWithDeviceCheckFallback,
+      );
+    }
     if (useEmulators) {
       const host = String.fromEnvironment('FIREBASE_EMULATOR_HOST', defaultValue: 'localhost');
       await FirebaseAuth.instance.useAuthEmulator(host, 9098);

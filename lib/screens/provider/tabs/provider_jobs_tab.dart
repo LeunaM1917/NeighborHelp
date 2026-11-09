@@ -143,7 +143,7 @@ class _ProviderJobsTabState extends State<ProviderJobsTab> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Marked as completed')));
+      ).showSnackBar(const SnackBar(content: Text('Work reported finished. Awaiting customer confirmation.')));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

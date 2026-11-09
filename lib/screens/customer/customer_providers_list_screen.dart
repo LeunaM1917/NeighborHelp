@@ -14,6 +14,7 @@ import '../../utils/review_sentiment.dart';
 import '../../widgets/customer_provider_profile_dialog.dart';
 import '../../ui/app_ui_kit.dart';
 import '../../widgets/loading_indicator.dart';
+import 'scheduled_provider_search_screen.dart';
 
 class CustomerProvidersListScreen extends StatefulWidget {
   const CustomerProvidersListScreen({super.key, required this.appUser, this.initialQuery = ''});
@@ -64,6 +65,7 @@ class _CustomerProvidersListScreenState extends State<CustomerProvidersListScree
                 onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
               ),
               const SizedBox(height: 24),
+              OutlinedButton.icon(onPressed:()=>Navigator.push<void>(context,MaterialPageRoute(builder:(_)=>ScheduledProviderSearchScreen(appUser:widget.appUser))),icon:const Icon(Icons.event_available),label:const Text('Match a date and work schedule')),
               DataStreamBuilder<List<ServiceProviderProfile>>(
  label: 'providers', onRetry: () => FirestoreService().retryDataLoads(),
                 stream: firestore.serviceProvidersStream(),

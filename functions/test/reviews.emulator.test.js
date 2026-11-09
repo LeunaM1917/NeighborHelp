@@ -23,12 +23,17 @@ beforeEach(async () => {
   await db.doc('serviceProviders/provider').set({averageRating:0,reviewCount:0});
   await db.doc('bookings/booking').set({customerId:'customer',providerId:'provider',serviceId:'service',status:'Milestone Complete',completedAt:Timestamp.now()});
   prediction.sentiment='positive';
+  delete prediction.model_family;
 });
 const auth = uid => ({auth:{uid}});
-test('a strong sentiment/rating contradiction asks the user to revise before storing feedback', async () => {
+test('a sentiment disagreement is advisory and the reviewer can post their own stars and words', async () => {
   prediction.sentiment='negative';
-  await assert.rejects(api.submitMilestoneReview.run({bookingId:'booking',reviewerRole:'customer',rating:5,comment:'The work was terrible and very disappointing.'},auth('customer')),/appear to disagree/);
+  const data={bookingId:'booking',reviewerRole:'customer',rating:5,comment:'The work was terrible and very disappointing.'};
+  const result=await api.submitMilestoneReview.run(data,auth('customer'));
+  assert.equal(result.requiresConfirmation,true);assert.match(result.warning,/post it as written/);
   assert.equal((await db.collection('reviews').get()).size,0);
+  await api.submitMilestoneReview.run({...data,confirmSentimentMismatch:true},auth('customer'));
+  const review=(await db.collection('reviews').get()).docs[0].data();assert.equal(review.rating,5);assert.equal(review.comment,data.comment);assert.equal(review.sentimentMismatchAcknowledged,true);
 });
 test('concurrent feedback submissions store one review; rating aggregation remains stable on retries', async () => {
   const data={bookingId:'booking',reviewerRole:'customer',rating:5,comment:'The provider did excellent work today.'};
@@ -45,8 +50,18 @@ test('concurrent feedback submissions store one review; rating aggregation remai
 test('unfinished bookings and suspended accounts cannot submit feedback', async () => {
   await db.doc('bookings/booking').update({status:'Accepted',completedAt:FieldValue.delete()});
   await assert.rejects(api.submitMilestoneReview.run({bookingId:'booking',reviewerRole:'customer',rating:5},auth('customer')),/unlock/);
+  await db.doc('bookings/booking').update({status:'Awaiting Confirmation'});
+  await assert.rejects(api.submitMilestoneReview.run({bookingId:'booking',reviewerRole:'customer',rating:5},auth('customer')),/unlock/);
   await db.doc('users/customer').update({accountStatus:'Suspended'});
   await assert.rejects(api.submitMilestoneReview.run({bookingId:'booking',reviewerRole:'customer',rating:5},auth('customer')),/active account/);
+});
+test('linear sentiment candidates retain their model family and advisory warning',async()=>{
+  prediction.model_family='tfidf_logistic';
+  await api.submitMilestoneReview.run({bookingId:'booking',reviewerRole:'customer',rating:5,comment:'The provider did excellent work today.'},auth('customer'));
+  assert.equal((await db.collection('reviews').get()).docs[0].data().sentiment.source,'tfidf_logistic');
+  await db.doc('bookings/second').set({customerId:'customer',providerId:'provider',serviceId:'service',status:'Milestone Complete',completedAt:Timestamp.now()});
+  prediction.sentiment='negative';
+  const warning=await api.submitMilestoneReview.run({bookingId:'second',reviewerRole:'customer',rating:5,comment:'The work was terrible and very disappointing.'},auth('customer'));assert.equal(warning.requiresConfirmation,true);
 });
 
 test('incoming messages update conversation activity and create one alert on trigger retries', async () => {

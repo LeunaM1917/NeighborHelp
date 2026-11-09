@@ -1,0 +1,21 @@
+{
+  "session_id": "anonymous-session-id",
+  "conducted": false,
+  "consent_recorded_separately": false,
+  "role": "customer/provider/administrator",
+  "preferred_language": "English/Tagalog-Taglish/Cebuano-Bisaya",
+  "device_and_browser": "",
+  "network_conditions": "",
+  "tasks": [],
+  "task_record_format": {
+    "task_id": "1",
+    "outcome": "unassisted/assisted/failed/not_attempted",
+    "elapsed_seconds": null,
+    "ease_1_to_5": null,
+    "errors": [],
+    "observations_without_personal_data": ""
+  },
+  "agreement_and_payment_understood": null,
+  "security_or_duplicate_state_failure": null,
+  "follow_up_issue_ids": []
+}

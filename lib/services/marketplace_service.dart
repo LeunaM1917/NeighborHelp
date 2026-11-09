@@ -51,11 +51,12 @@ class MarketplaceService {
     String id, {
     String text = '',
     String mediaUrl = '',
+    String? messageId,
   }) async {
     await command('inquiryCommand', {
       'action': 'send',
       'inquiryId': id,
-      'messageId': _db.collection('inquiries').doc().id,
+      'messageId': messageId ?? _db.collection('inquiries').doc().id,
       'text': text,
       'mediaUrl': mediaUrl,
     });

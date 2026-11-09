@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/provider.dart';
 import '../models/service.dart';
+import '../models/requested_work_schedule.dart';
 import '../utils/geo_location.dart';
 import '../utils/haversine.dart';
 import '../utils/weighted_scoring.dart';
@@ -48,8 +49,10 @@ List<RankedProvider> rankProvidersByRecommendation({
   double maxSearchRadiusKm = kDefaultMaxSearchRadiusKm,
   DateTime? now,
   Random? random,
+  RequestedWorkSchedule? requestedSchedule,
+  Map<String,bool>? availabilityByProvider,
 }) {
-  final at = now ?? DateTime.now();
+  final at = now ?? DateTime.now().toUtc().add(const Duration(hours: 8));
   final origin = geoPointOrNull(customerOrigin);
   final hasOrigin = origin != null;
 
@@ -74,7 +77,9 @@ List<RankedProvider> rankProvidersByRecommendation({
       proximityInputKm = (1 - kNeutralProximityWhenNoOrigin) * maxSearchRadiusKm;
     }
 
-    final available = profile.isAvailableNow(at);
+    final available = requestedSchedule == null ? profile.isAvailableNow(at)
+        : profile.effectiveWeeklyAvailability.coversRequest(requestedSchedule) && availabilityByProvider?[profile.providerId] == true;
+    if(requestedSchedule != null && !available)continue;
     final isNew = isColdStartProvider(
       reviewCount: profile.reviewCount,
       averageRating: profile.averageRating,
@@ -175,7 +180,7 @@ WeightedScoreBreakdown breakdownForProvider({
   int? completedOverride,
   int? acceptedOverride,
 }) {
-  final at = now ?? DateTime.now();
+  final at = now ?? DateTime.now().toUtc().add(const Duration(hours: 8));
   final origin = geoPointOrNull(customerOrigin);
   double distanceKm;
   if (origin != null) {

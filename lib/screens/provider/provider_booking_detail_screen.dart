@@ -132,7 +132,7 @@ class _ProviderBookingDetailScreenState
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Marked as completed')));
+      ).showSnackBar(const SnackBar(content: Text('Completion reported. Waiting for customer confirmation.')));
       Navigator.pop(context);
     } catch (_) {
       if (mounted) {
@@ -808,7 +808,7 @@ class _ProviderBookingDetailScreenState
 
     if (b.canMarkCompleted) {
       return AppPrimaryButton(
-        label: 'Complete milestone',
+        label: 'Report work finished',
         icon: Icons.task_alt_outlined,
         onPressed: () => _complete(b),
       );

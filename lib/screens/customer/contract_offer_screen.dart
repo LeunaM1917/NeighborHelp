@@ -43,6 +43,7 @@ class _ContractOfferScreenState extends State<ContractOfferScreen> {
   TimeOfDay _time = const TimeOfDay(hour: 9, minute: 0);
   double _hours = 8;
   bool _busy = false;
+  final _offerId = FirebaseFirestore.instance.collection('bookings').doc().id;
   @override
   void dispose() {
     for (final c in [_address, _rate, _days, ..._fields.values]) {
@@ -71,7 +72,7 @@ class _ContractOfferScreenState extends State<ContractOfferScreen> {
       final template = await MarketplaceService.command('inquiryCommand', {
         'action': 'template',
       });
-      final id = FirebaseFirestore.instance.collection('bookings').doc().id;
+      final id = _offerId;
       final start = DateTime.utc(
         _date!.year,
         _date!.month,
@@ -102,6 +103,10 @@ class _ContractOfferScreenState extends State<ContractOfferScreen> {
         ...payload,
       });
       if (!mounted) return;
+      if(preview['duplicate']==true){
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('This offer was already recorded. Open it from the conversation.')));
+        Navigator.pop(context);return;
+      }
       final agreement = Map<String, dynamic>.from(preview['agreement'] as Map);
       final accepted = await confirmServiceAgreement(
         context,

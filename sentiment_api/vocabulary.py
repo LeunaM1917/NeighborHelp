@@ -1,5 +1,6 @@
 import json
 import re
+import unicodedata
 from pathlib import Path
 from typing import Dict, List
 
@@ -11,6 +12,13 @@ def clean_review_text(text: str) -> str:
     text = re.sub(r"[^a-z0-9\s']", " ", text)
     text = re.sub(r"\s+", " ", text).strip()
     return text
+
+
+def clean_review_text_unicode(text: str) -> str:
+    """Versioned candidate preprocessing: preserve Philippine-language letters."""
+    text = unicodedata.normalize("NFKC", text).lower()
+    text = re.sub(r"https?://\S+|www\.\S+", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def load_vocabulary_index(vocabulary_path: Path) -> Dict[str, int]:

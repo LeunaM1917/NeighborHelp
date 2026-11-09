@@ -24,6 +24,7 @@ import '../../../widgets/loading_indicator.dart';
 import '../../../widgets/stream_snapshot.dart';
 import '../customer_demo_catalog.dart';
 import '../customer_service_detail_screen.dart';
+import '../scheduled_provider_search_screen.dart';
 
 enum _BrowseListFilter { all, topRated, nearest, mostBooked, newest }
 
@@ -192,6 +193,7 @@ class _CustomerBrowseTabState extends State<CustomerBrowseTab> {
                       onSubmitted: (_) => _applyFilters(),
                     ),
                     const SizedBox(height: 36),
+                    OutlinedButton.icon(onPressed:()=>Navigator.push<void>(context,MaterialPageRoute(builder:(_)=>ScheduledProviderSearchScreen(appUser:widget.appUser))),icon:const Icon(Icons.event_available),label:const Text('Find providers available for your work schedule')),
                     LayoutBuilder(
                       builder: (context, c) {
                         final twoColumn = c.maxWidth >= _twoColumnMinWidth;

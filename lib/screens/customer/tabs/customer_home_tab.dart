@@ -39,7 +39,7 @@ Set<String> _hiredProviderIdsFromBookings(List<Booking> bookings) {
   final ids = <String>{};
   for (final b in bookings) {
     if (b.isCancelled || b.isPending) continue;
-    if (b.isAccepted || b.isInProgress || b.isMilestoneComplete) {
+    if (b.isAccepted || b.isInProgress || b.isAwaitingConfirmation || b.isMilestoneComplete) {
       final id = b.providerId.trim();
       if (id.isNotEmpty) ids.add(id);
     }

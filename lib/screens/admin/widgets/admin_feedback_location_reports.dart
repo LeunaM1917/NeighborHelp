@@ -33,7 +33,7 @@ class AdminFeedbackLocationReports extends StatelessWidget {
         return r.isCustomerReview && inReportRange(r.createdAt.toDate(), range);
       }).toList();
       final counts = {'positive': 0, 'neutral': 0, 'negative': 0};
-      var lstm = 0, fallback = 0, pending = 0;
+      var lstm = 0, linear = 0, fallback = 0, pending = 0;
       final providers = <String, Map<String, int>>{};
       for (final doc in docs) {
         final row = doc.data();
@@ -48,6 +48,8 @@ class AdminFeedbackLocationReports extends StatelessWidget {
           perProvider[label] = perProvider[label]! + 1;
           if (sentiment?['source'] == 'lstm') {
             lstm++;
+          } else if (sentiment?['source'] == 'tfidf_logistic') {
+            linear++;
           } else {
             fallback++;
           }
@@ -71,7 +73,7 @@ class AdminFeedbackLocationReports extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Reviews submitted in $range. $lstm LSTM results, $fallback fallback results, $pending without an analyzed comment.',
+                  'Reviews submitted in $range. $lstm LSTM results, $linear linear-model results, $fallback fallback results, $pending without an analyzed comment.',
                 ),
                 const SizedBox(height: 12),
                 Wrap(

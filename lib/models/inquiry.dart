@@ -15,6 +15,8 @@ class Inquiry {
   bool get hasDiscussion =>
       (data['customerMessageCount'] as num? ?? 0) > 0 &&
       (data['providerMessageCount'] as num? ?? 0) > 0;
+  List<String> get blockedBy => List<String>.from(data['blockedBy'] as List? ?? const []);
+  bool get isBlocked => blockedBy.isNotEmpty;
   DateTime get updatedAt =>
       (data['updatedAt'] as Timestamp?)?.toDate() ?? DateTime(2000);
 }

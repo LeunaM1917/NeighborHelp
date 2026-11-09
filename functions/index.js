@@ -593,7 +593,7 @@ async function predictReviewSentiment(review) {
       probabilities,
       modelVersion: typeof json.model_version === 'string' ? json.model_version : null,
       analyzedAt: FieldValue.serverTimestamp(),
-      source: 'lstm',
+      source: json.model_family === 'tfidf_logistic' ? 'tfidf_logistic' : 'lstm',
     };
   } catch (err) {
     functions.logger.warn('Sentiment prediction failed', { err: String(err) });
@@ -928,6 +928,7 @@ exports.diditWebhook = functions.region(functionsRegion).https.onRequest(async (
  * stale or not yet deployed.
  */
 exports.submitMilestoneReview = functions
+  .runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'})
   .region(functionsRegion)
   .https.onCall(async (data, context) => {
     const uid = context.auth && context.auth.uid;
@@ -967,7 +968,7 @@ exports.submitMilestoneReview = functions
     if (!milestoneComplete) {
       throw new functions.https.HttpsError(
         'failed-precondition',
-        'Reviews unlock after the provider marks the milestone complete.'
+        'Reviews unlock after the customer confirms the reported work is complete.'
       );
     }
 
@@ -1001,9 +1002,11 @@ exports.submitMilestoneReview = functions
     if (booking.milestoneNumber != null) payload.milestoneNumber = booking.milestoneNumber;
 
     const sentiment = await predictReviewSentiment({ comment, reviewId: `${bookingId}_${uid}`, providerId: booking.providerId });
-    if (sentiment?.source === 'lstm' && sentiment.confidence >= 0.8 && comment.split(/\s+/).length >= 4 &&
+    if (['lstm', 'tfidf_logistic'].includes(sentiment?.source) && sentiment.confidence >= 0.8 && comment.split(/\s+/).length >= 4 &&
         ((sentiment.label === 'negative' && rating >= 4) || (sentiment.label === 'positive' && rating <= 2))) {
-      throw new functions.https.HttpsError('failed-precondition', 'Your written feedback and star rating appear to disagree. Please review both before submitting.');
+      const warning = 'Your written feedback and star rating may differ. Automated sentiment can misread context and language. You may edit your review or post it as written.';
+      if(data.confirmSentimentMismatch !== true) return {requiresConfirmation:true,warning};
+      payload.sentimentMismatchAcknowledged=true;
     }
     if (sentiment) payload.sentiment = sentiment;
     const ref = db.collection('reviews').doc(`${bookingId}_${uid}`);

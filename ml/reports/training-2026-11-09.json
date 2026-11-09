@@ -1,0 +1,955 @@
+{
+  "user_date": "2026-11-09",
+  "selected_experimental_candidate": "ml/runs/bilingual-linear-2026-11-09/model.joblib",
+  "selection_basis": "Higher validation macro F1 than bilingual LSTM on the identical split; not selected by test accuracy.",
+  "sources": {
+    "firecs": {
+      "source": "https://huggingface.co/datasets/ccosme/FiReCS",
+      "revision": "4da2863e53e7260ab6f2dcd2089af5c112d25c80",
+      "license": "CC-BY-4.0",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "attribution": "Cosme, C.J. and De Leon, M.M. (2024). Sentiment Analysis of Code-Switched Filipino-English Product and Service Reviews Using Transformers-Based Large Language Models. DOI: 10.1007/978-981-99-8349-0_11. FiReCS v1.0, CC BY 4.0.",
+      "annotation": "Original human sentiment labels, not inferred from star ratings",
+      "labels": {
+        "0": "negative",
+        "1": "neutral",
+        "2": "positive"
+      },
+      "languages": [
+        "English",
+        "Tagalog/Taglish"
+      ],
+      "cebuano_verified": false,
+      "seed": 42,
+      "train_rows_removed_for_test_overlap": 5,
+      "data_sha256": "7014dc57e549d0de6167c10db0670e3af59610889506e325a9ec4f6ac2f4fdf3",
+      "download_sha256": {
+        "train": "9ca5ef80b8f93836f5966a1db8d017ebbd474e4b615468269cb0ba9d3778eb39",
+        "test": "6c172b8a52ad5d320d445bcf2229557de103587673582767cc59f8fc42754875"
+      },
+      "split_counts": {
+        "validation": 1466,
+        "train": 5869,
+        "test": 3147
+      },
+      "limitations": [
+        "Product and service reviews outside NeighborHelp; domain evaluation still required.",
+        "Official test split retained; a validation split was taken only from original training data."
+      ]
+    },
+    "bilingual": {
+      "attribution": "DynaSent: Potts, Wu, Geiger and Kiela (2020), https://github.com/cgpotts/dynasent, data CC BY 4.0. FiReCS: Cosme and De Leon (2024), https://huggingface.co/datasets/ccosme/FiReCS, CC BY 4.0.",
+      "dynasent_revision": "707b6208978bfe7ff251a0c3263c9f0552c27b48",
+      "dynasent_archive_sha256": "33001cf394618aa38f9530c43ca87072b92f5ee609a02afa2d168d25560cedfd",
+      "firecs_manifest": "../firecs/source.json",
+      "data_sha256": "17c45725856150c3b09fa3e2df377b5637365095f58f8451fd6209ddfdb3682b",
+      "seed": 42,
+      "removed_cross_split_text_or_review_overlap": 360,
+      "counts": {
+        "FiReCS:validation": 1466,
+        "FiReCS:train": 5869,
+        "FiReCS:test": 3147,
+        "DynaSent round 1:train": 5686,
+        "DynaSent round 1:validation": 1154,
+        "DynaSent round 1:test": 1800
+      },
+      "cebuano_verified": false,
+      "pilot_test_reused": "FiReCS test was previously evaluated in the initial pilot; this is an extended language-coverage experiment, not a new untouched FiReCS benchmark."
+    }
+  },
+  "experiments": {
+    "firecs_lstm": {
+      "created_at": "2026-11-08T16:56:29.940096+00:00",
+      "kind": "sentiment_training",
+      "source": "FiReCS human labels; CC BY 4.0; pinned revision in ml/data/firecs/source.json",
+      "languages": [
+        "English",
+        "Tagalog/Taglish"
+      ],
+      "data_sha256": "7014dc57e549d0de6167c10db0670e3af59610889506e325a9ec4f6ac2f4fdf3",
+      "candidate_sha256": "00cbbd245d724236ff4d68aca4a13c706bcc003392b88357712a52eb79259ab8",
+      "seed": 42,
+      "mode": "scratch",
+      "epochs_run": 4,
+      "split_audit": {
+        "removed_duplicates": 1,
+        "quarantined_conflicting_texts": 0,
+        "split_method": "supplied grouped split"
+      },
+      "partitions": {
+        "train": {
+          "rows": 5868,
+          "groups": 5868,
+          "labels": {
+            "2": 1909,
+            "0": 1924,
+            "1": 2035
+          }
+        },
+        "validation": {
+          "rows": 1466,
+          "groups": 1466,
+          "labels": {
+            "0": 457,
+            "1": 512,
+            "2": 497
+          }
+        },
+        "test": {
+          "rows": 3147,
+          "groups": 3147,
+          "labels": {
+            "1": 1087,
+            "2": 1033,
+            "0": 1027
+          }
+        }
+      },
+      "validation": {
+        "count": 1466,
+        "accuracy": 0.7967257844474761,
+        "macro_f1": 0.7963902047129164,
+        "per_class": {
+          "negative": {
+            "precision": 0.790948275862069,
+            "recall": 0.8030634573304157,
+            "f1": 0.7969598262757872,
+            "support": 457
+          },
+          "neutral": {
+            "precision": 0.7351129363449692,
+            "recall": 0.69921875,
+            "f1": 0.7167167167167168,
+            "support": 512
+          },
+          "positive": {
+            "precision": 0.8601941747572815,
+            "recall": 0.8913480885311871,
+            "f1": 0.8754940711462451,
+            "support": 497
+          }
+        },
+        "confusion_matrix": [
+          [
+            367,
+            87,
+            3
+          ],
+          [
+            85,
+            358,
+            69
+          ],
+          [
+            12,
+            42,
+            443
+          ]
+        ],
+        "matrix_order": [
+          "negative",
+          "neutral",
+          "positive"
+        ],
+        "brier_score": 0.2901789691383299,
+        "expected_calibration_error_10_bins": 0.04414557414523256
+      },
+      "test": {
+        "count": 3147,
+        "accuracy": 0.7994915792818558,
+        "macro_f1": 0.7999175459714699,
+        "per_class": {
+          "negative": {
+            "precision": 0.8112648221343873,
+            "recall": 0.7994157740993184,
+            "f1": 0.8052967140755272,
+            "support": 1027
+          },
+          "neutral": {
+            "precision": 0.7407757805108799,
+            "recall": 0.7203311867525299,
+            "f1": 0.7304104477611941,
+            "support": 1087
+          },
+          "positive": {
+            "precision": 0.8460111317254174,
+            "recall": 0.882865440464666,
+            "f1": 0.8640454760776882,
+            "support": 1033
+          }
+        },
+        "confusion_matrix": [
+          [
+            821,
+            175,
+            31
+          ],
+          [
+            169,
+            783,
+            135
+          ],
+          [
+            22,
+            99,
+            912
+          ]
+        ],
+        "matrix_order": [
+          "negative",
+          "neutral",
+          "positive"
+        ],
+        "brier_score": 0.2885365064879224,
+        "expected_calibration_error_10_bins": 0.03287841292991312
+      },
+      "existing_model_test": {
+        "count": 3147,
+        "accuracy": 0.5201779472513505,
+        "macro_f1": 0.5074808735066322,
+        "per_class": {
+          "negative": {
+            "precision": 0.542528735632184,
+            "recall": 0.4595910418695229,
+            "f1": 0.4976278334211914,
+            "support": 1027
+          },
+          "neutral": {
+            "precision": 0.6387434554973822,
+            "recall": 0.33670653173873044,
+            "f1": 0.44096385542168676,
+            "support": 1087
+          },
+          "positive": {
+            "precision": 0.4688967136150235,
+            "recall": 0.7734753146176185,
+            "f1": 0.5838509316770186,
+            "support": 1033
+          }
+        },
+        "confusion_matrix": [
+          [
+            472,
+            111,
+            444
+          ],
+          [
+            260,
+            366,
+            461
+          ],
+          [
+            138,
+            96,
+            799
+          ]
+        ],
+        "matrix_order": [
+          "negative",
+          "neutral",
+          "positive"
+        ],
+        "brier_score": 0.6398443154149235,
+        "expected_calibration_error_10_bins": 0.17539773943464376
+      },
+      "production_model_replaced": false,
+      "limitations": [
+        "Dataset metrics are not proof of performance on NeighborHelp users.",
+        "Existing model training data is unknown; its prior overlap with a public benchmark cannot be ruled out.",
+        "Language support requires separate human-reviewed tests in every claimed language."
+      ]
+    },
+    "bilingual_lstm": {
+      "created_at": "2026-11-08T17:04:00.761314+00:00",
+      "kind": "sentiment_training",
+      "source": "Human-labeled FiReCS and DynaSent round 1; CC BY 4.0; pinned revisions in ml/data/bilingual/source.json",
+      "languages": [
+        "English",
+        "Tagalog/Taglish"
+      ],
+      "data_sha256": "17c45725856150c3b09fa3e2df377b5637365095f58f8451fd6209ddfdb3682b",
+      "candidate_sha256": "d409c14a8ef5e21859efd50f2498c48de5db228380a39ba521b91605d04223ee",
+      "seed": 42,
+      "mode": "scratch",
+      "epochs_run": 3,
+      "split_audit": {
+        "removed_duplicates": 8,
+        "quarantined_conflicting_texts": 3,
+        "split_method": "supplied grouped split"
+      },
+      "partitions": {
+        "train": {
+          "rows": 11544,
+          "groups": 11242,
+          "labels": {
+            "2": 3817,
+            "0": 3807,
+            "1": 3920
+          }
+        },
+        "validation": {
+          "rows": 2620,
+          "groups": 2607,
+          "labels": {
+            "0": 844,
+            "1": 895,
+            "2": 881
+          }
+        },
+        "test": {
+          "rows": 4947,
+          "groups": 4920,
+          "labels": {
+            "1": 1687,
+            "2": 1633,
+            "0": 1627
+          }
+        }
+      },
+      "validation": {
+        "count": 2620,
+        "accuracy": 0.6801526717557251,
+        "macro_f1": 0.680338109806759,
+        "per_class": {
+          "negative": {
+            "precision": 0.7219796215429404,
+            "recall": 0.5876777251184834,
+            "f1": 0.6479425212279556,
+            "support": 844
+          },
+          "neutral": {
+            "precision": 0.5929368029739777,
+            "recall": 0.7128491620111732,
+            "f1": 0.6473871131405378,
+            "support": 895
+          },
+          "positive": {
+            "precision": 0.7561260210035006,
+            "recall": 0.735527809307605,
+            "f1": 0.7456846950517836,
+            "support": 881
+          }
+        },
+        "confusion_matrix": [
+          [
+            496,
+            248,
+            100
+          ],
+          [
+            148,
+            638,
+            109
+          ],
+          [
+            43,
+            190,
+            648
+          ]
+        ],
+        "matrix_order": [
+          "negative",
+          "neutral",
+          "positive"
+        ],
+        "brier_score": 0.42108765962689515,
+        "expected_calibration_error_10_bins": 0.02191716348396915
+      },
+      "test": {
+        "count": 4947,
+        "accuracy": 0.7008287851222963,
+        "macro_f1": 0.7019074728743168,
+        "per_class": {
+          "negative": {
+            "precision": 0.7645283018867924,
+            "recall": 0.6226183159188691,
+            "f1": 0.6863143631436314,
+            "support": 1627
+          },
+          "neutral": {
+            "precision": 0.6133651551312649,
+            "recall": 0.7617071724955542,
+            "f1": 0.6795346377578001,
+            "support": 1687
+          },
+          "positive": {
+            "precision": 0.7655533726260642,
+            "recall": 0.7158603796693203,
+            "f1": 0.7398734177215188,
+            "support": 1633
+          }
+        },
+        "confusion_matrix": [
+          [
+            1013,
+            446,
+            168
+          ],
+          [
+            212,
+            1285,
+            190
+          ],
+          [
+            100,
+            364,
+            1169
+          ]
+        ],
+        "matrix_order": [
+          "negative",
+          "neutral",
+          "positive"
+        ],
+        "brier_score": 0.4038901240013418,
+        "expected_calibration_error_10_bins": 0.025393516819284773
+      },
+      "existing_model_test": {
+        "count": 4947,
+        "accuracy": 0.4738225186982009,
+        "macro_f1": 0.4683336884491946,
+        "per_class": {
+          "negative": {
+            "precision": 0.4984066284257489,
+            "recall": 0.48063921327596804,
+            "f1": 0.4893617021276596,
+            "support": 1627
+          },
+          "neutral": {
+            "precision": 0.45746388443017655,
+            "recall": 0.3378778897451097,
+            "f1": 0.3886805318786226,
+            "support": 1687
+          },
+          "positive": {
+            "precision": 0.4652908067542214,
+            "recall": 0.6074709124311084,
+            "f1": 0.5269588313413015,
+            "support": 1633
+          }
+        },
+        "confusion_matrix": [
+          [
+            782,
+            315,
+            530
+          ],
+          [
+            507,
+            570,
+            610
+          ],
+          [
+            280,
+            361,
+            992
+          ]
+        ],
+        "matrix_order": [
+          "negative",
+          "neutral",
+          "positive"
+        ],
+        "brier_score": 0.6749062306714311,
+        "expected_calibration_error_10_bins": 0.19431215271049493
+      },
+      "test_by_source": {
+        "DynaSent round 1": {
+          "candidate": {
+            "count": 1800,
+            "accuracy": 0.5477777777777778,
+            "macro_f1": 0.5413708232967114,
+            "per_class": {
+              "negative": {
+                "precision": 0.609375,
+                "recall": 0.39,
+                "f1": 0.475609756097561,
+                "support": 600
+              },
+              "neutral": {
+                "precision": 0.501813784764208,
+                "recall": 0.6916666666666667,
+                "f1": 0.5816398037841627,
+                "support": 600
+              },
+              "positive": {
+                "precision": 0.5721561969439728,
+                "recall": 0.5616666666666666,
+                "f1": 0.5668629100084105,
+                "support": 600
+              }
+            },
+            "confusion_matrix": [
+              [
+                234,
+                231,
+                135
+              ],
+              [
+                68,
+                415,
+                117
+              ],
+              [
+                82,
+                181,
+                337
+              ]
+            ],
+            "matrix_order": [
+              "negative",
+              "neutral",
+              "positive"
+            ],
+            "brier_score": 0.5748636758797055,
+            "expected_calibration_error_10_bins": 0.01646608706977631
+          },
+          "existing_model": {
+            "count": 1800,
+            "accuracy": 0.3927777777777778,
+            "macro_f1": 0.3910931179941502,
+            "per_class": {
+              "negative": {
+                "precision": 0.4434907010014306,
+                "recall": 0.5166666666666667,
+                "f1": 0.47729022324865283,
+                "support": 600
+              },
+              "neutral": {
+                "precision": 0.3031203566121842,
+                "recall": 0.34,
+                "f1": 0.32050274941084056,
+                "support": 600
+              },
+              "positive": {
+                "precision": 0.45093457943925236,
+                "recall": 0.32166666666666666,
+                "f1": 0.3754863813229572,
+                "support": 600
+              }
+            },
+            "confusion_matrix": [
+              [
+                310,
+                204,
+                86
+              ],
+              [
+                247,
+                204,
+                149
+              ],
+              [
+                142,
+                265,
+                193
+              ]
+            ],
+            "matrix_order": [
+              "negative",
+              "neutral",
+              "positive"
+            ],
+            "brier_score": 0.7362061458509722,
+            "expected_calibration_error_10_bins": 0.22942097460230193
+          }
+        },
+        "FiReCS": {
+          "candidate": {
+            "count": 3147,
+            "accuracy": 0.7883698760724499,
+            "macro_f1": 0.7915872238757095,
+            "per_class": {
+              "negative": {
+                "precision": 0.8278427205100957,
+                "recall": 0.7585199610516066,
+                "f1": 0.7916666666666666,
+                "support": 1027
+              },
+              "neutral": {
+                "precision": 0.6861198738170347,
+                "recall": 0.8003679852805887,
+                "f1": 0.7388535031847133,
+                "support": 1087
+              },
+              "positive": {
+                "precision": 0.8869936034115139,
+                "recall": 0.8054211035818006,
+                "f1": 0.8442415017757484,
+                "support": 1033
+              }
+            },
+            "confusion_matrix": [
+              [
+                779,
+                215,
+                33
+              ],
+              [
+                144,
+                870,
+                73
+              ],
+              [
+                18,
+                183,
+                832
+              ]
+            ],
+            "matrix_order": [
+              "negative",
+              "neutral",
+              "positive"
+            ],
+            "brier_score": 0.3060978159820731,
+            "expected_calibration_error_10_bins": 0.031655833025678676
+          },
+          "existing_model": {
+            "count": 3147,
+            "accuracy": 0.5201779472513505,
+            "macro_f1": 0.5074808735066322,
+            "per_class": {
+              "negative": {
+                "precision": 0.542528735632184,
+                "recall": 0.4595910418695229,
+                "f1": 0.4976278334211914,
+                "support": 1027
+              },
+              "neutral": {
+                "precision": 0.6387434554973822,
+                "recall": 0.33670653173873044,
+                "f1": 0.44096385542168676,
+                "support": 1087
+              },
+              "positive": {
+                "precision": 0.4688967136150235,
+                "recall": 0.7734753146176185,
+                "f1": 0.5838509316770186,
+                "support": 1033
+              }
+            },
+            "confusion_matrix": [
+              [
+                472,
+                111,
+                444
+              ],
+              [
+                260,
+                366,
+                461
+              ],
+              [
+                138,
+                96,
+                799
+              ]
+            ],
+            "matrix_order": [
+              "negative",
+              "neutral",
+              "positive"
+            ],
+            "brier_score": 0.6398443154149235,
+            "expected_calibration_error_10_bins": 0.17539773943464376
+          }
+        }
+      },
+      "production_model_replaced": false,
+      "limitations": [
+        "Dataset metrics are not proof of performance on NeighborHelp users.",
+        "Existing model training data is unknown; its prior overlap with a public benchmark cannot be ruled out.",
+        "Language support requires separate human-reviewed tests in every claimed language."
+      ]
+    },
+    "bilingual_linear": {
+      "kind": "sentiment_training",
+      "model_family": "tfidf_logistic",
+      "created_at": "2026-11-08T17:08:01.519785+00:00",
+      "source": "Human-labeled FiReCS and DynaSent round 1, CC BY 4.0",
+      "languages": [
+        "English",
+        "Tagalog/Taglish"
+      ],
+      "data_sha256": "17c45725856150c3b09fa3e2df377b5637365095f58f8451fd6209ddfdb3682b",
+      "candidate_sha256": "59f7497b2f4a3f29fa3ba0d30e4a94e235bd090d4a612de77ca835d4c2b9e0b0",
+      "seed": 42,
+      "partitions": {
+        "train": {
+          "rows": 11544,
+          "groups": 11242,
+          "labels": {
+            "2": 3817,
+            "0": 3807,
+            "1": 3920
+          }
+        },
+        "validation": {
+          "rows": 2620,
+          "groups": 2607,
+          "labels": {
+            "0": 844,
+            "1": 895,
+            "2": 881
+          }
+        },
+        "test": {
+          "rows": 4947,
+          "groups": 4920,
+          "labels": {
+            "1": 1687,
+            "2": 1633,
+            "0": 1627
+          }
+        }
+      },
+      "split_audit": {
+        "removed_duplicates": 8,
+        "quarantined_conflicting_texts": 3,
+        "split_method": "supplied grouped split"
+      },
+      "validation": {
+        "count": 2620,
+        "accuracy": 0.7217557251908397,
+        "macro_f1": 0.721413349511138,
+        "per_class": {
+          "negative": {
+            "precision": 0.7055359246171967,
+            "recall": 0.7097156398104265,
+            "f1": 0.7076196101594802,
+            "support": 844
+          },
+          "neutral": {
+            "precision": 0.6846330275229358,
+            "recall": 0.6670391061452514,
+            "f1": 0.6757215619694397,
+            "support": 895
+          },
+          "positive": {
+            "precision": 0.7730812013348165,
+            "recall": 0.7888762769580022,
+            "f1": 0.7808988764044944,
+            "support": 881
+          }
+        },
+        "confusion_matrix": [
+          [
+            599,
+            151,
+            94
+          ],
+          [
+            188,
+            597,
+            110
+          ],
+          [
+            62,
+            124,
+            695
+          ]
+        ],
+        "matrix_order": [
+          "negative",
+          "neutral",
+          "positive"
+        ],
+        "brier_score": 0.38375757253792925,
+        "expected_calibration_error_10_bins": 0.05700610728802653
+      },
+      "selected_C": 1.0,
+      "test": {
+        "count": 4947,
+        "accuracy": 0.7315544774610875,
+        "macro_f1": 0.7322856820628996,
+        "per_class": {
+          "negative": {
+            "precision": 0.7409230769230769,
+            "recall": 0.7400122925629994,
+            "f1": 0.7404674046740468,
+            "support": 1627
+          },
+          "neutral": {
+            "precision": 0.6820034944670937,
+            "recall": 0.6941315945465323,
+            "f1": 0.6880141010575793,
+            "support": 1687
+          },
+          "positive": {
+            "precision": 0.7750778816199377,
+            "recall": 0.7617881200244948,
+            "f1": 0.7683755404570723,
+            "support": 1633
+          }
+        },
+        "confusion_matrix": [
+          [
+            1204,
+            294,
+            129
+          ],
+          [
+            284,
+            1171,
+            232
+          ],
+          [
+            137,
+            252,
+            1244
+          ]
+        ],
+        "matrix_order": [
+          "negative",
+          "neutral",
+          "positive"
+        ],
+        "brier_score": 0.3675667486022945,
+        "expected_calibration_error_10_bins": 0.056643812833850254
+      },
+      "test_by_source": {
+        "DynaSent round 1": {
+          "count": 1800,
+          "accuracy": 0.6094444444444445,
+          "macro_f1": 0.6093885235523299,
+          "per_class": {
+            "negative": {
+              "precision": 0.610738255033557,
+              "recall": 0.6066666666666667,
+              "f1": 0.608695652173913,
+              "support": 600
+            },
+            "neutral": {
+              "precision": 0.608843537414966,
+              "recall": 0.5966666666666667,
+              "f1": 0.6026936026936027,
+              "support": 600
+            },
+            "positive": {
+              "precision": 0.6087662337662337,
+              "recall": 0.625,
+              "f1": 0.6167763157894737,
+              "support": 600
+            }
+          },
+          "confusion_matrix": [
+            [
+              364,
+              122,
+              114
+            ],
+            [
+              115,
+              358,
+              127
+            ],
+            [
+              117,
+              108,
+              375
+            ]
+          ],
+          "matrix_order": [
+            "negative",
+            "neutral",
+            "positive"
+          ],
+          "brier_score": 0.5122893741305513,
+          "expected_calibration_error_10_bins": 0.052725007975743456
+        },
+        "FiReCS": {
+          "count": 3147,
+          "accuracy": 0.8013981569748967,
+          "macro_f1": 0.8034733800496903,
+          "per_class": {
+            "negative": {
+              "precision": 0.8163265306122449,
+              "recall": 0.8179162609542356,
+              "f1": 0.8171206225680934,
+              "support": 1027
+            },
+            "neutral": {
+              "precision": 0.7201062887511072,
+              "recall": 0.7479300827966882,
+              "f1": 0.733754512635379,
+              "support": 1087
+            },
+            "positive": {
+              "precision": 0.8786653185035389,
+              "recall": 0.8412391093901258,
+              "f1": 0.8595450049455984,
+              "support": 1033
+            }
+          },
+          "confusion_matrix": [
+            [
+              840,
+              172,
+              15
+            ],
+            [
+              169,
+              813,
+              105
+            ],
+            [
+              20,
+              144,
+              869
+            ]
+          ],
+          "matrix_order": [
+            "negative",
+            "neutral",
+            "positive"
+          ],
+          "brier_score": 0.2847892697491441,
+          "expected_calibration_error_10_bins": 0.0603196274317503
+        }
+      },
+      "production_model_replaced": false,
+      "software": {
+        "scikit_learn": "1.9.1",
+        "numpy": "2.5.4"
+      },
+      "limitations": [
+        "Cebuano is not trained or validated.",
+        "English and Filipino benchmark data are not NeighborHelp deployment data.",
+        "These test partitions have been examined in prior pilot comparisons; new domain evaluation remains necessary."
+      ]
+    }
+  },
+  "original_model_sha256": "4873c2c1690d580207987ef169dbdf23841789730cedc866e22a5ef5360e9240",
+  "original_model_unchanged_from_HEAD": true,
+  "production_model_replaced": false,
+  "production_ranking_weights_changed": false,
+  "ranking_labels": {
+    "hypothetical_requests": 45,
+    "candidates": 225,
+    "human_labels_completed": 0,
+    "training_status": "awaiting independent human grades"
+  },
+  "cebuano": {
+    "requested": true,
+    "trained": false,
+    "validated": false,
+    "AI_authored_unlabeled_drafts": 30,
+    "native_speaker_final_labels": 0,
+    "needed": "Representative native-speaker-labeled Cebuano/Bisaya service reviews, including an independent test split."
+  },
+  "runtime": {
+    "python": "3.13.14",
+    "tensorflow": "2.21.0",
+    "keras": "3.15.1",
+    "numpy": "2.5.4",
+    "scikit-learn": "1.9.1",
+    "joblib": "1.6.0",
+    "fastapi": "0.162.0"
+  },
+  "important_limits": [
+    "Public benchmark performance is not NeighborHelp deployment performance.",
+    "Cebuano has not been trained or validated; it is not interchangeable with Hiligaynon.",
+    "Test partitions were examined during pilot comparisons; fresh domain evaluation remains necessary.",
+    "Existing model original training data is unknown."
+  ]
+}
