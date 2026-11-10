@@ -213,12 +213,7 @@ class _ProviderBookingDetailScreenState
                                       inProgressAt: b.startedAt?.toDate(),
                                       completedAt: b.completedAt?.toDate(),
                                     ),
-                                    const SizedBox(height: 20),
-                                    ContractPanel(
-                                      appUser: widget.appUser,
-                                      booking: b,
-                                      viewerRole: 'provider',
-                                    ),
+
                                     const SizedBox(height: 20),
                                     AppSection(
                                       title: 'Service details',
@@ -344,30 +339,43 @@ class _ProviderBookingDetailScreenState
                                     ],
                                   ];
 
+                                  final contractPanel = ContractPanel(
+                                    appUser: widget.appUser,
+                                    booking: b,
+                                    viewerRole: 'provider',
+                                  );
+
                                   return LayoutBuilder(
                                     builder: (context, c) {
                                       final wide = c.maxWidth >= 900;
                                       if (wide) {
-                                        return Row(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
+                                        return Column(
+                                          crossAxisAlignment: CrossAxisAlignment.stretch,
                                           children: [
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.stretch,
-                                                children: mainChildren,
-                                              ),
+                                            Row(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment.stretch,
+                                                    children: mainChildren,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 24),
+                                                SizedBox(
+                                                  width: 340,
+                                                  child: Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment.stretch,
+                                                    children: sideChildren,
+                                                  ),
+                                                ),
+                                              ],
                                             ),
-                                            const SizedBox(width: 24),
-                                            SizedBox(
-                                              width: 340,
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.stretch,
-                                                children: sideChildren,
-                                              ),
-                                            ),
+                                            const SizedBox(height: 20),
+                                            contractPanel,
                                           ],
                                         );
                                       }
@@ -378,6 +386,8 @@ class _ProviderBookingDetailScreenState
                                           ...mainChildren,
                                           const SizedBox(height: 20),
                                           ...sideChildren,
+                                          const SizedBox(height: 20),
+                                          contractPanel,
                                         ],
                                       );
                                     },

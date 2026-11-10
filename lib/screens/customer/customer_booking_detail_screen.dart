@@ -133,12 +133,7 @@ class CustomerBookingDetailScreen extends StatelessWidget {
                                         ),
                                       ),
                                     ),
-                                    const SizedBox(height: 20),
-                                    ContractPanel(
-                                      appUser: appUser,
-                                      booking: b,
-                                      viewerRole: 'customer',
-                                    ),
+
                                     const SizedBox(height: 20),
                                     BookingReviewSection(appUser: appUser, booking: b),
                                   ];
@@ -170,27 +165,40 @@ class CustomerBookingDetailScreen extends StatelessWidget {
                                     ],
                                   ];
 
+                                  final contractPanel = ContractPanel(
+                                    appUser: appUser,
+                                    booking: b,
+                                    viewerRole: 'customer',
+                                  );
+
                                   return LayoutBuilder(
                                     builder: (context, c) {
                                       final wide = c.maxWidth >= 900;
                                       if (wide) {
-                                        return Row(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                        return Column(
+                                          crossAxisAlignment: CrossAxisAlignment.stretch,
                                           children: [
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                                children: mainChildren,
-                                              ),
+                                            Row(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                                    children: mainChildren,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 24),
+                                                SizedBox(
+                                                  width: 340,
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                                    children: sideChildren,
+                                                  ),
+                                                ),
+                                              ],
                                             ),
-                                            const SizedBox(width: 24),
-                                            SizedBox(
-                                              width: 340,
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                                children: sideChildren,
-                                              ),
-                                            ),
+                                            const SizedBox(height: 20),
+                                            contractPanel,
                                           ],
                                         );
                                       }
@@ -200,6 +208,8 @@ class CustomerBookingDetailScreen extends StatelessWidget {
                                           ...mainChildren,
                                           const SizedBox(height: 20),
                                           ...sideChildren,
+                                          const SizedBox(height: 20),
+                                          contractPanel,
                                         ],
                                       );
                                     },
