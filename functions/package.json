@@ -18,6 +18,6 @@
   },
   "scripts": {
     "test": "node --test test/domain.test.js test/agreements.test.js test/scheduling.test.js test/discovery_safety.test.js test/review_status_notifications.test.js",
-    "test:emulator": "firebase emulators:exec --config ../firebase.test.json --project demo-neighborhelp --only firestore,storage \"node --test --test-concurrency=1 test/security.emulator.test.js test/booking.emulator.test.js test/platform.emulator.test.js test/reviews.emulator.test.js test/marketplace.emulator.test.js test/improvements.emulator.test.js test/reliability.emulator.test.js test/discovery_safety.emulator.test.js\""
+    "test:emulator": "firebase emulators:exec --config ../firebase.test.json --project demo-neighborhelp --only firestore,storage \"node --test --test-concurrency=1 test/security.emulator.test.js test/booking.emulator.test.js test/platform.emulator.test.js test/reviews.emulator.test.js test/marketplace.emulator.test.js test/improvements.emulator.test.js test/reliability.emulator.test.js test/discovery_safety.emulator.test.js test/disputes.emulator.test.js\""
   }
 }

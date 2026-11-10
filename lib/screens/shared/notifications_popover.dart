@@ -11,6 +11,7 @@ import '../../services/firestore_service.dart';
 import '../../widgets/stream_snapshot.dart';
 import '../../widgets/managed_scrollbar.dart';
 import '../../widgets/data_stream_builder.dart';
+import 'inquiry_screen.dart';
 
 /// Notification dropdown (web) or bottom sheet (mobile / compact).
 class NotificationsPopover {
@@ -145,7 +146,8 @@ class _NotificationDropdown extends StatelessWidget {
         child: Stack(
           children: [
             DataStreamBuilder<List<n.AppNotification>>(
-              label: 'notifications', onRetry: () => firestore.retryDataLoads(),
+              label: 'notifications',
+              onRetry: () => firestore.retryDataLoads(),
               stream: firestore.notificationsForUser(appUser.userId),
               builder: (context, snap) {
                 if (isStreamWaiting(snap)) {
@@ -160,32 +162,53 @@ class _NotificationDropdown extends StatelessWidget {
                 if (items.isEmpty) {
                   return _NotificationsEmptyState(compact: !useCardLayout);
                 }
-                Widget buildList(ScrollController? controller) => ListView.separated(
-                  controller: controller,
-                  shrinkWrap: scrollController == null,
-                  padding: EdgeInsets.fromLTRB(
-                    useCardLayout ? 16 : 0,
-                    useCardLayout ? 8 : (scrollController == null ? 40 : 8),
-                    useCardLayout ? 16 : 0,
-                    useCardLayout ? 20 : 8,
-                  ),
-                  itemCount: items.length,
-                  separatorBuilder: (_, __) => useCardLayout
-                      ? const SizedBox(height: 10)
-                      : const Divider(height: 1, color: FigmaColors.gray200),
-                  itemBuilder: (context, index) {
-                    final note = items[index];
-                    return _NotificationRow(
-                      note: note,
-                      timeLabel: _formatNotificationTime(
-                        note.createdAt.toDate(),
+                Widget buildList(ScrollController? controller) =>
+                    ListView.separated(
+                      controller: controller,
+                      shrinkWrap: scrollController == null,
+                      padding: EdgeInsets.fromLTRB(
+                        useCardLayout ? 16 : 0,
+                        useCardLayout ? 8 : (scrollController == null ? 40 : 8),
+                        useCardLayout ? 16 : 0,
+                        useCardLayout ? 20 : 8,
                       ),
-                      useCardLayout: useCardLayout,
-                      onTap: () =>
-                          firestore.markNotificationRead(note.notificationId),
+                      itemCount: items.length,
+                      separatorBuilder: (_, __) => useCardLayout
+                          ? const SizedBox(height: 10)
+                          : const Divider(
+                              height: 1,
+                              color: FigmaColors.gray200,
+                            ),
+                      itemBuilder: (context, index) {
+                        final note = items[index];
+                        return _NotificationRow(
+                          note: note,
+                          timeLabel: _formatNotificationTime(
+                            note.createdAt.toDate(),
+                          ),
+                          useCardLayout: useCardLayout,
+                          onTap: () async {
+                            await firestore.markNotificationRead(
+                              note.notificationId,
+                            );
+                            if (context.mounted &&
+                                note.notificationType == 'Report Update' &&
+                                (note.relatedInquiryId?.isNotEmpty ?? false)) {
+                              NotificationsPopover.hide();
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute<void>(
+                                  builder: (_) => InquiryScreen(
+                                    appUser: appUser,
+                                    inquiryId: note.relatedInquiryId!,
+                                  ),
+                                ),
+                              );
+                            }
+                          },
+                        );
+                      },
                     );
-                  },
-                );
 
                 if (scrollController != null) {
                   return buildList(scrollController);

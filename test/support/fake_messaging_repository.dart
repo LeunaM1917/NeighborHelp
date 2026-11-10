@@ -1,5 +1,6 @@
 import 'package:neighbor_help/models/app_user.dart';
 import 'package:neighbor_help/models/booking.dart';
+import 'package:neighbor_help/models/booking_user_report.dart';
 import 'package:neighbor_help/models/inquiry.dart';
 import 'package:neighbor_help/models/message.dart';
 import 'package:neighbor_help/models/service.dart';
@@ -8,6 +9,12 @@ import 'package:neighbor_help/services/messaging_repository.dart';
 class FakeMessagingRepository extends MessagingRepository {
   List<Inquiry> threads = [];
   List<Booking> bookingRows = [];
+  final reportsById = <String, BookingUserReport>{};
+  @override
+  Stream<BookingUserReport?> report(String id) => Stream.value(reportsById[id]);
+  @override
+  Stream<List<Map<String, dynamic>>> reportEvents(String id) =>
+      Stream.value([]);
   final messagesByThread = <String, List<ChatMessage>>{};
   final sent = <Map<String, String>>[];
   final actions = <Map<String, dynamic>>[];

@@ -41,17 +41,38 @@ service firebase.storage {
       allow update, delete: if false;
     }
     match /inquiries/{inquiryId}/{senderId}/{fileName} {
-      function participant() { return active() && request.auth.uid in firestore.get(/databases/(default)/documents/inquiries/$(inquiryId)).data.participantIds; }
+      function participant() {
+        let thread = firestore.get(/databases/(default)/documents/inquiries/$(inquiryId)).data;
+        return active() && request.auth.uid in thread.participantIds
+          && (thread.get('kind', '') != 'dispute' || request.auth.uid != thread.get('assignedAdminId', '') || admin());
+      }
       function uploadAllowed() {
         let permitId = fileName.split('[.]')[0];
         let thread = firestore.get(/databases/(default)/documents/inquiries/$(inquiryId)).data;
         let permit = thread.uploadPermits[request.auth.uid];
         return permit.permitId == permitId && permit.expiresAt > request.time && permit.used == false
           && fileName == permitId + '.' + permit.extension
-          && thread.get('blockedBy', []).size() == 0;
+          && thread.get('blockedBy', []).size() == 0
+          && !(thread.get('caseStatus', '') in ['resolved', 'dismissed']);
       }
       allow read: if participant();
       allow create: if resource == null && participant() && request.auth.uid == senderId && image() && uploadAllowed();
+      allow update, delete: if false;
+    }
+    match /reportPhotos/{reportId}/{senderId}/{fileName} {
+      function reportReader() {
+        let report = firestore.get(/databases/(default)/documents/bookingUserReports/$(reportId)).data;
+        return active() && request.auth.uid in [report.reporterId, report.reportedUserId];
+      }
+      function uploadAllowed() {
+        let permitId = fileName.split('[.]')[0];
+        let permit = firestore.get(/databases/(default)/documents/reportUploads/$(permitId)).data;
+        return permit.userId == request.auth.uid && permit.reportId == reportId && permit.expiresAt > request.time
+          && permit.get('usedAt', null) == null && fileName == permitId + '.' + permit.extension
+          && !firestore.exists(/databases/(default)/documents/bookingUserReports/$(reportId));
+      }
+      allow read: if admin() || (active() && request.auth.uid == senderId) || reportReader();
+      allow create: if resource == null && active() && request.auth.uid == senderId && image() && uploadAllowed();
       allow update, delete: if false;
     }
   }

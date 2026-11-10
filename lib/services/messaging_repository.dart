@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/app_user.dart';
 import '../models/booking.dart';
+import '../models/booking_user_report.dart';
 import '../models/inquiry.dart';
 import '../models/message.dart';
 import '../models/service.dart';
@@ -11,6 +12,18 @@ import 'storage_service.dart';
 
 /// The restored message layout uses the same protected conversation API.
 class MessagingRepository {
+  Stream<BookingUserReport?> report(String id) =>
+      FirestoreService().bookingUserReport(id);
+  Stream<List<Map<String, dynamic>>> reportEvents(String id) =>
+      FirebaseFirestore.instance
+          .collection('bookingUserReports')
+          .doc(id)
+          .collection('events')
+          .orderBy('createdAt', descending: true)
+          .limit(100)
+          .snapshots()
+          .map((s) => s.docs.map((d) => d.data()).toList());
+
   Stream<List<Inquiry>> inbox(String uid) => MarketplaceService.inbox(uid);
   Stream<List<Booking>> bookings(String uid, bool asCustomer) =>
       FirestoreService().bookingsForUser(uid, asCustomer: asCustomer);

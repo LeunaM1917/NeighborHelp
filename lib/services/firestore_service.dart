@@ -884,6 +884,7 @@ class FirestoreService {
     required String reportedRole, // 'customer' | 'provider'
     required String reason,
     String details = '',
+    List<String> photoUrls = const [],
   }) async {
     final trimmedReason = reason.trim();
     if (trimmedReason.length < 3) {
@@ -896,10 +897,20 @@ class FirestoreService {
       'bookingId': bookingId,
       'reason': trimmedReason,
       'details': trimmedDetails,
+      'photoUrls': photoUrls,
     });
   }
 
   /// Admin: stream all booking user reports (newest first).
+  Stream<BookingUserReport?> bookingUserReport(String id) => _db
+      .collection(FirestoreCollections.bookingUserReports)
+      .doc(id)
+      .snapshots()
+      .map(
+        (s) =>
+            s.exists ? BookingUserReport.fromFirestore(s.id, s.data()!) : null,
+      );
+
   Stream<List<BookingUserReport>> allBookingUserReportsStream() {
     return _cache('allBookingUserReports', () {
       return _db

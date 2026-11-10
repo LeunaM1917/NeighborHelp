@@ -69,7 +69,7 @@ module.exports = function platformOperations({ db, admin, functions, region, mes
   out.workCaseCommand=functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK==='true'}).https.onCall(workCases.command);
   out.unresolvedWorkReminders=functions.region(region).pubsub.schedule('every 30 minutes').onRun(workCases.sweep);
   out.cleanupAbuseLimits=functions.region(region).pubsub.schedule('every 6 hours').onRun(async()=>{
-    for(const collection of ['rateLimits','inquiryUploads']) {
+    for(const collection of ['rateLimits','inquiryUploads','reportUploads']) {
       const expired=await db.collection(collection).where('expiresAt','<',Timestamp.now()).limit(450).get();
       if(!expired.empty){const batch=db.batch();for(const doc of expired.docs)batch.delete(doc.ref);await batch.commit();}
     }

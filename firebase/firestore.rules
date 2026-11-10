@@ -123,10 +123,16 @@ service cloud.firestore {
     }
     match /providerSchedules/{id} { allow read, write: if false; }
     match /inquiries/{id} {
-      allow read: if activeUser() && request.auth.uid in resource.data.participantIds;
+      function canReadThread(thread) {
+        return activeUser() && request.auth.uid in thread.participantIds
+          && (get(userPath()).data.role != 'Administrator' || isAdmin());
+      }
+      allow read: if canReadThread(resource.data);
       allow write: if false;
       match /messages/{messageId} {
-        allow read: if activeUser() && request.auth.uid in get(/databases/$(database)/documents/inquiries/$(id)).data.participantIds;
+        allow read: if canReadThread(get(/databases/$(database)/documents/inquiries/$(id)).data)
+          && (get(/databases/$(database)/documents/inquiries/$(id)).data.get('kind', '') != 'dispute'
+            || request.auth.uid != get(/databases/$(database)/documents/inquiries/$(id)).data.get('assignedAdminId', '') || isAdmin());
         allow write: if false;
       }
     }
@@ -143,8 +149,15 @@ service cloud.firestore {
       }
     }
     match /bookingUserReports/{id} {
-      allow read: if isAdmin();
+      function reportReader(report) {
+        return isAdmin() || (activeUser() && request.auth.uid in [report.reporterId, report.reportedUserId]);
+      }
+      allow read: if reportReader(resource.data);
       allow write: if false;
+      match /events/{eventId} {
+        allow read: if reportReader(get(/databases/$(database)/documents/bookingUserReports/$(id)).data);
+        allow write: if false;
+      }
     }
     match /messages/{id} {
       allow read: if activeUser() && (resource.data.senderId == request.auth.uid || resource.data.receiverId == request.auth.uid);

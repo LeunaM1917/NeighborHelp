@@ -6,6 +6,8 @@ class ChatMessage {
     required this.bookingId,
     this.threadId,
     required this.senderId,
+    this.senderName = '',
+    this.senderRole = '',
     required this.receiverId,
     this.messageText,
     this.mediaUrl,
@@ -16,9 +18,12 @@ class ChatMessage {
 
   final String messageId;
   final String bookingId;
+
   /// Groups messages across repeat bookings between the same customer and provider.
   final String? threadId;
   final String senderId;
+  final String senderName;
+  final String senderRole;
   final String receiverId;
   final String? messageText;
   final String? mediaUrl;
@@ -32,6 +37,8 @@ class ChatMessage {
       bookingId: data['bookingId'] as String? ?? '',
       threadId: data['threadId'] as String?,
       senderId: data['senderId'] as String? ?? '',
+      senderName: data['senderName'] as String? ?? '',
+      senderRole: data['senderRole'] as String? ?? '',
       receiverId: data['receiverId'] as String? ?? '',
       messageText: data['messageText'] as String?,
       mediaUrl: data['mediaUrl'] as String?,

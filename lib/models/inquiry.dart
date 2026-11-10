@@ -4,11 +4,16 @@ class Inquiry {
   Inquiry(this.id, this.data);
   final String id;
   final Map<String, dynamic> data;
-  int unreadFor(String uid) =>
-      (data[uid == customerId ? 'customerUnreadCount' : 'providerUnreadCount']
-              as num?)
-          ?.toInt() ??
-      0;
+  bool get isDispute => data['kind'] == 'dispute';
+  String get reportId => data['reportId'] as String? ?? '';
+  bool get isClosedDispute =>
+      isDispute && ['resolved', 'dismissed'].contains(data['caseStatus']);
+  int unreadFor(String uid) => isDispute
+      ? ((data['unreadCounts'] as Map?)?[uid] as num?)?.toInt() ?? 0
+      : (data[uid == customerId ? 'customerUnreadCount' : 'providerUnreadCount']
+                    as num?)
+                ?.toInt() ??
+            0;
   String get customerId => data['customerId'] as String;
   String get providerId => data['providerId'] as String;
   String get serviceId => data['serviceId'] as String;

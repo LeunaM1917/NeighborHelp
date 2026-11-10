@@ -10,6 +10,7 @@ import '../../models/app_user.dart';
 import '../../models/booking.dart';
 import '../../models/inquiry.dart';
 import '../../models/message.dart';
+import '../../models/user_role.dart';
 import '../../models/service.dart';
 import '../../services/messaging_repository.dart';
 import '../../services/marketplace_service.dart';
@@ -17,6 +18,7 @@ import '../../theme/mobile_layout.dart';
 import '../../theme/role_theme.dart';
 import '../../ui/app_ui_kit.dart';
 import '../../widgets/chat_image.dart';
+import '../../widgets/dispute_case_panel.dart';
 import '../../widgets/data_stream_builder.dart';
 import '../../widgets/loading_indicator.dart';
 import '../../widgets/stream_snapshot.dart';
@@ -35,8 +37,11 @@ class _Conversation {
   String get customerId => inquiry.customerId;
   String get providerId => inquiry.providerId;
   String get otherUserId => uid == customerId ? providerId : customerId;
-  String get name =>
-      uid == customerId ? inquiry.providerName : inquiry.customerName;
+  String get name => inquiry.isDispute
+      ? 'Dispute · ${inquiry.customerName} / ${inquiry.providerName}'
+      : uid == customerId
+      ? inquiry.providerName
+      : inquiry.customerName;
   Booking? get primaryBooking => bookings.firstOrNull;
 }
 
@@ -115,15 +120,18 @@ class _MessagesHubState extends State<MessagesHub> {
     super.initState();
     _repository = widget.repository ?? MessagingRepository();
     _inbox = widget.conversations ?? _repository.inbox(widget.appUser.userId);
-    _bookings = _repository.bookings(widget.appUser.userId, widget.asCustomer);
+    _bookings = widget.appUser.role == UserRole.administrator
+        ? Stream.value(<Booking>[])
+        : _repository.bookings(widget.appUser.userId, widget.asCustomer);
     _selectedId = widget.initialInquiryId;
     _sync = _synchronize();
     MessagesHub.pendingBookingId.addListener(_openPending);
     WidgetsBinding.instance.addPostFrameCallback((_) => _openPending());
   }
 
-  Future<void> _synchronize() =>
-      Future<void>.sync(widget.syncHistory ?? _repository.synchronize);
+  Future<void> _synchronize() => widget.appUser.role == UserRole.administrator
+      ? Future.value()
+      : Future<void>.sync(widget.syncHistory ?? _repository.synchronize);
   @override
   void dispose() {
     MessagesHub.pendingBookingId.removeListener(_openPending);
@@ -177,6 +185,8 @@ class _MessagesHubState extends State<MessagesHub> {
         return null;
       }
     }
+
+    if (thread.inquiry.isDispute) return;
 
     final details = await Future.wait<Object?>([
       optional(() => _repository.user(thread.otherUserId)),
@@ -243,12 +253,14 @@ class _MessagesHubState extends State<MessagesHub> {
                               final related =
                                   (bookings.data ?? <Booking>[])
                                       .where(
-                                        (b) =>
-                                            b.inquiryId == inquiry.id ||
-                                            (b.customerId ==
-                                                    inquiry.customerId &&
-                                                b.providerId ==
-                                                    inquiry.providerId),
+                                        (b) => (inquiry.isDispute
+                                            ? b.bookingId ==
+                                                  inquiry.data['bookingId']
+                                            : b.inquiryId == inquiry.id ||
+                                                  (b.customerId ==
+                                                          inquiry.customerId &&
+                                                      b.providerId ==
+                                                          inquiry.providerId)),
                                       )
                                       .toList()
                                     ..sort(
@@ -257,7 +269,7 @@ class _MessagesHubState extends State<MessagesHub> {
                                     );
                               return _Conversation(
                                 inquiry,
-                                related,
+                                inquiry.isDispute ? <Booking>[] : related,
                                 widget.appUser.userId,
                               );
                             }).toList();
@@ -378,6 +390,7 @@ class _MessagesHubState extends State<MessagesHub> {
                                       SizedBox(
                                         width: 300,
                                         child: _InfoPane(
+                                          repository: _repository,
                                           appUser: widget.appUser,
                                           asCustomer: widget.asCustomer,
                                           thread: selected,
@@ -821,6 +834,7 @@ class _ChatPaneState extends State<_ChatPane> {
   Future<void> _send({bool photo = false}) async {
     if (_sending ||
         widget.thread.inquiry.isBlocked ||
+        widget.thread.inquiry.isClosedDispute ||
         (!photo && _controller.text.trim().isEmpty)) {
       return;
     }
@@ -919,6 +933,7 @@ class _ChatPaneState extends State<_ChatPane> {
       builder: (sheet) => SizedBox(
         height: MediaQuery.sizeOf(sheet).height * .85,
         child: _InfoPane(
+          repository: widget.repository,
           appUser: widget.appUser,
           asCustomer: widget.asCustomer,
           thread: widget.thread,
@@ -1055,42 +1070,45 @@ class _ChatPaneState extends State<_ChatPane> {
                   ],
                 ),
               ),
-              PopupMenuButton<String>(
-                tooltip: 'Conversation safety',
-                onSelected: (action) {
-                  if (action == 'info') {
-                    _showMobileInfo();
-                  } else {
-                    _safetyAction(action);
-                  }
-                },
-                itemBuilder: (_) => [
-                  if (compact)
-                    const PopupMenuItem(
-                      value: 'info',
-                      child: Text('Conversation info'),
-                    ),
-                  PopupMenuItem(
-                    value:
-                        widget.thread.inquiry.blockedBy.contains(
-                          widget.appUser.userId,
-                        )
-                        ? 'unblock'
-                        : 'block',
-                    child: Text(
-                      widget.thread.inquiry.blockedBy.contains(
-                            widget.appUser.userId,
-                          )
-                          ? 'Unblock conversation'
-                          : 'Block conversation',
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'report',
-                    child: Text('Report to administrator'),
-                  ),
-                ],
-              ),
+              if (!widget.thread.inquiry.isDispute || compact)
+                PopupMenuButton<String>(
+                  tooltip: 'Conversation safety',
+                  onSelected: (action) {
+                    if (action == 'info') {
+                      _showMobileInfo();
+                    } else {
+                      _safetyAction(action);
+                    }
+                  },
+                  itemBuilder: (_) => [
+                    if (compact)
+                      const PopupMenuItem(
+                        value: 'info',
+                        child: Text('Conversation info'),
+                      ),
+                    if (!widget.thread.inquiry.isDispute)
+                      PopupMenuItem(
+                        value:
+                            widget.thread.inquiry.blockedBy.contains(
+                              widget.appUser.userId,
+                            )
+                            ? 'unblock'
+                            : 'block',
+                        child: Text(
+                          widget.thread.inquiry.blockedBy.contains(
+                                widget.appUser.userId,
+                              )
+                              ? 'Unblock conversation'
+                              : 'Block conversation',
+                        ),
+                      ),
+                    if (!widget.thread.inquiry.isDispute)
+                      const PopupMenuItem(
+                        value: 'report',
+                        child: Text('Report to administrator'),
+                      ),
+                  ],
+                ),
               if (!compact) ...[
                 IconButton(
                   onPressed: () {},
@@ -1183,9 +1201,13 @@ class _ChatPaneState extends State<_ChatPane> {
                         message: m,
                         senderName: m.senderId == widget.appUser.userId
                             ? 'You'
+                            : widget.thread.inquiry.isDispute
+                            ? '${m.senderName}${m.senderRole == 'Administrator' ? ' · Administrator' : ''}'
                             : name,
                         photoUrl: m.senderId == widget.appUser.userId
                             ? widget.appUser.profilePhotoUrl
+                            : widget.thread.inquiry.isDispute
+                            ? null
                             : widget.otherUser?.profilePhotoUrl,
                         timeLabel: timeFmt.format(
                           m.sentAt.toDate().toUtc().add(
@@ -1207,14 +1229,25 @@ class _ChatPaneState extends State<_ChatPane> {
               'This conversation is blocked. Messages and new offers are paused. You can still view history and report a concern.',
             ),
           ),
-        if (_retryMessage != null && !widget.thread.inquiry.isBlocked)
+        if (widget.thread.inquiry.isClosedDispute)
+          const Padding(
+            padding: EdgeInsets.all(12),
+            child: Text(
+              'This dispute is closed. Its messages, evidence and recorded outcome remain available.',
+            ),
+          ),
+        if (_retryMessage != null &&
+            !widget.thread.inquiry.isBlocked &&
+            !widget.thread.inquiry.isClosedDispute)
           TextButton.icon(
             onPressed: _sending ? null : _retrySend,
             icon: const Icon(Icons.refresh),
             label: const Text('Retry message with uncertain delivery'),
           ),
         _MessageComposer(
-          enabled: !widget.thread.inquiry.isBlocked,
+          enabled:
+              !widget.thread.inquiry.isBlocked &&
+              !widget.thread.inquiry.isClosedDispute,
           controller: _controller,
           sending: _sending,
           onSend: _send,
@@ -1585,6 +1618,7 @@ class _MessageComposer extends StatelessWidget {
 
 class _InfoPane extends StatefulWidget {
   const _InfoPane({
+    required this.repository,
     required this.appUser,
     required this.asCustomer,
     required this.booking,
@@ -1595,6 +1629,7 @@ class _InfoPane extends StatefulWidget {
     this.onMessageSearchChanged,
   });
 
+  final MessagingRepository repository;
   final AppUser appUser;
   final bool asCustomer;
   final Booking? booking;
@@ -1631,185 +1666,206 @@ class _InfoPaneState extends State<_InfoPane> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
               children: [
-                Center(
-                  child: CircleAvatar(
-                    radius: 36,
-                    backgroundColor: FigmaColors.gray200,
-                    backgroundImage: widget.otherUser?.profilePhotoUrl != null
-                        ? NetworkImage(widget.otherUser!.profilePhotoUrl!)
-                        : null,
-                    child: widget.otherUser?.profilePhotoUrl == null
-                        ? Text(
-                            _initials(name),
-                            style: GoogleFonts.inter(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          )
-                        : null,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Center(
-                  child: Text(
-                    name,
-                    style: GoogleFonts.inter(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      Icons.work_outline,
-                      size: 14,
-                      color: FigmaColors.gray500,
-                    ),
-                    const SizedBox(width: 4),
-                    Flexible(
-                      child: Text(
-                        roleLabel,
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          color: FigmaColors.gray600,
-                        ),
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                if (widget.booking != null)
+                if (widget.thread.inquiry.isDispute) ...[
                   Text(
-                    'Scheduled ${widget.booking!.scheduledWindowLabel}',
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: FigmaColors.gray500,
-                    ),
-                    textAlign: TextAlign.center,
+                    '${widget.thread.inquiry.customerName} ? Customer\n${widget.thread.inquiry.providerName} ? Provider\n${widget.thread.inquiry.data['adminName'] ?? 'System Administrator'} ? Administrator',
+                    style: GoogleFonts.inter(fontSize: 13, height: 1.6),
                   ),
-                const SizedBox(height: 16),
-                if (widget.booking != null)
-                  TextButton.icon(
-                    onPressed: () => _openBooking(
-                      context,
-                      widget.appUser,
-                      widget.asCustomer,
-                      widget.booking!,
+                  const SizedBox(height: 16),
+                  DisputeCasePanel(
+                    key: ValueKey(widget.thread.inquiry.reportId),
+                    appUser: widget.appUser,
+                    reportId: widget.thread.inquiry.reportId,
+                    reports: widget.repository.report(
+                      widget.thread.inquiry.reportId,
                     ),
-                    icon: const Icon(Icons.visibility_outlined),
-                    label: const Text('View booking'),
+                    events: widget.repository.reportEvents(
+                      widget.thread.inquiry.reportId,
+                    ),
                   ),
-                if (widget.asCustomer)
-                  TextButton.icon(
-                    onPressed:
-                        widget.thread.inquiry.hasDiscussion &&
-                            !widget.thread.inquiry.isBlocked
-                        ? () => Navigator.push(
-                            context,
-                            MaterialPageRoute<void>(
-                              builder: (_) => ContractOfferScreen(
-                                appUser: widget.appUser,
-                                inquiry: widget.thread.inquiry,
+                ] else ...[
+                  Center(
+                    child: CircleAvatar(
+                      radius: 36,
+                      backgroundColor: FigmaColors.gray200,
+                      backgroundImage: widget.otherUser?.profilePhotoUrl != null
+                          ? NetworkImage(widget.otherUser!.profilePhotoUrl!)
+                          : null,
+                      child: widget.otherUser?.profilePhotoUrl == null
+                          ? Text(
+                              _initials(name),
+                              style: GoogleFonts.inter(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            )
+                          : null,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Center(
+                    child: Text(
+                      name,
+                      style: GoogleFonts.inter(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.work_outline,
+                        size: 14,
+                        color: FigmaColors.gray500,
+                      ),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          roleLabel,
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            color: FigmaColors.gray600,
+                          ),
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  if (widget.booking != null)
+                    Text(
+                      'Scheduled ${widget.booking!.scheduledWindowLabel}',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: FigmaColors.gray500,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  const SizedBox(height: 16),
+                  if (widget.booking != null)
+                    TextButton.icon(
+                      onPressed: () => _openBooking(
+                        context,
+                        widget.appUser,
+                        widget.asCustomer,
+                        widget.booking!,
+                      ),
+                      icon: const Icon(Icons.visibility_outlined),
+                      label: const Text('View booking'),
+                    ),
+                  if (widget.asCustomer)
+                    TextButton.icon(
+                      onPressed:
+                          widget.thread.inquiry.hasDiscussion &&
+                              !widget.thread.inquiry.isBlocked
+                          ? () => Navigator.push(
+                              context,
+                              MaterialPageRoute<void>(
+                                builder: (_) => ContractOfferScreen(
+                                  appUser: widget.appUser,
+                                  inquiry: widget.thread.inquiry,
+                                ),
+                              ),
+                            )
+                          : null,
+                      icon: const Icon(Icons.description_outlined),
+                      label: const Text('Prepare fixed or daily offer'),
+                    ),
+                  if (widget.asCustomer && !widget.thread.inquiry.hasDiscussion)
+                    const Text(
+                      'Both parties must send a message before an offer can be sent.',
+                    ),
+                  const SizedBox(height: 20),
+                  _InfoExpansion(
+                    icon: Icons.timeline_outlined,
+                    title: 'Activity timeline',
+                    child: widget.booking == null
+                        ? const Text(
+                            'Discuss the work before starting a contract.',
+                          )
+                        : BookingStatusTracker(status: widget.booking!.status),
+                  ),
+                  if (widget.thread.bookings.length > 1)
+                    _InfoExpansion(
+                      icon: Icons.history,
+                      title: 'Previous offers and bookings',
+                      child: Column(
+                        children: [
+                          for (final b in widget.thread.bookings)
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(b.status),
+                              subtitle: Text(
+                                b.pricingSummary ?? b.scheduledWindowLabel,
+                              ),
+                              onTap: () => _openBooking(
+                                context,
+                                widget.appUser,
+                                widget.asCustomer,
+                                b,
                               ),
                             ),
-                          )
-                        : null,
-                    icon: const Icon(Icons.description_outlined),
-                    label: const Text('Prepare fixed or daily offer'),
-                  ),
-                if (widget.asCustomer && !widget.thread.inquiry.hasDiscussion)
-                  const Text(
-                    'Both parties must send a message before an offer can be sent.',
-                  ),
-                const SizedBox(height: 20),
-                _InfoExpansion(
-                  icon: Icons.timeline_outlined,
-                  title: 'Activity timeline',
-                  child: widget.booking == null
-                      ? const Text(
-                          'Discuss the work before starting a contract.',
-                        )
-                      : BookingStatusTracker(status: widget.booking!.status),
-                ),
-                if (widget.thread.bookings.length > 1)
-                  _InfoExpansion(
-                    icon: Icons.history,
-                    title: 'Previous offers and bookings',
-                    child: Column(
-                      children: [
-                        for (final b in widget.thread.bookings)
-                          ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: Text(b.status),
-                            subtitle: Text(
-                              b.pricingSummary ?? b.scheduledWindowLabel,
-                            ),
-                            onTap: () => _openBooking(
-                              context,
-                              widget.appUser,
-                              widget.asCustomer,
-                              b,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                _InfoExpansion(
-                  icon: Icons.search,
-                  title: 'Search messages',
-                  child: TextField(
-                    decoration: const InputDecoration(
-                      hintText: 'Filter in conversation…',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    onChanged: widget.onMessageSearchChanged,
-                  ),
-                ),
-                if (widget.booking != null)
-                  _InfoExpansion(
-                    icon: Icons.description_outlined,
-                    title: 'Booking details',
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.service?.serviceTitle ?? 'Service',
-                          style: GoogleFonts.inter(fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(height: 6),
-                        FigmaStatusChip(status: widget.booking!.status),
-                        if (widget.booking!.serviceLocation.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            widget.booking!.serviceLocation,
-                            style: GoogleFonts.inter(
-                              fontSize: 13,
-                              color: FigmaColors.gray600,
-                            ),
-                          ),
                         ],
-                      ],
+                      ),
+                    ),
+                  _InfoExpansion(
+                    icon: Icons.search,
+                    title: 'Search messages',
+                    child: TextField(
+                      decoration: const InputDecoration(
+                        hintText: 'Filter in conversation…',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      onChanged: widget.onMessageSearchChanged,
                     ),
                   ),
-                _InfoExpansion(
-                  icon: Icons.folder_outlined,
-                  title: 'Files and links',
-                  child: Text(
-                    'Shared images are available in the conversation.',
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      color: FigmaColors.gray500,
+                  if (widget.booking != null)
+                    _InfoExpansion(
+                      icon: Icons.description_outlined,
+                      title: 'Booking details',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.service?.serviceTitle ?? 'Service',
+                            style: GoogleFonts.inter(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          FigmaStatusChip(status: widget.booking!.status),
+                          if (widget.booking!.serviceLocation.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              widget.booking!.serviceLocation,
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                color: FigmaColors.gray600,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  _InfoExpansion(
+                    icon: Icons.folder_outlined,
+                    title: 'Files and links',
+                    child: Text(
+                      'Shared images are available in the conversation.',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: FigmaColors.gray500,
+                      ),
                     ),
                   ),
-                ),
+                ],
               ],
             ),
           ),

@@ -19,6 +19,10 @@ class BookingUserReport {
     this.resolvedAt,
     this.inquiryId = '',
     this.evidence = const [],
+    this.photoUrls = const [],
+    this.assignedAdminId = '',
+    this.disputeInquiryId = '',
+    this.resolutionProposal,
   });
 
   final String reportId;
@@ -35,13 +39,29 @@ class BookingUserReport {
   final Timestamp? resolvedAt;
   final String inquiryId;
   final List<Map<String, dynamic>> evidence;
-  String get contextLabel => inquiryId.isNotEmpty ? 'Inquiry $inquiryId' : bookingId;
+  final List<String> photoUrls;
+  final String assignedAdminId;
+  final String disputeInquiryId;
+  final Map<String, dynamic>? resolutionProposal;
+  bool get isClosed => status == statusResolved || status == statusDismissed;
+  String get statusLabel => switch (status) {
+    'under_review' => 'Under review',
+    'waiting_response' => 'Waiting for response',
+    'resolved' => 'Resolved',
+    'dismissed' => 'Dismissed',
+    _ => 'Open',
+  };
+  String get contextLabel =>
+      inquiryId.isNotEmpty ? 'Inquiry $inquiryId' : bookingId;
 
   static const statusOpen = 'open';
   static const statusResolved = 'resolved';
   static const statusDismissed = 'dismissed';
 
-  factory BookingUserReport.fromFirestore(String id, Map<String, dynamic> data) {
+  factory BookingUserReport.fromFirestore(
+    String id,
+    Map<String, dynamic> data,
+  ) {
     return BookingUserReport(
       reportId: id,
       bookingId: data['bookingId'] as String? ?? '',
@@ -56,7 +76,15 @@ class BookingUserReport {
       adminNotes: (data['adminNotes'] as String?)?.trim() ?? '',
       resolvedAt: data['resolvedAt'] as Timestamp?,
       inquiryId: data['inquiryId'] as String? ?? '',
-      evidence: (data['evidence'] as List? ?? const []).map((e)=>Map<String,dynamic>.from(e as Map)).toList(),
+      photoUrls: List<String>.from(data['photoUrls'] as List? ?? const []),
+      assignedAdminId: data['assignedAdminId'] as String? ?? '',
+      disputeInquiryId: data['disputeInquiryId'] as String? ?? '',
+      resolutionProposal: data['resolutionProposal'] is Map
+          ? Map<String, dynamic>.from(data['resolutionProposal'] as Map)
+          : null,
+      evidence: (data['evidence'] as List? ?? const [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList(),
     );
   }
 
@@ -73,7 +101,12 @@ class BookingUserReport {
       'createdAt': createdAt,
       'adminNotes': adminNotes,
       'resolvedAt': resolvedAt,
+      'photoUrls': photoUrls,
+      'assignedAdminId': assignedAdminId,
+      'disputeInquiryId': disputeInquiryId,
+      if (resolutionProposal != null) 'resolutionProposal': resolutionProposal,
+      'inquiryId': inquiryId,
+      'evidence': evidence,
     };
   }
 }
-

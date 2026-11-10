@@ -153,6 +153,7 @@ test('booking reports derive participants and only administrators can resolve wi
   const r=await report({action:'reportBooking',bookingId:'b',reportedUserId:'stranger',reason:'Please investigate.'},auth('c'));
   assert.equal((await db.doc(`bookingUserReports/${r.reportId}`).get()).data().reportedUserId,'p');
   await assert.rejects(report({action:'resolve',reportId:r.reportId,status:'dismissed',adminNotes:'Reviewed the report details.'},auth('c')),/Administrator/);
+  await report({action:'startReview',reportId:r.reportId},auth('a'));
   await report({action:'resolve',reportId:r.reportId,status:'resolved',adminNotes:'Reviewed and recorded the administrative decision.'},auth('a'));
   assert.equal((await db.doc(`bookingUserReports/${r.reportId}`).get()).data().status,'resolved');
 });

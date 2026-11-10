@@ -11,6 +11,31 @@ class StorageService {
     : _storage = storage ?? FirebaseStorage.instance;
 
   final FirebaseStorage _storage;
+  Future<String> uploadReportImage({
+    required String bookingId,
+    required String senderId,
+    required Uint8List bytes,
+  }) async {
+    if (bytes.length > 5 * 1024 * 1024) {
+      throw StateError('Choose an image up to 5 MB.');
+    }
+    final format = ImageUploadFormat.inspect(bytes);
+    final permit = await MarketplaceService.command('reportCommand', {
+      'action': 'authorizePhoto',
+      'bookingId': bookingId,
+      'permitId': FirebaseFirestore.instance
+          .collection('reportUploads')
+          .doc()
+          .id,
+      'extension': format.extension,
+    });
+    final ref = _storage.ref(
+      'reportPhotos/${permit['reportId']}/$senderId/${permit['fileName']}',
+    );
+    await ref.putData(bytes, SettableMetadata(contentType: format.contentType));
+    return 'gs://${ref.bucket}/${ref.fullPath}';
+  }
+
   Future<String> uploadInquiryImage({
     required String inquiryId,
     required String senderId,

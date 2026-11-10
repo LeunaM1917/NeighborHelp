@@ -44,6 +44,7 @@ module.exports = ({db, functions}) => async (data, context) => {
     if(currentUser?.accountStatus!=='Active') fail('permission-denied','An active account is required.');
     const snap = await tx.get(ref), thread = snap.data();
     if (!thread || !thread.participantIds.includes(uid)) fail('permission-denied','This conversation belongs to another account.');
+    if (thread.kind === 'dispute') return require('./dispute_chat')({db, tx, ref, thread, uid, user: currentUser, data, context, fail});
     if(data.action === 'read') {
       const field=uid === thread.customerId ? 'customerUnreadCount' : 'providerUnreadCount';
       if(thread[field]) tx.update(ref,{[field]:0});

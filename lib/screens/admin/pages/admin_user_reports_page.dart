@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -13,6 +12,8 @@ import '../../../services/firestore_service.dart';
 import '../widgets/admin_dashboard_widgets.dart';
 import '../widgets/admin_detail_dialog.dart';
 import '../widgets/admin_widgets.dart';
+import '../../../widgets/dispute_case_panel.dart';
+import '../../shared/inquiry_screen.dart';
 
 class AdminUserReportsPage extends StatefulWidget {
   const AdminUserReportsPage({
@@ -45,7 +46,11 @@ class _AdminUserReportsPageState extends State<AdminUserReportsPage> {
   List<BookingUserReport> _applyFilters(List<BookingUserReport> reports) {
     var list = [...reports];
     if (_statusFilter != 'All') {
-      final status = _statusFilter.toLowerCase();
+      final status = switch (_statusFilter) {
+        'Under review' => 'under_review',
+        'Waiting for response' => 'waiting_response',
+        _ => _statusFilter.toLowerCase(),
+      };
       list = list.where((r) => r.status.toLowerCase() == status).toList();
     }
 
@@ -75,139 +80,85 @@ class _AdminUserReportsPageState extends State<AdminUserReportsPage> {
     required AppUser? reporter,
     required AppUser? reported,
   }) async {
-    final dateFmt = DateFormat('MMM d, yyyy');
-    final timeFmt = DateFormat('h:mm a');
-    final notesController = TextEditingController();
-
-    String? chosenAction;
-
+    final uid = widget.auth.currentUser?.uid;
+    if (uid == null) return;
+    final admin = await FirestoreService().getUser(uid);
+    if (!context.mounted || admin == null) return;
     await showDialog<void>(
       context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setLocal) {
-            return AlertDialog(
-              title: Text(
-                'Report detail',
-                style: GoogleFonts.inter(fontWeight: FontWeight.w700),
-              ),
-              content: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    RichText(
-                      text: TextSpan(
-                        style: GoogleFonts.inter(fontSize: 14, color: FigmaColors.gray800),
-                        children: [
-                          TextSpan(text: report.inquiryId.isNotEmpty ? 'Inquiry: ' : 'Booking ID: ', style: const TextStyle(fontWeight: FontWeight.w600)),
-                          TextSpan(text: report.contextLabel),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    RichText(
-                      text: TextSpan(
-                        style: GoogleFonts.inter(fontSize: 14, color: FigmaColors.gray800),
-                        children: [
-                          const TextSpan(text: 'Status: ', style: TextStyle(fontWeight: FontWeight.w600)),
-                          TextSpan(text: report.status),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    adminDetailLine('Submitted', '${dateFmt.format(report.createdAt.toDate())} ${timeFmt.format(report.createdAt.toDate())}'),
-                    adminDetailLine(
-                      'Reporter',
-                      '${reporter?.fullName.isNotEmpty == true ? reporter!.fullName : report.reporterId} (${report.reporterRole})',
-                    ),
-                    adminDetailLine(
-                      'Reported user',
-                      '${reported?.fullName.isNotEmpty == true ? reported!.fullName : report.reportedUserId} (${report.reportedRole})',
-                    ),
-                    const SizedBox(height: 8),
-                    adminDetailLine('Reason', report.reason),
-                    if (report.details.isNotEmpty) adminDetailLine('Details', report.details),
-                    if (report.evidence.isNotEmpty) ...[
-                      const Text('Reported conversation evidence',style:TextStyle(fontWeight:FontWeight.w600)),
-                      for(final message in report.evidence.reversed)
-                        Padding(padding:const EdgeInsets.symmetric(vertical:6),child:SelectableText('${message['senderId']} · ${message['sentAt'] is Timestamp ? timeFmt.format((message['sentAt'] as Timestamp).toDate()) : ''}\n${message['text'] ?? ''}${(message['mediaUrl'] as String? ?? '').isNotEmpty ? '\n[Photo attached; private conversation media]' : ''}')),
-                    ],
-                    if (booking != null) adminDetailLine('Booking status', booking.status),
-                    if (report.adminNotes.isNotEmpty) adminDetailLine('Admin notes', report.adminNotes),
-                    const SizedBox(height: 14),
-                    TextField(
-                      controller: notesController,
-                      maxLines: 3,
-                      decoration: const InputDecoration(
-                        labelText: 'Decision notes (at least 10 characters)',
-                        alignLabelWithHint: true,
-                        border: OutlineInputBorder(),
-                      ),
-                      onChanged: (_) {
-                        setLocal(() => chosenAction = chosenAction);
-                      },
-                    ),
-                  ],
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          'Report detail',
+          style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+        ),
+        content: SizedBox(
+          width: 680,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                adminDetailLine(
+                  'Reporter',
+                  '${reporter?.fullName ?? report.reporterId} (${report.reporterRole})',
                 ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Close'),
+                adminDetailLine(
+                  'Reported user',
+                  '${reported?.fullName ?? report.reportedUserId} (${report.reportedRole})',
                 ),
-                OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: FigmaColors.red600,
-                    side: const BorderSide(color: FigmaColors.red600),
+                if (booking != null) ...[
+                  adminDetailLine('Booking status', booking.status),
+                  if (booking.agreement?['scope'] != null)
+                    adminDetailLine(
+                      'Agreed scope',
+                      '${booking.agreement!['scope']}',
+                    ),
+                  if (booking.agreement?['deliverables'] != null)
+                    adminDetailLine(
+                      'Agreed deliverables',
+                      '${booking.agreement!['deliverables']}',
+                    ),
+                ],
+                if (report.evidence.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Submitted conversation evidence',
+                    style: TextStyle(fontWeight: FontWeight.w600),
                   ),
-                  onPressed: notesController.text.trim().length < 10 ? null : () async {
-                    chosenAction = 'dismiss';
+                  for (final message in report.evidence.reversed)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: SelectableText(
+                        '${message['senderId']}\n${message['text'] ?? ''}',
+                      ),
+                    ),
+                ],
+                const SizedBox(height: 16),
+                DisputeCasePanel(
+                  appUser: admin,
+                  reportId: report.reportId,
+                  onOpenConversation: (id) {
                     Navigator.pop(ctx);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) =>
+                            InquiryScreen(appUser: admin, inquiryId: id),
+                      ),
+                    );
                   },
-                  child: const Text('Dismiss'),
-                ),
-                FilledButton(
-                  style: FilledButton.styleFrom(backgroundColor: FigmaColors.green),
-                  onPressed: notesController.text.trim().length < 10 ? null : () async {
-                    chosenAction = 'resolve';
-                    Navigator.pop(ctx);
-                  },
-                  child: const Text('Resolve'),
                 ),
               ],
-            );
-          },
-        );
-      },
-    );
-
-    if (!context.mounted) return;
-
-    // If dialog closed without action, do nothing.
-    if (chosenAction == null) return;
-
-    try {
-      await FirestoreService().adminSetBookingUserReportStatus(
-        reportId: report.reportId,
-        status: chosenAction == 'resolve' ? BookingUserReport.statusResolved : BookingUserReport.statusDismissed,
-        adminNotes: notesController.text,
-      );
-
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              chosenAction == 'resolve' ? 'Report resolved.' : 'Report dismissed.',
             ),
           ),
-        );
-      }
-    } catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e is StateError ? e.message : 'Could not update report.')),
-      );
-    }
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -241,12 +192,16 @@ class _AdminUserReportsPageState extends State<AdminUserReportsPage> {
           final totalPages = total == 0 ? 1 : (total / _pageSize).ceil();
           final page = _page.clamp(1, totalPages);
           if (_page != page && mounted) {
-            WidgetsBinding.instance.addPostFrameCallback((_) => setState(() => _page = page));
+            WidgetsBinding.instance.addPostFrameCallback(
+              (_) => setState(() => _page = page),
+            );
           }
 
           final start = (page - 1) * _pageSize;
           final end = (start + _pageSize).clamp(0, total);
-          final pageReports = total == 0 ? <BookingUserReport>[] : reports.sublist(start, end);
+          final pageReports = total == 0
+              ? <BookingUserReport>[]
+              : reports.sublist(start, end);
 
           return StreamBuilder<List<Booking>>(
             stream: firestore.allBookingsStream(),
@@ -264,15 +219,21 @@ class _AdminUserReportsPageState extends State<AdminUserReportsPage> {
 
                   final bookings = bookingSnap.data ?? [];
                   final users = userSnap.data ?? [];
-                  final bookingsById = {for (final b in bookings) b.bookingId: b};
+                  final bookingsById = {
+                    for (final b in bookings) b.bookingId: b,
+                  };
                   final usersById = {for (final u in users) u.userId: u};
 
                   // Metrics
                   var open = 0, resolved = 0, dismissed = 0;
                   for (final r in reportsRaw) {
-                    if (r.status == BookingUserReport.statusResolved) { resolved++; }
-                    else if (r.status == BookingUserReport.statusDismissed) { dismissed++; }
-                    else { open++; }
+                    if (r.status == BookingUserReport.statusResolved) {
+                      resolved++;
+                    } else if (r.status == BookingUserReport.statusDismissed) {
+                      dismissed++;
+                    } else {
+                      open++;
+                    }
                   }
 
                   return Column(
@@ -280,7 +241,8 @@ class _AdminUserReportsPageState extends State<AdminUserReportsPage> {
                     children: [
                       const AdminDashboardHeader(
                         title: 'User Reports (per booking)',
-                        subtitle: 'Customers/providers report the other party. Admin can resolve or dismiss.',
+                        subtitle:
+                            'Customers/providers report the other party. Admin can resolve or dismiss.',
                       ),
                       const SizedBox(height: 24),
                       AdminMetricGrid(
@@ -320,32 +282,60 @@ class _AdminUserReportsPageState extends State<AdminUserReportsPage> {
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               Padding(
-                                padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+                                padding: const EdgeInsets.fromLTRB(
+                                  20,
+                                  16,
+                                  20,
+                                  12,
+                                ),
                                 child: AdminTableFilterToolbar(
                                   search: TextField(
                                     controller: _searchController,
-                                    onChanged: (v) => setState(() => _search = v),
+                                    onChanged: (v) =>
+                                        setState(() => _search = v),
                                     decoration: InputDecoration(
-                                      hintText: 'Search booking ID / reason / users…',
-                                      hintStyle: GoogleFonts.inter(color: FigmaColors.gray500, fontSize: 14),
-                                      prefixIcon: const Icon(Icons.search, size: 20, color: FigmaColors.gray500),
+                                      hintText:
+                                          'Search booking ID / reason / users…',
+                                      hintStyle: GoogleFonts.inter(
+                                        color: FigmaColors.gray500,
+                                        fontSize: 14,
+                                      ),
+                                      prefixIcon: const Icon(
+                                        Icons.search,
+                                        size: 20,
+                                        color: FigmaColors.gray500,
+                                      ),
                                       filled: true,
                                       fillColor: FigmaColors.gray50,
                                       border: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(8),
-                                        borderSide: const BorderSide(color: FigmaColors.gray300),
+                                        borderSide: const BorderSide(
+                                          color: FigmaColors.gray300,
+                                        ),
                                       ),
                                       enabledBorder: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(8),
-                                        borderSide: const BorderSide(color: FigmaColors.gray300),
+                                        borderSide: const BorderSide(
+                                          color: FigmaColors.gray300,
+                                        ),
                                       ),
-                                      contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                            vertical: 12,
+                                          ),
                                     ),
                                   ),
                                   filters: [
                                     adminFilterDropdown(
                                       value: _statusFilter,
-                                      options: const ['All', 'Open', 'Resolved', 'Dismissed'],
+                                      options: const [
+                                        'All',
+                                        'Open',
+                                        'Under review',
+                                        'Waiting for response',
+                                        'Resolved',
+                                        'Dismissed',
+                                      ],
                                       onChanged: (v) => setState(() {
                                         _statusFilter = v;
                                         _page = 1;
@@ -354,14 +344,19 @@ class _AdminUserReportsPageState extends State<AdminUserReportsPage> {
                                   ],
                                 ),
                               ),
-                              const Divider(height: 1, color: FigmaColors.gray200),
+                              const Divider(
+                                height: 1,
+                                color: FigmaColors.gray200,
+                              ),
                               if (pageReports.isEmpty)
                                 const Padding(
                                   padding: EdgeInsets.all(40),
                                   child: Center(
                                     child: Text(
                                       'No reports match your filters.',
-                                      style: TextStyle(color: FigmaColors.gray500),
+                                      style: TextStyle(
+                                        color: FigmaColors.gray500,
+                                      ),
                                     ),
                                   ),
                                 )
@@ -379,7 +374,10 @@ class _AdminUserReportsPageState extends State<AdminUserReportsPage> {
                                       fontWeight: FontWeight.w700,
                                       color: FigmaColors.gray600,
                                     ),
-                                    dataTextStyle: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray800),
+                                    dataTextStyle: GoogleFonts.inter(
+                                      fontSize: 13,
+                                      color: FigmaColors.gray800,
+                                    ),
                                     columns: const [
                                       DataColumn(label: Text('Booking ID')),
                                       DataColumn(label: Text('Reported user')),
@@ -392,30 +390,50 @@ class _AdminUserReportsPageState extends State<AdminUserReportsPage> {
                                     rows: [
                                       for (final r in pageReports)
                                         DataRow(
-                                          selected: _selectedReportId == r.reportId,
-                                          onSelectChanged: (v) => setState(() => _selectedReportId = v == true ? r.reportId : null),
+                                          selected:
+                                              _selectedReportId == r.reportId,
+                                          onSelectChanged: (v) => setState(
+                                            () => _selectedReportId = v == true
+                                                ? r.reportId
+                                                : null,
+                                          ),
                                           cells: [
                                             DataCell(
                                               AdminTableDetailTap(
                                                 onOpen: () => _showReportDetail(
                                                   context,
                                                   report: r,
-                                                  booking: bookingsById[r.bookingId],
-                                                  reporter: usersById[r.reporterId],
-                                                  reported: usersById[r.reportedUserId],
+                                                  booking:
+                                                      bookingsById[r.bookingId],
+                                                  reporter:
+                                                      usersById[r.reporterId],
+                                                  reported:
+                                                      usersById[r
+                                                          .reportedUserId],
                                                 ),
-                                                child: Text(r.contextLabel, style: GoogleFonts.inter(color: FigmaColors.navy)),
+                                                child: Text(
+                                                  r.contextLabel,
+                                                  style: GoogleFonts.inter(
+                                                    color: FigmaColors.navy,
+                                                  ),
+                                                ),
                                               ),
                                             ),
                                             DataCell(
                                               Text(
-                                                _displayUser(usersById[r.reportedUserId], r.reportedUserId),
+                                                _displayUser(
+                                                  usersById[r.reportedUserId],
+                                                  r.reportedUserId,
+                                                ),
                                                 softWrap: false,
                                               ),
                                             ),
                                             DataCell(
                                               Text(
-                                                _displayUser(usersById[r.reporterId], r.reporterId),
+                                                _displayUser(
+                                                  usersById[r.reporterId],
+                                                  r.reporterId,
+                                                ),
                                                 softWrap: false,
                                               ),
                                             ),
@@ -434,14 +452,19 @@ class _AdminUserReportsPageState extends State<AdminUserReportsPage> {
                                             ),
                                             DataCell(
                                               Text(
-                                                r.status,
+                                                r.statusLabel,
                                                 style: GoogleFonts.inter(
                                                   fontWeight: FontWeight.w700,
-                                                  color: r.status == BookingUserReport.statusResolved
+                                                  color:
+                                                      r.status ==
+                                                          BookingUserReport
+                                                              .statusResolved
                                                       ? FigmaColors.green
-                                                      : r.status == BookingUserReport.statusDismissed
-                                                          ? FigmaColors.red600
-                                                          : FigmaColors.orange600,
+                                                      : r.status ==
+                                                            BookingUserReport
+                                                                .statusDismissed
+                                                      ? FigmaColors.red600
+                                                      : FigmaColors.orange600,
                                                 ),
                                               ),
                                             ),
@@ -450,32 +473,71 @@ class _AdminUserReportsPageState extends State<AdminUserReportsPage> {
                                                 mainAxisSize: MainAxisSize.min,
                                                 children: [
                                                   OutlinedButton(
-                                                    onPressed: () => _showReportDetail(
-                                                      context,
-                                                      report: r,
-                                                      booking: bookingsById[r.bookingId],
-                                                      reporter: usersById[r.reporterId],
-                                                      reported: usersById[r.reportedUserId],
-                                                    ),
+                                                    onPressed: () =>
+                                                        _showReportDetail(
+                                                          context,
+                                                          report: r,
+                                                          booking:
+                                                              bookingsById[r
+                                                                  .bookingId],
+                                                          reporter:
+                                                              usersById[r
+                                                                  .reporterId],
+                                                          reported:
+                                                              usersById[r
+                                                                  .reportedUserId],
+                                                        ),
                                                     style: OutlinedButton.styleFrom(
-                                                      foregroundColor: FigmaColors.gray800,
-                                                      side: const BorderSide(color: FigmaColors.gray300),
-                                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                      foregroundColor:
+                                                          FigmaColors.gray800,
+                                                      side: const BorderSide(
+                                                        color:
+                                                            FigmaColors.gray300,
+                                                      ),
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 12,
+                                                            vertical: 8,
+                                                          ),
+                                                      shape: RoundedRectangleBorder(
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              8,
+                                                            ),
+                                                      ),
                                                     ),
                                                     child: Text(
                                                       'View',
-                                                      style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600),
+                                                      style: GoogleFonts.inter(
+                                                        fontSize: 13,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
                                                     ),
                                                   ),
                                                   const SizedBox(width: 8),
                                                   IconButton(
                                                     tooltip: 'Copy report id',
-                                                    icon: const Icon(Icons.copy_outlined, size: 18, color: FigmaColors.gray500),
+                                                    icon: const Icon(
+                                                      Icons.copy_outlined,
+                                                      size: 18,
+                                                      color:
+                                                          FigmaColors.gray500,
+                                                    ),
                                                     onPressed: () {
-                                                      Clipboard.setData(ClipboardData(text: r.reportId));
-                                                      ScaffoldMessenger.of(context).showSnackBar(
-                                                        const SnackBar(content: Text('Report ID copied')),
+                                                      Clipboard.setData(
+                                                        ClipboardData(
+                                                          text: r.reportId,
+                                                        ),
+                                                      );
+                                                      ScaffoldMessenger.of(
+                                                        context,
+                                                      ).showSnackBar(
+                                                        const SnackBar(
+                                                          content: Text(
+                                                            'Report ID copied',
+                                                          ),
+                                                        ),
                                                       );
                                                     },
                                                   ),
@@ -488,12 +550,18 @@ class _AdminUserReportsPageState extends State<AdminUserReportsPage> {
                                   ),
                                 ),
                               Padding(
-                                padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+                                padding: const EdgeInsets.fromLTRB(
+                                  20,
+                                  12,
+                                  20,
+                                  16,
+                                ),
                                 child: _UserReportsPagination(
                                   total: total,
                                   page: page,
                                   pageSize: _pageSize,
-                                  onPageChanged: (p) => setState(() => _page = p),
+                                  onPageChanged: (p) =>
+                                      setState(() => _page = p),
                                   onPageSizeChanged: (s) => setState(() {
                                     _pageSize = s;
                                     _page = 1;
@@ -558,12 +626,22 @@ class _UserReportsPagination extends StatelessWidget {
               decoration: BoxDecoration(
                 color: FigmaColors.tintGreen,
                 borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: FigmaColors.green.withValues(alpha: 0.3)),
+                border: Border.all(
+                  color: FigmaColors.green.withValues(alpha: 0.3),
+                ),
               ),
-              child: Text('$page', style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: FigmaColors.green)),
+              child: Text(
+                '$page',
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w700,
+                  color: FigmaColors.green,
+                ),
+              ),
             ),
             IconButton(
-              onPressed: page < totalPages ? () => onPageChanged(page + 1) : null,
+              onPressed: page < totalPages
+                  ? () => onPageChanged(page + 1)
+                  : null,
               icon: const Icon(Icons.chevron_right),
             ),
             const SizedBox(width: 8),
@@ -592,12 +670,8 @@ class _UserReportsPagination extends StatelessWidget {
           ],
         );
 
-        return AdminTablePaginationBar(
-          info: info,
-          controls: controls,
-        );
+        return AdminTablePaginationBar(info: info, controls: controls);
       },
     );
   }
 }
-
