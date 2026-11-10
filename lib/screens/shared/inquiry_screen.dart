@@ -16,12 +16,20 @@ import '../customer/customer_booking_detail_screen.dart';
 import '../provider/provider_booking_detail_screen.dart';
 
 class InquiryInbox extends StatelessWidget {
-  const InquiryInbox({super.key, required this.appUser, this.scrollController});
+  const InquiryInbox({
+    super.key,
+    required this.appUser,
+    this.scrollController,
+    this.conversations,
+    this.emptyMessage,
+  });
   final AppUser appUser;
   final ScrollController? scrollController;
+  final Stream<List<Inquiry>>? conversations;
+  final String? emptyMessage;
   @override
   Widget build(BuildContext context) => StreamBuilder<List<Inquiry>>(
-    stream: MarketplaceService.inbox(appUser.userId),
+    stream: conversations ?? MarketplaceService.inbox(appUser.userId),
     builder: (context, snap) {
       if (snap.hasError) {
         return const Center(
@@ -34,11 +42,12 @@ class InquiryInbox extends StatelessWidget {
         return const Center(child: CircularProgressIndicator());
       }
       if (snap.data!.isEmpty) {
-        return const Center(
+        return Center(
           child: Padding(
-            padding: EdgeInsets.all(24),
+            padding: const EdgeInsets.all(24),
             child: Text(
-              'No inquiries yet. Customers can open a service and select Message Provider to discuss a job before hiring.',
+              emptyMessage ??
+                  'No inquiries yet. Customers can open a service and select Message Provider to discuss a job before hiring.',
             ),
           ),
         );

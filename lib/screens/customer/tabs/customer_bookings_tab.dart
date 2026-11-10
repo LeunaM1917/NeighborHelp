@@ -1,3 +1,5 @@
+import '../../../services/booking_reference_loader.dart';
+import '../../../widgets/booking_reference_notice.dart';
 import '../../../widgets/data_stream_builder.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -59,6 +61,7 @@ class _CustomerBookingsTabState extends State<CustomerBookingsTab> {
   Map<String, ServiceProviderProfile?> _profiles = {};
   String? _hydratedKey;
   Future<void>? _hydration;
+  bool _detailsUnavailable = false;
 
   static const _sidebarWidth = 320.0;
   static const _columnGap = 28.0;
@@ -78,27 +81,17 @@ class _CustomerBookingsTabState extends State<CustomerBookingsTab> {
   }
 
   Future<void> _loadDetails(List<Booking> bookings, String key) async {
-    if (bookings.isEmpty) {
-      _services = {};
-      _providers = {};
-      _profiles = {};
-      return;
-    }
-    final services = <String, ServiceListing?>{};
-    final providers = <String, AppUser?>{};
-    final profiles = <String, ServiceProviderProfile?>{};
-    for (final b in bookings) {
-      if (b.bookingId.startsWith('demo-')) continue;
-      services[b.serviceId] ??= await _firestore.getService(b.serviceId);
-      providers[b.providerId] ??= await _firestore.getUser(b.providerId);
-      profiles[b.providerId] ??= await _firestore.getProviderProfile(
-        b.providerId,
-      );
-    }
+    final details = await loadBookingReferences(
+      bookings: bookings,
+      service: _firestore.getService,
+      provider: _firestore.getUser,
+      profile: _firestore.getProviderProfile,
+    );
     if (!mounted || _hydratedKey != key) return;
-    _services = services;
-    _providers = providers;
-    _profiles = profiles;
+    _services = details.services;
+    _providers = details.providers;
+    _profiles = details.profiles;
+    _detailsUnavailable = details.unavailable.isNotEmpty;
   }
 
   _BookingBucket _bucket(Booking b) {
@@ -233,41 +226,28 @@ class _CustomerBookingsTabState extends State<CustomerBookingsTab> {
                       );
                     }
 
-                    var bookings = snap.data ?? [];
-                    if (bookings.isEmpty) {
-                      bookings = _demoBookings(widget.appUser.userId);
-                    }
+                    final bookings = snap.data ?? [];
 
                     return FutureBuilder<void>(
                       future: _hydrate(bookings),
                       builder: (context, hydrateSnap) {
-                        if (hydrateSnap.hasError) {
-                          return DataLoadFailure(
-                            label: 'booking details',
-                            error: hydrateSnap.error,
-                            onRetry: () async {
-                              await _firestore.retryDataLoads();
-                              if (mounted) setState(() => _hydration = null);
-                            },
-                          );
-                        }
-                        if (hydrateSnap.connectionState !=
-                                ConnectionState.done &&
-                            bookings.isNotEmpty) {
-                          return const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 48),
-                            child: LoadingIndicator(
-                              message: 'Loading booking details…',
-                            ),
-                          );
-                        }
-
                         final counts = _counts(bookings);
                         final visible = _visible(bookings);
 
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
+                            BookingReferenceNotice(
+                              loading:
+                                  hydrateSnap.connectionState !=
+                                  ConnectionState.done,
+                              unavailable:
+                                  _detailsUnavailable || hydrateSnap.hasError,
+                              onRetry: () async {
+                                await _firestore.retryDataLoads();
+                                if (mounted) setState(() => _hydration = null);
+                              },
+                            ),
                             Text(
                               'My bookings',
                               style: GoogleFonts.inter(
@@ -370,86 +350,8 @@ class _CustomerBookingsTabState extends State<CustomerBookingsTab> {
 
 enum _BookingBucket { upcoming, inProgress, completed, cancelled, expired }
 
-// --- Demo data (UI preview when Firestore has no bookings) ---
+// Optional preview labels for explicitly marked demo records only.
 
-List<Booking> _demoBookings(String customerId) {
-  final now = DateTime.now();
-  Booking mk({
-    required String id,
-    required String status,
-    required DateTime when,
-    required String location,
-    required String serviceId,
-    double? fee,
-  }) {
-    return Booking(
-      bookingId: id,
-      customerId: customerId,
-      providerId: 'demo-provider',
-      serviceId: serviceId,
-      serviceLocation: location,
-      location: const GeoPoint(7.3083, 125.6842),
-      scheduledDate: Timestamp.fromDate(when),
-      status: status,
-      totalFee: fee,
-      createdAt: Timestamp.fromDate(now.subtract(const Duration(days: 2))),
-      updatedAt: Timestamp.now(),
-    );
-  }
-
-  return [
-    mk(
-      id: 'demo-1',
-      status: 'Completed',
-      when: now.subtract(const Duration(days: 3)),
-      location: 'Isabela Homes, Panabo City',
-      serviceId: 'demo-dog',
-      fee: 200,
-    ),
-    mk(
-      id: 'demo-2',
-      status: 'Completed',
-      when: now.subtract(const Duration(days: 10)),
-      location: 'Gredu, Panabo City',
-      serviceId: 'demo-clean',
-      fee: 400,
-    ),
-    mk(
-      id: 'demo-3',
-      status: 'In Progress',
-      when: now.add(const Duration(hours: 4)),
-      location: 'San Francisco, Panabo City',
-      serviceId: 'demo-moving',
-      fee: 600,
-    ),
-    mk(
-      id: 'demo-4',
-      status: 'Pending',
-      when: now.add(const Duration(days: 2)),
-      location: 'New Pandan, Panabo City',
-      serviceId: 'demo-tutor',
-      fee: 350,
-    ),
-    mk(
-      id: 'demo-5',
-      status: 'Accepted',
-      when: now.add(const Duration(days: 5)),
-      location: 'J.P. Laurel, Panabo City',
-      serviceId: 'demo-clean2',
-      fee: 450,
-    ),
-    mk(
-      id: 'demo-6',
-      status: 'Cancelled',
-      when: now.subtract(const Duration(days: 1)),
-      location: 'Gredu, Panabo City',
-      serviceId: 'demo-repair',
-      fee: 500,
-    ),
-  ];
-}
-
-/// Hydration fallbacks for demo rows.
 ServiceListing? _demoService(String serviceId) {
   return switch (serviceId) {
     'demo-dog' => ServiceListing(

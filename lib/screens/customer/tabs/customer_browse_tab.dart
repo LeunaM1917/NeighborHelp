@@ -899,7 +899,7 @@ class _BrowseCategoryTileState extends State<_BrowseCategoryTile> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${widget.category.serviceCount} services',
+                  '${widget.category.serviceCount} service types',
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     color: FigmaColors.gray500,
@@ -921,12 +921,12 @@ class _BrowseInsightSidebar extends StatelessWidget {
     (
       Icons.verified_outlined,
       'Verified providers',
-      'Every provider is reviewed and background-checked.',
+      'Providers complete identity and certificate review.',
     ),
     (
       Icons.payments_outlined,
       'Clear pricing',
-      'See rates upfront before you send a booking request.',
+      'Discuss a fixed or daily price before accepting a service agreement.',
     ),
     (
       Icons.lock_outline,

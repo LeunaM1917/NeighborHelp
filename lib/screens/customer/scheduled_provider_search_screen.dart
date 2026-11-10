@@ -1,3 +1,4 @@
+import '../../widgets/provider_search_status.dart';
 import '../../l10n/app_strings.dart';
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -134,9 +135,14 @@ class _ScheduledProviderSearchScreenState
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'Available for all $_days workday(s), $_hours hours each. A 15-minute gap between jobs is included. Checked ${DateFormat('h:mm a').format(_checkedAt ?? DateTime.now())}.',
+            ProviderSearchStatus(
+              candidates: providers.length,
+              matches: ranked.length,
+              days: _days,
+              hours: _hours,
+              checkedAt: _checkedAt,
             ),
+            const SizedBox(height: 12),
             const Text(
               'Distance is an estimate from the provider barangay center. Availability can change and is checked again when an offer is accepted. Discuss travel and requirements in messages.',
             ),
@@ -153,13 +159,6 @@ class _ScheduledProviderSearchScreenState
                 interactive: true,
               ),
             ),
-            if (ranked.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(20),
-                child: Text(
-                  'No eligible providers cover the complete requested schedule and location. Try another date, time or duration.',
-                ),
-              ),
             for (final r in ranked)
               Card(
                 child: ListTile(
@@ -246,6 +245,7 @@ class _ScheduledProviderSearchScreenState
                 ),
               ],
             ),
+            const SizedBox(height: 16),
             DropdownButtonFormField<int>(
               initialValue: _days,
               decoration: InputDecoration(
@@ -257,6 +257,7 @@ class _ScheduledProviderSearchScreenState
               ],
               onChanged: (v) => setState(() => _days = v!),
             ),
+            const SizedBox(height: 16),
             DropdownButtonFormField<double>(
               initialValue: _hours,
               decoration: InputDecoration(

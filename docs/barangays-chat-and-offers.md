@@ -1,6 +1,6 @@
 # Barangay privacy, messaging and availability
 
-This change implements the five requested improvements locally. It does not deploy rules, Functions, indexes or clients, or change production records.
+The five requested improvements are implemented. See [the November 10 loading repair and deployment notes](marketplace-loading-fix.md) for the current targeted Firebase deployment status. The provider-location cleanup migration remains a separate maintenance step.
 
 ## Behavior
 
@@ -38,7 +38,7 @@ After reviewing that concrete plan, apply it to the same project:
 node scripts/migrate_provider_locations.js --project YOUR_PROJECT_ID --apply
 ```
 
-The script requires an explicit project, uses operator Application Default Credentials, and never prints addresses or coordinates. It processes 100 providers per page. It clears current legacy provider coordinates, replaces a valid base with its catalog center, removes user home pins/addresses, and deletes old public projections. It is safe to rerun. Profile triggers republish only eligible, selected providers; the existing policy scheduler also refreshes projections. Providers without selections must open profile settings and choose barangays before appearing in discovery. Historical booking addresses, original agreement text, messages and payment evidence are preserved. Backup snapshots and existing administrative audit history have their own retention/access controls and are not rewritten by this migration.
+The script requires an explicit project, uses operator Application Default Credentials, and never prints addresses or coordinates. It processes 100 providers per page. It clears current legacy provider coordinates, replaces a valid base with its catalog center, removes user home pins/addresses, and deletes old public projections. It is safe to rerun. Profile triggers republish only eligible, selected providers; the policy scheduler can also refresh projections once deployed. Providers without selections must open profile settings and choose barangays before appearing in discovery. Historical booking addresses, original agreement text, messages and payment evidence are preserved. Backup snapshots and existing administrative audit history have their own retention/access controls and are not rewritten by this migration.
 
 No production migration has been run by this coding change. Plan/apply/idempotency and historical preservation are exercised on synthetic demo-emulator records. Pilot with two accounts: compare providers in Messages, block across both booking/inquiry entry points, inspect a legacy conversation, set coverage and leave, try an expired offer, and review both sides of an accepted contract.
 

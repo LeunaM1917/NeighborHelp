@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/app_user.dart';
 import '../../models/booking.dart';
+import '../../models/inquiry.dart';
 import '../../services/marketplace_service.dart';
 import 'inquiry_screen.dart';
 
@@ -10,10 +11,14 @@ class MessagesHub extends StatefulWidget {
     required this.appUser,
     required this.asCustomer,
     this.listScrollController,
+    this.syncHistory,
+    this.conversations,
   });
   final AppUser appUser;
   final bool asCustomer;
   final ScrollController? listScrollController;
+  final Future<void> Function()? syncHistory;
+  final Stream<List<Inquiry>>? conversations;
   static VoidCallback? shellMessagesActivator;
   static final pendingBookingId = ValueNotifier<String?>(null);
   static Future<void> openConversation(
@@ -49,10 +54,14 @@ class _MessagesHubState extends State<MessagesHub> {
   @override
   void initState() {
     super.initState();
-    _sync = MarketplaceService.syncBookingConversations();
+    _sync = _syncHistory();
     MessagesHub.pendingBookingId.addListener(_openPending);
     WidgetsBinding.instance.addPostFrameCallback((_) => _openPending());
   }
+
+  Future<void> _syncHistory() => Future<void>.sync(
+    widget.syncHistory ?? MarketplaceService.syncBookingConversations,
+  );
 
   @override
   void dispose() {
@@ -92,42 +101,43 @@ class _MessagesHubState extends State<MessagesHub> {
   }
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      const Padding(
-        padding: EdgeInsets.all(20),
-        child: Text(
-          'Messages',
-          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+  Widget build(BuildContext context) => FutureBuilder<void>(
+    future: _sync,
+    builder: (context, history) => Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Padding(
+          padding: EdgeInsets.all(20),
+          child: Text(
+            'Messages',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          ),
         ),
-      ),
-      FutureBuilder<void>(
-        future: _sync,
-        builder: (context, snap) {
-          if (snap.hasError) {
-            return TextButton.icon(
-              onPressed: () => setState(() {
-                _sync = MarketplaceService.syncBookingConversations();
-              }),
-              icon: const Icon(Icons.refresh),
-              label: const Text('Retry loading older booking conversations'),
-            );
-          }
-          if (snap.connectionState != ConnectionState.done) {
-            return const LinearProgressIndicator(
-              semanticsLabel: 'Importing older booking conversations',
-            );
-          }
-          return const SizedBox.shrink();
-        },
-      ),
-      Expanded(
-        child: InquiryInbox(
-          appUser: widget.appUser,
-          scrollController: widget.listScrollController,
+        if (history.hasError)
+          TextButton.icon(
+            onPressed: () => setState(() {
+              _sync = _syncHistory();
+            }),
+            icon: const Icon(Icons.refresh),
+            label: const Text('Retry loading older booking conversations'),
+          )
+        else if (history.connectionState != ConnectionState.done)
+          const LinearProgressIndicator(
+            semanticsLabel: 'Importing older booking conversations',
+          ),
+        Expanded(
+          child: InquiryInbox(
+            appUser: widget.appUser,
+            scrollController: widget.listScrollController,
+            conversations: widget.conversations,
+            emptyMessage: history.hasError
+                ? 'Your previous conversations have not loaded. Retry loading older booking conversations above.'
+                : history.connectionState != ConnectionState.done
+                ? 'Loading previous conversations…'
+                : null,
+          ),
         ),
-      ),
-    ],
+      ],
+    ),
   );
 }
