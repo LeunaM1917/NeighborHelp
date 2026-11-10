@@ -2,6 +2,7 @@
 const { FieldValue, Timestamp, FieldPath } = require('firebase-admin/firestore');
 const crypto = require('node:crypto');
 const { complete, active, hasMatchingCertificate, tokenId } = require('./domain');
+const reviewStatusNotifications = require('./review_status_notifications');
 
 module.exports = function platformOperations({ db, admin, functions, region, messaging = require('firebase-admin/messaging').getMessaging }) {
   const out = {};
@@ -135,8 +136,10 @@ module.exports = function platformOperations({ db, admin, functions, region, mes
         else await publicRef.delete();
       }
       const providerId = collection === 'serviceProviders' || collection === 'users' ? context.params.id : collection === 'services' ? after.providerId || before.providerId : null;
+      let reviewOwnerId = collection === 'users' ? context.params.id : after.userId || context.params.id;
       if (providerId) {
         const provider = (await db.collection('serviceProviders').doc(providerId).get()).data();
+        if (collection === 'services') reviewOwnerId = provider?.userId || providerId;
         const projected = provider ? await publicProvider(providerId, provider) : null;
         const ref = db.collection('publicProviders').doc(providerId);
         if (projected) await ref.set(projected); else await ref.delete();
@@ -149,12 +152,15 @@ module.exports = function platformOperations({ db, admin, functions, region, mes
       await db.collection('auditLogs').doc(eventKey(context.eventId)).set({ actorId, actorRole: actorId === 'didit' ? 'Identity service' : actor?.role || 'System',
         action: `${collection}.${!change.before.exists ? 'created' : !change.after.exists ? 'deleted' : 'updated'}`, collection,
         referenceId: context.params.id, changedFields: changed, createdAt: stamp() });
-      if (identityChanged && change.after.exists) {
-        const uid = collection === 'users' ? context.params.id : after.userId;
-        await notify(context.eventId, uid, 'Identity verification updated', `Your verification status is ${after.verificationStatus || 'Pending'}.`, '', 'Verification');
+      if (change.after.exists) {
+        const notices = reviewStatusNotifications({collection, id: context.params.id, before, after, ownerId: reviewOwnerId});
+        for (const notice of notices) {
+          if (!notice.data.userId) continue;
+          await db.collection('notifications').doc(eventKey(`${context.eventId}:${collection}:${notice.key}:${notice.data.userId}`))
+            .create({...notice.data, isRead: false, createdAt: stamp()})
+            .catch(e => { if (e.code !== 6) throw e; });
+        }
       }
-      if (collection === 'services' && before.approvalStatus !== after.approvalStatus && change.after.exists) await notify(context.eventId, after.providerId, 'Service review updated', `${after.serviceTitle}: ${after.approvalStatus}${after.rejectionReason ? `. ${after.rejectionReason}` : ''}`, '', 'Service Review');
-      if (collection === 'serviceProviders' && JSON.stringify(before.approvedCertificationIds || []) !== JSON.stringify(after.approvedCertificationIds || [])) await notify(`${context.eventId}:certificate`, after.userId, 'Certificate review updated', 'Open your profile to see your certificate review results.', '', 'Certificate Review');
       return null;
     });
   }

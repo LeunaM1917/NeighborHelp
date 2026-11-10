@@ -34,6 +34,75 @@ test('booking notifications are idempotent and preserve read receipts on event r
   assert.equal((await db.collection('notifications').get()).size,3);
   assert.equal((await notifications.docs[0].ref.get()).data().isRead,true);
 });
+
+const reviewChange = (before, after) => ({
+  before: {exists: before !== null, data: () => before},
+  after: {exists: after !== null, data: () => after},
+});
+
+test('identity status notifications persist for customers/providers and retries preserve read receipts', async () => {
+  for (const [collection, id, handler] of [['users', 'customer', ops.auditUsers], ['serviceProviders', 'provider', ops.auditServiceProviders]]) {
+    let before = {userId: id, verificationStatus: 'Pending', isVerified: false};
+    for (const status of ['Pending', 'Approved', 'Rejected']) {
+      const after = {...before, verificationStatus: status, isVerified: status === 'Approved', diditSessionId: 'session'};
+      await db.doc(`${collection}/${id}`).set(after, {merge: true});
+      const context = {params: {id}, eventId: `${collection}-${status}`};
+      await handler.run(reviewChange(before, after), context);
+      const match = await db.collection('notifications').where('userId', '==', id).where('reviewStatus', '==', status).get();
+      assert.equal(match.size, 1);
+      await match.docs[0].ref.update({isRead: true});
+      await handler.run(reviewChange(before, after), context);
+      assert.equal((await match.docs[0].ref.get()).data().isRead, true);
+      before = after;
+    }
+  }
+  assert.equal((await db.collection('notifications').get()).size, 6);
+});
+
+test('service notifications resolve the profile owner and ignore drafts, unrelated edits and deletions', async () => {
+  await db.doc('serviceProviders/profile-not-auth-uid').set({userId: 'provider'});
+  let before = null;
+  for (const status of ['Draft', 'Pending', 'Approved', 'Rejected', 'Pending']) {
+    const after = {providerId: 'profile-not-auth-uid', serviceTitle: 'House cleaning', approvalStatus: status, rejectionReason: 'Please supply a matching certificate.'};
+    const eventId = `service-${status}-${before?.approvalStatus || 'create'}`;
+    await db.doc('services/listing').set(after);
+    await ops.auditServices.run(reviewChange(before, after), {params: {id: 'listing'}, eventId});
+    await ops.auditServices.run(reviewChange(before, after), {params: {id: 'listing'}, eventId});
+    before = after;
+  }
+  await ops.auditServices.run(reviewChange(before, {...before, description: 'Updated description'}), {params: {id: 'listing'}, eventId: 'edit-service'});
+  await ops.auditServices.run(reviewChange(before, null), {params: {id: 'listing'}, eventId: 'delete-service'});
+  const alerts = await db.collection('notifications').get();
+  assert.equal(alerts.size, 4);
+  assert.ok(alerts.docs.every(d => d.data().userId === 'provider' && d.data().relatedServiceId === 'listing'));
+});
+
+test('certificate notifications cover new submissions, pending review notes, rejection, approval and retries per certificate', async () => {
+  let before = {userId: 'provider', approvedCertificationIds: [], certificationHistory: []};
+  const cert = {id: 'first', name: 'Domestic Work NC II', status: 'Pending'};
+  const steps = [
+    [cert],
+    [{...cert, reviewedAt: Timestamp.now(), verificationNotes: 'Registry confirmation is still pending.'}],
+    [{...cert, status: 'Rejected', rejectionReason: 'Certificate holder does not match.'}],
+    [{...cert, status: 'Approved'}],
+    [{...cert, status: 'Approved'}, {...cert, id: 'second'}],
+  ];
+  for (const [i, certificationHistory] of steps.entries()) {
+    const after = {...before, certificationHistory};
+    await db.doc('serviceProviders/provider').set(after);
+    const context = {params: {id: 'provider'}, eventId: `certificate-${i}`};
+    await ops.auditServiceProviders.run(reviewChange(before, after), context);
+    await ops.auditServiceProviders.run(reviewChange(before, after), context);
+    before = after;
+  }
+  await ops.auditServiceProviders.run(reviewChange(before, {...before, certificationHistory: [...before.certificationHistory].reverse()}),
+    {params: {id: 'provider'}, eventId: 'reorder-certificates'});
+  const alerts = await db.collection('notifications').get();
+  assert.equal(alerts.size, 5);
+  assert.ok(alerts.docs.every(d => d.data().userId === 'provider' && d.data().notificationType === 'Certificate Review'));
+  assert.equal(alerts.docs.filter(d => d.data().relatedCertificationId === 'second').length, 1);
+  assert.equal(alerts.docs.filter(d => d.data().reviewStatus === 'Rejected').length, 1);
+});
 test('appointment reminders are created once for each participant and schedule', async () => {
   await db.doc('bookings/soon').set({customerId:'customer',providerId:'provider',status:'Accepted',scheduledDate:Timestamp.fromMillis(Date.now()+30*60000)});
   await ops.appointmentReminders.run({}); await ops.appointmentReminders.run({});
