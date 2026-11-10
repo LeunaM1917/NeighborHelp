@@ -63,6 +63,14 @@ for this project and localhost development URLs are supported.
 
 ## Deployment and validation
 
+The canonical web address is `https://neighborhelp.web.app`. Firebase Hosting
+target `neighborhelp` publishes the application; target `legacy` redirects the
+old project-number address to it while retaining paths and query parameters.
+Both new Firebase domains are authorized for sign-in and verification returns.
+New-origin sessions may require users to sign in again; account data remains in
+the same Firebase project. Use `firebase deploy --only hosting` to deploy both
+Hosting targets, or `--only hosting:neighborhelp` for the application alone.
+
 Run `npm test --prefix functions`, `npm run test:emulator --prefix functions`,
 and Flutter analysis/tests before deployment. Emulator tests use only synthetic
 records in `demo-neighborhelp` and mocked ID Analyzer responses.
