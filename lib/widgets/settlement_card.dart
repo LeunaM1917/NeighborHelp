@@ -1,3 +1,4 @@
+import '../ui/workflow_ui.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../l10n/app_strings.dart';
@@ -64,18 +65,21 @@ class _SettlementCardState extends State<SettlementCard> {
   @override
   Widget build(BuildContext context) {
     final b = widget.bookingData;
-    if (!['Cancelled', 'Completed', 'Milestone Complete'].contains(b['status'])) {
+    if (![
+      'Cancelled',
+      'Completed',
+      'Milestone Complete',
+    ].contains(b['status'])) {
       return const SizedBox.shrink();
     }
-    return Card(
+    return WorkflowSurface(
       child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        padding: const EdgeInsets.all(20),
+        child: WorkflowFields(
           children: [
             Text(
               context.tr('Final work settlement'),
-              style: Theme.of(context).textTheme.titleMedium,
+              style: WorkflowStyles.sectionTitle,
             ),
             Text(context.tr('Contract language notice')),
             OutlinedButton(
@@ -282,16 +286,26 @@ class _SettlementProposalScreenState extends State<SettlementProposalScreen> {
       title: Text(context.tr('Final work settlement')),
       actions: const [LanguageMenuButton()],
     ),
-    body: Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 700),
-        child: Form(
-          key: _form,
-          child: ListView(
-            padding: const EdgeInsets.all(20),
+    body: Form(
+      key: _form,
+      child: WorkflowPage(
+        title: context.tr('Final work settlement'),
+        subtitle:
+            'Review the final fee and record the work and materials with the other party.',
+        children: [
+          WorkflowNotice(
+            child: WorkflowFields(
+              spacing: 8,
+              children: [
+                Text(context.tr('Contract language notice')),
+                Text(context.tr('Payment record notice')),
+              ],
+            ),
+          ),
+          WorkflowSection(
+            title: context.tr('Agreed final labour fee (PHP)'),
+            icon: Icons.receipt_long_outlined,
             children: [
-              Text(context.tr('Contract language notice')),
-              Text(context.tr('Payment record notice')),
               TextFormField(
                 controller: _fee,
                 keyboardType: const TextInputType.numberWithOptions(
@@ -310,6 +324,13 @@ class _SettlementProposalScreenState extends State<SettlementProposalScreen> {
                       : null;
                 },
               ),
+            ],
+          ),
+          WorkflowSection(
+            title: 'Work and materials',
+            icon: Icons.task_alt_outlined,
+            subtitle: 'Describe the completed work and any remaining concerns.',
+            children: [
               for (final field in [
                 (_work, 'Work completed'),
                 (_materials, 'Materials supplied and returned'),
@@ -317,7 +338,7 @@ class _SettlementProposalScreenState extends State<SettlementProposalScreen> {
               ])
                 TextFormField(
                   controller: field.$1,
-                  minLines: 3,
+                  minLines: 2,
                   maxLines: 6,
                   maxLength: 3000,
                   decoration: InputDecoration(labelText: context.tr(field.$2)),
@@ -325,13 +346,15 @@ class _SettlementProposalScreenState extends State<SettlementProposalScreen> {
                       ? context.tr('Explain in at least 10 characters')
                       : null,
                 ),
-              FilledButton(
-                onPressed: _busy ? null : _propose,
-                child: Text(context.tr('Preview settlement')),
-              ),
             ],
           ),
-        ),
+          WorkflowActions(
+            child: FilledButton(
+              onPressed: _busy ? null : _propose,
+              child: Text(context.tr('Preview settlement')),
+            ),
+          ),
+        ],
       ),
     ),
   );

@@ -1,3 +1,4 @@
+import '../ui/workflow_ui.dart';
 import '../l10n/app_strings.dart';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -53,7 +54,7 @@ class OfferChangeButton extends StatelessWidget {
       final reason = TextEditingController();
       final result = await showDialog<String>(
         context: context,
-        builder: (ctx) => AlertDialog(
+        builder: (ctx) => WorkflowDialog(
           title: const Text('Request changes to this offer'),
           content: TextField(
             controller: reason,
@@ -112,7 +113,7 @@ Future<bool?> confirmServiceAgreement(
   builder: (context) {
     bool accepted = false;
     return StatefulBuilder(
-      builder: (context, setState) => AlertDialog(
+      builder: (context, setState) => WorkflowDialog(
         title: Text(title),
         content: SizedBox(
           width: 640,
@@ -162,20 +163,19 @@ class ServiceAgreementCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (booking.agreement == null) {
-      return const Card(
+      return const WorkflowSurface(
         child: Padding(
-          padding: EdgeInsets.all(16),
+          padding: EdgeInsets.all(20),
           child: Text(
             'Historical booking: its recorded price is preserved. Pending requests must be replaced with a fixed or daily contract offer before acceptance.',
           ),
         ),
       );
     }
-    return Card(
+    return WorkflowSurface(
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        padding: const EdgeInsets.all(20),
+        child: WorkflowFields(
           children: [
             if (booking.isPending || booking.isExpired)
               Semantics(
@@ -188,7 +188,7 @@ class ServiceAgreementCard extends StatelessWidget {
               ),
             Text(
               context.tr('Service agreement'),
-              style: Theme.of(context).textTheme.titleMedium,
+              style: WorkflowStyles.sectionTitle,
             ),
             Text(
               booking.isExpired

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -107,15 +108,13 @@ class _AdminUserReportsPageState extends State<AdminUserReportsPage> {
                 ),
                 if (booking != null) ...[
                   adminDetailLine('Booking status', booking.status),
-                  if (booking.agreement?['scope'] != null)
-                    adminDetailLine(
-                      'Agreed scope',
-                      '${booking.agreement!['scope']}',
-                    ),
-                  if (booking.agreement?['deliverables'] != null)
-                    adminDetailLine(
-                      'Agreed deliverables',
-                      '${booking.agreement!['deliverables']}',
+                  if (booking.agreement?['text'] is String)
+                    ExpansionTile(
+                      tilePadding: EdgeInsets.zero,
+                      title: const Text('Agreed work and contract'),
+                      children: [
+                        SelectableText(booking.agreement!['text'] as String),
+                      ],
                     ),
                 ],
                 if (report.evidence.isNotEmpty) ...[
@@ -128,7 +127,7 @@ class _AdminUserReportsPageState extends State<AdminUserReportsPage> {
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 6),
                       child: SelectableText(
-                        '${message['senderId']}\n${message['text'] ?? ''}',
+                        '${message['senderId']} · ${message['sentAt'] is Timestamp ? DateFormat('MMM d, yyyy h:mm a').format((message['sentAt'] as Timestamp).toDate().toUtc().add(const Duration(hours: 8))) : ''}\n${message['text'] ?? ''}${(message['mediaUrl'] as String? ?? '').isNotEmpty ? '\n[Photo attached in the reported private conversation]' : ''}',
                       ),
                     ),
                 ],

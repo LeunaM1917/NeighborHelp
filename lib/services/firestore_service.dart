@@ -902,6 +902,24 @@ class FirestoreService {
   }
 
   /// Admin: stream all booking user reports (newest first).
+  Stream<BookingUserReport?> myBookingUserReport(
+    String bookingId,
+    String reporterId,
+  ) => _db
+      .collection(FirestoreCollections.bookingUserReports)
+      .where('reporterId', isEqualTo: reporterId)
+      .where('bookingId', isEqualTo: bookingId)
+      .limit(1)
+      .snapshots()
+      .map(
+        (s) => s.docs.isEmpty
+            ? null
+            : BookingUserReport.fromFirestore(
+                s.docs.first.id,
+                s.docs.first.data(),
+              ),
+      );
+
   Stream<BookingUserReport?> bookingUserReport(String id) => _db
       .collection(FirestoreCollections.bookingUserReports)
       .doc(id)

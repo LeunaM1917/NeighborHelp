@@ -2,7 +2,6 @@ import '../../widgets/provider_barangay_editor.dart';
 import '../../services/marketplace_service.dart';
 import '../../utils/image_upload.dart';
 import '../../widgets/profile_avatar.dart';
-import '../../widgets/enable_notifications_button.dart';
 import '../../widgets/app_preferences_panel.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -231,8 +230,7 @@ class _ProviderOverviewSettingsScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const EnableNotificationsButton(),
-          const AppPreferencesPanel(),
+          const AppPreferencesPanel(showLanguage: false),
           if (!widget.inDialog)
             AppPageHeader(
               title: 'Profile settings',

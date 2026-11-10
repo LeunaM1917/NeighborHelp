@@ -5,7 +5,7 @@ const admin = require('firebase-admin');
 const functions = require('firebase-functions/v1');
 const {getFirestore, Timestamp} = require('firebase-admin/firestore');
 const {initializeTestEnvironment, assertSucceeds, assertFails} = require('@firebase/rules-unit-testing');
-const {getDoc, doc, collection, query, where, getDocs, updateDoc} = require('firebase/firestore');
+const {getDoc, doc, collection, query, where, getDocs, updateDoc, onSnapshot} = require('firebase/firestore');
 const {ref, uploadBytes, getBytes} = require('firebase/storage');
 let env, app, db, report, inquiry;
 const auth = uid => ({auth: {uid, token: {email_verified: false}}});
@@ -14,7 +14,7 @@ before(async () => {
   env = await initializeTestEnvironment({projectId: 'demo-neighborhelp'});
   app = admin.initializeApp({projectId: 'demo-neighborhelp'}, 'dispute-tests');
   db = getFirestore(app);
-  report = require('../report_commands')({db, functions, storageBucket: 'demo-neighborhelp.appspot.com', verifyPhoto: async () => ({size: 100, contentType: 'image/png'})});
+  report = require('../report_commands')({db, functions, storageBucket: 'demo-neighborhelp', verifyPhoto: async () => ({size: 100, contentType: 'image/png'})});
   inquiry = require('../inquiry_commands')({db, functions});
 });
 after(async () => {await require('firebase-admin/app').deleteApp(app); await env?.cleanup();});
@@ -44,11 +44,26 @@ test('reports accept no photo, derive the reported party and do not duplicate on
   assert.equal((await db.collection('notifications').get()).size, 1);
 });
 
+test('the booking report listener works before submission and continues with the created report', async () => {
+  const client = env.authenticatedContext('c').firestore();
+  const reference = query(collection(client, 'bookingUserReports'), where('reporterId', '==', 'c'), where('bookingId', '==', 'b'));
+  assert.equal((await assertSucceeds(getDocs(reference))).empty, true);
+  await assertFails(getDocs(query(collection(env.authenticatedContext('other').firestore(), 'bookingUserReports'), where('reporterId', '==', 'c'))));
+  let unsubscribe;
+  const received = new Promise((resolve, reject) => {
+    unsubscribe = onSnapshot(reference, snapshot => {if (!snapshot.empty) resolve(snapshot.docs[0].data());}, reject);
+  });
+  try {
+    await submitted();
+    assert.equal((await received).reporterId, 'c');
+  } finally {unsubscribe();}
+});
+
 test('report photos require a scoped, unexpired, unused permit and a maximum of five', async () => {
   const permit = {action: 'authorizePhoto', bookingId: 'b', permitId: 'proof', extension: 'png'};
   await assert.rejects(report(permit, auth('other')), /participants/);
   const {reportId} = await report(permit, auth('c'));
-  const url = `gs://demo-neighborhelp.appspot.com/reportPhotos/${reportId}/c/proof.png`;
+  const url = `gs://demo-neighborhelp/reportPhotos/${reportId}/c/proof.png`;
   await assert.rejects(submitted({photoUrls: [url.replace('/c/', '/p/')]}), /this report/);
   await assert.rejects(submitted({photoUrls: [url, url]}), /at most 5/);
   await db.doc('reportUploads/proof').update({expiresAt: Timestamp.fromMillis(Date.now() - 1000)});
@@ -121,6 +136,7 @@ test('replacing a proposal clears confirmations and stale confirmations are reje
   await report({action: 'confirmResolution', reportId, proposalId: 'first'}, auth('c'));
   await report({...proposal, proposalId: 'second', adminNotes: 'Clean the kitchen and bathroom at the newly agreed time.'}, auth('a'));
   await assert.rejects(report({action: 'confirmResolution', reportId, proposalId: 'first'}, auth('p')), /no longer/);
+  await assert.rejects(report(proposal, auth('a')), /was replaced/);
   assert.deepEqual((await db.doc(`bookingUserReports/${reportId}`).get()).data().resolutionProposal.confirmedBy, []);
 });
 
@@ -178,4 +194,29 @@ test('assigned admin commands and case messages retain optional MFA and active-a
   await db.doc('users/a').update({role: 'Customer'});
   await assert.rejects(inquiry({action: 'send', inquiryId, messageId: 'former-admin', text: 'Review'}, mfa), /no longer/);
   await assertFails(getDocs(collection(env.authenticatedContext('a').firestore(), `inquiries/${inquiryId}/messages`)));
+});
+
+test('case photo messages use participant-bound permits and remain readable after closure', async () => {
+  const {reportId, inquiryId} = await reviewing();
+  await assert.rejects(inquiry({action: 'send', inquiryId, messageId: 'foreign', mediaUrl: 'gs://demo-neighborhelp/inquiries/another/p/proof.png'}, auth('p')), /through the dispute/);
+  const {fileName} = await inquiry({action: 'authorizeUpload', inquiryId, permitId: 'case-photo', extension: 'png'}, auth('p'));
+  const path = `inquiries/${inquiryId}/p/${fileName}`;
+  const bytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64');
+  const storage = env.authenticatedContext('p').storage();
+  await assertSucceeds(uploadBytes(ref(storage, path), bytes, {contentType: 'image/png'}));
+  await inquiry({action: 'send', inquiryId, messageId: 'photo', mediaUrl: `gs://${ref(storage, path).bucket}/${path}`}, auth('p'));
+  await assert.rejects(inquiry({action: 'send', inquiryId, messageId: 'reuse-photo', mediaUrl: `gs://${ref(storage, path).bucket}/${path}`}, auth('p')), /expired or is invalid/);
+  await assertFails(getBytes(ref(env.authenticatedContext('other').storage(), path)));
+  await assertSucceeds(getBytes(ref(env.authenticatedContext('a').storage(), path)));
+  await report({action: 'resolve', reportId, status: 'dismissed', adminNotes: 'Reviewed both responses and found insufficient supporting evidence.'}, auth('a'));
+  await assertSucceeds(getBytes(ref(env.authenticatedContext('c').storage(), path)));
+  await assert.rejects(inquiry({action: 'authorizeUpload', inquiryId, permitId: 'after-close', extension: 'png'}, auth('p')), /closed/);
+});
+
+test('report photo metadata must describe an uploaded supported image within the size limit', async () => {
+  const {reportId} = await report({action: 'authorizePhoto', bookingId: 'b', permitId: 'invalid-meta', extension: 'png'}, auth('c'));
+  for (const metadata of [{size: 6 * 1024 * 1024, contentType: 'image/png'}, {size: 200, contentType: 'text/html'}, {size: 0, contentType: 'image/png'}]) {
+    const command = require('../report_commands')({db, functions, verifyPhoto: async () => metadata});
+    await assert.rejects(command({action: 'reportBooking', bookingId: 'b', reason: 'Incomplete work', photoUrls: [`gs://demo-neighborhelp/reportPhotos/${reportId}/c/invalid-meta.png`]}, auth('c')), /up to 5 MB/);
+  }
 });

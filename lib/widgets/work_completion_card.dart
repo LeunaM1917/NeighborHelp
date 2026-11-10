@@ -1,3 +1,4 @@
+import '../ui/workflow_ui.dart';
 import '../l10n/app_strings.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -8,13 +9,13 @@ Future<String?> askRecordedReason(BuildContext context, String title) async {
   final controller = TextEditingController();
   final result = await showDialog<String>(
     context: context,
-    builder: (ctx) => AlertDialog(
+    builder: (ctx) => WorkflowDialog(
       title: Text(title),
       content: TextField(
         controller: controller,
         maxLines: 4,
         maxLength: 3000,
-        decoration:  InputDecoration(
+        decoration: InputDecoration(
           labelText: context.tr('Explain in at least 10 characters'),
         ),
       ),
@@ -58,9 +59,13 @@ class _WorkCompletionCardState extends State<WorkCompletionCard> {
     if (confirm) {
       final ok = await showDialog<bool>(
         context: context,
-        builder: (ctx) => AlertDialog(
+        builder: (ctx) => WorkflowDialog(
           title: Text(context.tr('Confirm the work is complete?')),
-          content: Text(context.tr('Inspect the deliverables and completion criteria in your agreement. Confirmation unlocks reviews. Payment receipt is recorded separately and your legal remedies remain available.')),
+          content: Text(
+            context.tr(
+              'Inspect the deliverables and completion criteria in your agreement. Confirmation unlocks reviews. Payment receipt is recorded separately and your legal remedies remain available.',
+            ),
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -113,17 +118,16 @@ class _WorkCompletionCardState extends State<WorkCompletionCard> {
     final due = b.completionResponseDueAt?.toDate().toUtc().add(
       const Duration(hours: 8),
     );
-    return Card(
+    return WorkflowSurface(
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        padding: const EdgeInsets.all(20),
+        child: WorkflowFields(
           children: [
             Text(
               b.isAwaitingConfirmation
                   ? 'Work reported finished'
                   : 'Corrections requested',
-              style: Theme.of(context).textTheme.titleMedium,
+              style: WorkflowStyles.sectionTitle,
             ),
             if (b.correctionRequest != null) Text(b.correctionRequest!),
             if (b.isAwaitingConfirmation) ...[

@@ -1,3 +1,4 @@
+import '../ui/workflow_ui.dart';
 import 'package:flutter/material.dart';
 import 'dart:typed_data';
 import 'package:google_fonts/google_fonts.dart';
@@ -44,8 +45,9 @@ class _BookingUserReportCardState extends State<BookingUserReportCard> {
   @override
   void initState() {
     super.initState();
-    _report = FirestoreService().bookingUserReport(
-      '${widget.booking.bookingId}_${widget.appUser.userId}_${widget.reportedUserId}',
+    _report = FirestoreService().myBookingUserReport(
+      widget.booking.bookingId,
+      widget.appUser.userId,
     );
   }
 
@@ -72,9 +74,7 @@ class _BookingUserReportCardState extends State<BookingUserReportCard> {
         child: StatefulBuilder(
           builder: (ctx, setLocal) {
             return SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                mainAxisSize: MainAxisSize.min,
+              child: WorkflowFields(
                 children: [
                   Text(
                     'Report user',
@@ -123,10 +123,7 @@ class _BookingUserReportCardState extends State<BookingUserReportCard> {
                         _draftReason = v;
                       });
                     },
-                    decoration: const InputDecoration(
-                      labelText: 'Reason',
-                      border: OutlineInputBorder(),
-                    ),
+                    decoration: const InputDecoration(labelText: 'Reason'),
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -136,7 +133,6 @@ class _BookingUserReportCardState extends State<BookingUserReportCard> {
                     decoration: const InputDecoration(
                       labelText: 'Additional details (optional)',
                       alignLabelWithHint: true,
-                      border: OutlineInputBorder(),
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -212,7 +208,7 @@ class _BookingUserReportCardState extends State<BookingUserReportCard> {
       barrierDismissible: false,
       builder: (ctx) {
         final maxW = MediaQuery.sizeOf(ctx).width - 48;
-        return AlertDialog(
+        return WorkflowDialog(
           title: null,
           content: SizedBox(
             width: maxW.clamp(280.0, 480.0),
@@ -258,6 +254,11 @@ class _BookingUserReportCardState extends State<BookingUserReportCard> {
       );
     } catch (e) {
       if (!mounted) return;
+      if (e is StateError &&
+          (e.message.toString().contains('permission expired') ||
+              e.message.toString().contains('upload is incomplete'))) {
+        _uploadedPhotos.clear();
+      }
       final msg = e is StateError
           ? e.message
           : 'Could not submit report. Try again.';

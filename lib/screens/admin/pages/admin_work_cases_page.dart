@@ -1,3 +1,4 @@
+import '../../../ui/workflow_ui.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -26,16 +27,14 @@ class _AdminWorkCasesPageState extends State<AdminWorkCasesPage> {
     final answer = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) => AlertDialog(
+        builder: (ctx, setLocal) => WorkflowDialog(
           title: const Text('Review unresolved work'),
           content: SizedBox(
             width: 620,
             child: SingleChildScrollView(
               child: Form(
                 key: form,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                child: WorkflowFields(
                   children: [
                     SelectableText(
                       'Booking: ${record.data()['bookingId']}\nCurrent status: ${booking.data()?['status']}\nConcern: ${record.data()['type']}\n${record.data()['reason']}\n\nCustomer: ${record.data()['customerId']}\nProvider: ${record.data()['providerId']}',

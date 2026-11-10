@@ -1,3 +1,4 @@
+import '../../ui/workflow_ui.dart';
 import '../../l10n/app_strings.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -162,23 +163,33 @@ class _ContractOfferScreenState extends State<ContractOfferScreen> {
       title: Text(context.tr('Prepare contract offer')),
       actions: const [LanguageMenuButton()],
     ),
-    body: Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 760),
-        child: Form(
-          key: _form,
-          child: ListView(
-            padding: const EdgeInsets.all(20),
+    body: Form(
+      key: _form,
+      child: WorkflowPage(
+        title: context.tr('Prepare contract offer'),
+        subtitle:
+            'Bring your agreed service, price, schedule and work details into one offer.',
+        children: [
+          WorkflowNotice(
+            child: WorkflowFields(
+              spacing: 8,
+              children: [
+                Text(
+                  'Offer work to ${widget.inquiry.providerName}',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Agree on the job in messages first. State all costs and responsibilities clearly. Additional days or work require a new accepted agreement; no automatic charges apply.',
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+          WorkflowSection(
+            title: 'Service, pricing and schedule',
+            icon: Icons.work_outline,
             children: [
-              Text(
-                'Offer work to ${widget.inquiry.providerName}',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Agree on the job in messages first. State all costs and responsibilities clearly. Additional days or work require a new accepted agreement; no automatic charges apply.',
-              ),
-              const SizedBox(height: 16),
               StreamBuilder<List<ServiceListing>>(
                 stream: FirestoreService().servicesForProvider(
                   widget.inquiry.providerId,
@@ -329,6 +340,12 @@ class _ContractOfferScreenState extends State<ContractOfferScreen> {
                 }),
               ),
               const SizedBox(height: 16),
+            ],
+          ),
+          WorkflowSection(
+            title: 'Work and responsibilities',
+            icon: Icons.description_outlined,
+            children: [
               for (final f in _fields.entries)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 16),
@@ -359,27 +376,29 @@ class _ContractOfferScreenState extends State<ContractOfferScreen> {
                         : null,
                   ),
                 ),
-              FilledButton.icon(
-                onPressed: _busy ? null : _preview,
-                icon: _busy
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(),
-                      )
-                    : const Icon(Icons.preview_outlined),
-                label: const Text('Review complete agreement'),
-              ),
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12),
-                child: Text(
-                  'The provider has up to 72 hours to respond, or until work starts if sooner. Unanswered offers expire. Discuss a new offer to continue after expiry.',
-                ),
-              ),
-              const SizedBox(height: 24),
             ],
           ),
-        ),
+          WorkflowActions(
+            child: FilledButton.icon(
+              onPressed: _busy ? null : _preview,
+              icon: _busy
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(),
+                    )
+                  : const Icon(Icons.preview_outlined),
+              label: const Text('Review complete agreement'),
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              'The provider has up to 72 hours to respond, or until work starts if sooner. Unanswered offers expire. Discuss a new offer to continue after expiry.',
+            ),
+          ),
+          const SizedBox(height: 24),
+        ],
       ),
     ),
   );

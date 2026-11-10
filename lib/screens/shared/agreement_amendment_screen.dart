@@ -1,3 +1,4 @@
+import '../../ui/workflow_ui.dart';
 import '../../l10n/app_strings.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -131,23 +132,32 @@ class _AgreementAmendmentScreenState extends State<AgreementAmendmentScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: Text(context.tr('Propose contract amendment'))),
-    body: Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 760),
-        child: Form(
-          key: _form,
-          child: ListView(
-            padding: const EdgeInsets.all(20),
+    body: Form(
+      key: _form,
+      child: WorkflowPage(
+        title: context.tr('Propose contract amendment'),
+        subtitle:
+            'Keep the agreed changes together for both parties to review.',
+        children: [
+          WorkflowNotice(
+            child: WorkflowFields(
+              children: [
+                const Text(
+                  'Review all revised terms, including scope, materials, total price and schedule. The current agreement stays in effect until both parties accept. Previous versions remain available.',
+                ),
+              ],
+            ),
+          ),
+          WorkflowSection(
+            title: 'Price and schedule changes',
+            icon: Icons.edit_calendar_outlined,
             children: [
-              const Text(
-                'Review all revised terms, including scope, materials, total price and schedule. The current agreement stays in effect until both parties accept. Previous versions remain available.',
-              ),
               TextFormField(
                 controller: _reason,
                 minLines: 2,
                 maxLines: 4,
                 maxLength: 3000,
-                decoration:  InputDecoration(
+                decoration: InputDecoration(
                   labelText: context.tr('Reason for amendment'),
                 ),
                 validator: (v) => (v?.trim().length ?? 0) < 10
@@ -156,8 +166,14 @@ class _AgreementAmendmentScreenState extends State<AgreementAmendmentScreen> {
               ),
               SegmentedButton<String>(
                 segments: [
-                  ButtonSegment(value: 'fixed', label: Text(context.tr('Fixed amount'))),
-                  ButtonSegment(value: 'daily', label: Text(context.tr('Daily rate'))),
+                  ButtonSegment(
+                    value: 'fixed',
+                    label: Text(context.tr('Fixed amount')),
+                  ),
+                  ButtonSegment(
+                    value: 'daily',
+                    label: Text(context.tr('Daily rate')),
+                  ),
                 ],
                 selected: {_type},
                 onSelectionChanged: _busy
@@ -184,7 +200,7 @@ class _AgreementAmendmentScreenState extends State<AgreementAmendmentScreen> {
               TextFormField(
                 controller: _days,
                 keyboardType: TextInputType.number,
-                decoration:  InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Revised total consecutive working days (1–30)',
                 ),
                 validator: (v) {
@@ -196,7 +212,7 @@ class _AgreementAmendmentScreenState extends State<AgreementAmendmentScreen> {
               ),
               DropdownButtonFormField<double>(
                 initialValue: _hours,
-                decoration:  InputDecoration(labelText: 'Hours per day'),
+                decoration: InputDecoration(labelText: 'Hours per day'),
                 items: [
                   for (var h = .5; h <= 8; h += .5)
                     DropdownMenuItem(value: h, child: Text('$h hours')),
@@ -247,6 +263,12 @@ class _AgreementAmendmentScreenState extends State<AgreementAmendmentScreen> {
                 const Text(
                   'Ongoing work keeps the original start and hours per day. You may add days and agree on revised scope or price.',
                 ),
+            ],
+          ),
+          WorkflowSection(
+            title: 'Revised work and responsibilities',
+            icon: Icons.description_outlined,
+            children: [
               for (final f in _fields.entries)
                 TextFormField(
                   controller: f.value,
@@ -254,27 +276,31 @@ class _AgreementAmendmentScreenState extends State<AgreementAmendmentScreen> {
                   maxLines: 5,
                   maxLength: 3000,
                   decoration: InputDecoration(
-                    labelText: context.tr({
-                      'scope': 'Scope of work',
-                      'deliverables': 'Deliverables',
-                      'exclusions': 'Exclusions',
-                      'materials': 'Materials and costs',
-                      'paymentTerms': 'Payment arrangement',
-                      'completionCriteria': 'Completion criteria',
-                      'responsibilities': 'Responsibilities',
-                    }[f.key]!),
+                    labelText: context.tr(
+                      {
+                        'scope': 'Scope of work',
+                        'deliverables': 'Deliverables',
+                        'exclusions': 'Exclusions',
+                        'materials': 'Materials and costs',
+                        'paymentTerms': 'Payment arrangement',
+                        'completionCriteria': 'Completion criteria',
+                        'responsibilities': 'Responsibilities',
+                      }[f.key]!,
+                    ),
                   ),
                   validator: (v) => (v?.trim().length ?? 0) < 5
                       ? 'Describe in at least 5 characters'
                       : null,
                 ),
-              FilledButton(
-                onPressed: _busy ? null : _submit,
-                child: Text(_busy ? 'Preparing…' : 'Preview amendment'),
-              ),
             ],
           ),
-        ),
+          WorkflowActions(
+            child: FilledButton(
+              onPressed: _busy ? null : _submit,
+              child: Text(_busy ? 'Preparing…' : 'Preview amendment'),
+            ),
+          ),
+        ],
       ),
     ),
   );

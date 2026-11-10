@@ -150,7 +150,8 @@ service cloud.firestore {
     }
     match /bookingUserReports/{id} {
       function reportReader(report) {
-        return isAdmin() || (activeUser() && request.auth.uid in [report.reporterId, report.reportedUserId]);
+        return isAdmin() || (activeUser()
+          && (report.get('reporterId', '') == request.auth.uid || report.get('reportedUserId', '') == request.auth.uid));
       }
       allow read: if reportReader(resource.data);
       allow write: if false;

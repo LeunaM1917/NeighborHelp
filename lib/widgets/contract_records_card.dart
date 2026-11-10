@@ -1,3 +1,4 @@
+import '../ui/workflow_ui.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -80,7 +81,7 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
     });
   }
 
-  Future<void> _reportPayment({bool refund=false}) async {
+  Future<void> _reportPayment({bool refund = false}) async {
     final form = GlobalKey<FormState>(),
         amount = TextEditingController(),
         reference = TextEditingController();
@@ -88,15 +89,18 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
     final payload = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) => AlertDialog(
-          title: Text(context.tr(refund?'Record refund sent':'Record a payment you made')),
+        builder: (ctx, setLocal) => WorkflowDialog(
+          title: Text(
+            context.tr(
+              refund ? 'Record refund sent' : 'Record a payment you made',
+            ),
+          ),
           content: SizedBox(
             width: 480,
             child: Form(
               key: form,
               child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
+                child: WorkflowFields(
                   children: [
                     const Text(
                       'This records a direct payment; the app does not transfer or hold money. The provider must acknowledge receipt. Do not enter PINs, passwords or full account numbers.',
@@ -104,7 +108,11 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
                     TextFormField(
                       controller: amount,
                       decoration: InputDecoration(
-                        labelText: context.tr(refund?'Amount refunded (PHP)':'Amount paid (PHP)'),
+                        labelText: context.tr(
+                          refund
+                              ? 'Amount refunded (PHP)'
+                              : 'Amount paid (PHP)',
+                        ),
                       ),
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
@@ -125,16 +133,23 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
                           'Bank transfer',
                           'Other',
                         ])
-                          DropdownMenuItem(value: m, child: Text(context.tr(m))),
+                          DropdownMenuItem(
+                            value: m,
+                            child: Text(context.tr(m)),
+                          ),
                       ],
                       onChanged: (v) => setLocal(() => method = v!),
-                      decoration:  InputDecoration(labelText: context.tr('Method')),
+                      decoration: InputDecoration(
+                        labelText: context.tr('Method'),
+                      ),
                     ),
                     TextFormField(
                       controller: reference,
                       maxLength: 200,
-                      decoration:  InputDecoration(
-                        labelText: context.tr('Transaction reference (optional)'),
+                      decoration: InputDecoration(
+                        labelText: context.tr(
+                          'Transaction reference (optional)',
+                        ),
                       ),
                     ),
                   ],
@@ -157,7 +172,9 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
                   });
                 }
               },
-              child: Text(context.tr(refund?'Report refund':'Report payment')),
+              child: Text(
+                context.tr(refund ? 'Report refund' : 'Report payment'),
+              ),
             ),
           ],
         ),
@@ -168,17 +185,19 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
       reference.dispose();
     });
     if (payload == null) return;
-    final payloadKey=jsonEncode({'refund':refund,...payload});
-    if(_paymentAttemptId==null || _paymentAttemptPayload!=payloadKey){
-      _paymentAttemptId=_ref.collection('payments').doc().id;_paymentAttemptPayload=payloadKey;
+    final payloadKey = jsonEncode({'refund': refund, ...payload});
+    if (_paymentAttemptId == null || _paymentAttemptPayload != payloadKey) {
+      _paymentAttemptId = _ref.collection('payments').doc().id;
+      _paymentAttemptPayload = payloadKey;
     }
     await MarketplaceService.command('paymentCommand', {
-      'action': refund?'reportRefund':'report',
+      'action': refund ? 'reportRefund' : 'report',
       'bookingId': widget.booking.bookingId,
       'paymentId': _paymentAttemptId,
       ...payload,
     });
-    _paymentAttemptId=null;_paymentAttemptPayload=null;
+    _paymentAttemptId = null;
+    _paymentAttemptPayload = null;
   }
 
   Future<void> _payment(
@@ -190,7 +209,7 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
     if (action == 'confirm') {
       final ok = await showDialog<bool>(
         context: context,
-        builder: (ctx) => AlertDialog(
+        builder: (ctx) => WorkflowDialog(
           title: Text(context.tr('Acknowledge actual receipt?')),
           content: Text(
             'Confirm only if you received PHP ${((data['amountCents'] as num) / 100).toStringAsFixed(2)} by ${data['method']}. Check your own cash or account records.',
@@ -218,7 +237,7 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
       if (reason == null) return;
     }
     await MarketplaceService.command('paymentCommand', {
-      'action': data['recordType']=='refund' ? '${action}Refund' : action,
+      'action': data['recordType'] == 'refund' ? '${action}Refund' : action,
       'bookingId': widget.booking.bookingId,
       'paymentId': id,
       'confirmReceived': true,
@@ -268,7 +287,7 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
                   return ListTile(
                     isThreeLine: true,
                     title: Text(
-                      '${context.tr(data['recordType']=='refund'?'Refund':'Payment')} - PHP ${((data['amountCents'] as num) / 100).toStringAsFixed(2)} · ${data['status']}',
+                      '${context.tr(data['recordType'] == 'refund' ? 'Refund' : 'Payment')} - PHP ${((data['amountCents'] as num) / 100).toStringAsFixed(2)} · ${data['status']}',
                     ),
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -284,7 +303,10 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
                           Wrap(
                             spacing: 8,
                             children:
-                                widget.viewerId == (data['recordType']=='refund'?widget.booking.customerId:widget.booking.providerId)
+                                widget.viewerId ==
+                                    (data['recordType'] == 'refund'
+                                        ? widget.booking.customerId
+                                        : widget.booking.providerId)
                                 ? [
                                     TextButton(
                                       onPressed: _busy
@@ -296,7 +318,9 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
                                                 data,
                                               ),
                                             ),
-                                      child: Text(context.tr('Confirm receipt')),
+                                      child: Text(
+                                        context.tr('Confirm receipt'),
+                                      ),
                                     ),
                                     TextButton(
                                       onPressed: _busy
@@ -322,7 +346,9 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
                                                 data,
                                               ),
                                             ),
-                                      child: Text(context.tr('Withdraw report')),
+                                      child: Text(
+                                        context.tr('Withdraw report'),
+                                      ),
                                     ),
                                   ],
                           ),
@@ -365,7 +391,7 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
                         } catch (e) {
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                               SnackBar(
+                              SnackBar(
                                 content: Text(
                                   'Could not save the record. Retry.',
                                 ),
@@ -425,19 +451,24 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
       builder: (context, snap) {
         final data = snap.data?.data();
         if (data == null) return const SizedBox.shrink();
-        final grossReceived = ((data['confirmedPaymentCents'] as num?) ?? 0) / 100,
+        final grossReceived =
+                ((data['confirmedPaymentCents'] as num?) ?? 0) / 100,
             refunded = ((data['confirmedRefundCents'] as num?) ?? 0) / 100,
             received = grossReceived - refunded,
             pending = ((data['pendingPaymentCents'] as num?) ?? 0) / 100,
-            total = data['settlement'] is Map ? ((data['settlement'] as Map)['agreedFeeCents'] as num).toDouble()/100 : (data['totalFee'] as num?)?.toDouble() ?? 0;
-        return Card(
+            total = data['settlement'] is Map
+                ? ((data['settlement'] as Map)['agreedFeeCents'] as num)
+                          .toDouble() /
+                      100
+                : (data['totalFee'] as num?)?.toDouble() ?? 0;
+        return WorkflowSurface(
           child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+            padding: const EdgeInsets.all(20),
+            child: WorkflowFields(
               children: [
-                Text(context.tr('Agreement changes and payments'),
-                  style: Theme.of(context).textTheme.titleMedium,
+                Text(
+                  context.tr('Agreement changes and payments'),
+                  style: WorkflowStyles.sectionTitle,
                 ),
                 if (widget.booking.agreement != null &&
                     (widget.booking.isAccepted || widget.booking.isInProgress))
@@ -459,7 +490,7 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
                 _history('amendments', 'Amendment history'),
                 _history('agreementVersions', 'Accepted agreement versions'),
                 Text(
-                  '${context.tr('Net received')}: PHP ${received.toStringAsFixed(2)}\n${context.tr('Reported, awaiting receipt')}: PHP ${pending.toStringAsFixed(2)}\n${context.tr('Refund reported, awaiting receipt')}: PHP ${(((data['pendingRefundCents'] as num?) ?? 0)/100).toStringAsFixed(2)}',
+                  '${context.tr('Net received')}: PHP ${received.toStringAsFixed(2)}\n${context.tr('Reported, awaiting receipt')}: PHP ${pending.toStringAsFixed(2)}\n${context.tr('Refund reported, awaiting receipt')}: PHP ${(((data['pendingRefundCents'] as num?) ?? 0) / 100).toStringAsFixed(2)}',
                 ),
                 const Text(
                   'Payment records are separate from completion. They record statements by the parties and do not verify a bank transfer or move money.',
@@ -470,12 +501,28 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
                     icon: const Icon(Icons.payments_outlined),
                     label: Text(context.tr('Record payment made')),
                   ),
-                if(widget.viewerId==widget.booking.providerId && data['settlement']!=null)
-                  OutlinedButton.icon(onPressed:_busy?null:()=>_run(()=>_reportPayment(refund:true)),icon:const Icon(Icons.currency_exchange),label:Text(context.tr('Record refund sent'))),
-                if(refunded>0)Text('${context.tr('Received refunds')}: PHP ${refunded.toStringAsFixed(2)}'),
-                Text('${context.tr('Balance due')}: PHP ${(total>received?total-received:0).toStringAsFixed(2)}\n${context.tr('Refund due')}: PHP ${(received>total?received-total:0).toStringAsFixed(2)}'),
+                if (widget.viewerId == widget.booking.providerId &&
+                    data['settlement'] != null)
+                  OutlinedButton.icon(
+                    onPressed: _busy
+                        ? null
+                        : () => _run(() => _reportPayment(refund: true)),
+                    icon: const Icon(Icons.currency_exchange),
+                    label: Text(context.tr('Record refund sent')),
+                  ),
+                if (refunded > 0)
+                  Text(
+                    '${context.tr('Received refunds')}: PHP ${refunded.toStringAsFixed(2)}',
+                  ),
+                Text(
+                  '${context.tr('Balance due')}: PHP ${(total > received ? total - received : 0).toStringAsFixed(2)}\n${context.tr('Refund due')}: PHP ${(received > total ? received - total : 0).toStringAsFixed(2)}',
+                ),
                 _history('payments', context.tr('Payment records')),
-                SettlementCard(bookingId:widget.booking.bookingId,bookingData:data,viewerId:widget.viewerId),
+                SettlementCard(
+                  bookingId: widget.booking.bookingId,
+                  bookingData: data,
+                  viewerId: widget.viewerId,
+                ),
               ],
             ),
           ),

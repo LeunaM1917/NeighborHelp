@@ -1,3 +1,4 @@
+import '../../../ui/workflow_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -37,14 +38,12 @@ class _AdminCertificateReviewPageState
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, refresh) => AlertDialog(
+        builder: (ctx, refresh) => WorkflowDialog(
           title: const Text('System Administrator certificate review'),
           content: SizedBox(
             width: 560,
             child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+              child: WorkflowFields(
                 children: [
                   SelectableText(
                     'Holder: $holder\nQualification: ${cert.name}\nCertificate number: ${cert.certificationId}\nIssuer: ${cert.provider}\nValidity: ${cert.issueDate} to ${cert.expirationDate}',

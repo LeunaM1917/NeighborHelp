@@ -1,3 +1,6 @@
+import '../ui/workflow_ui.dart';
+import '../figma_ui/figma_colors.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -61,36 +64,53 @@ class _ReportPhotoPickerState extends State<ReportPhotoPicker> {
   }
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      OutlinedButton.icon(
-        onPressed: _picking || widget.photos.length >= 5 ? null : _pick,
-        icon: const Icon(Icons.add_photo_alternate_outlined),
-        label: Text(_picking ? 'Selecting photos…' : 'Add photos (optional)'),
+  Widget build(BuildContext context) => WorkflowTheme(
+    child: Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: FigmaColors.gray50,
+        border: Border.all(color: FigmaColors.gray200),
+        borderRadius: BorderRadius.circular(10),
       ),
-      const Text(
-        'Up to 5 JPG, PNG or WebP photos, 5 MB each. Include only evidence relevant to this report.',
+      child: WorkflowFields(
+        spacing: 10,
+        children: [
+          OutlinedButton.icon(
+            onPressed: _picking || widget.photos.length >= 5 ? null : _pick,
+            icon: const Icon(Icons.add_photo_alternate_outlined),
+            label: Text(
+              _picking ? 'Selecting photos…' : 'Add photos (optional)',
+            ),
+          ),
+          Text(
+            'Up to 5 JPG, PNG or WebP photos, 5 MB each. Include only evidence relevant to this report.',
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              color: FigmaColors.gray500,
+              height: 1.5,
+            ),
+          ),
+          if (_error != null)
+            Text(
+              _error!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          if (widget.photos.isNotEmpty)
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (var i = 0; i < widget.photos.length; i++)
+                  InputChip(
+                    label: Text('Photo ${i + 1}'),
+                    avatar: const Icon(Icons.image_outlined, size: 18),
+                    onDeleted: () =>
+                        widget.onChanged([...widget.photos]..removeAt(i)),
+                  ),
+              ],
+            ),
+        ],
       ),
-      if (_error != null)
-        Text(
-          _error!,
-          style: TextStyle(color: Theme.of(context).colorScheme.error),
-        ),
-      if (widget.photos.isNotEmpty)
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (var i = 0; i < widget.photos.length; i++)
-              InputChip(
-                label: Text('Photo ${i + 1}'),
-                avatar: const Icon(Icons.image_outlined, size: 18),
-                onDeleted: () =>
-                    widget.onChanged([...widget.photos]..removeAt(i)),
-              ),
-          ],
-        ),
-    ],
+    ),
   );
 }

@@ -1,3 +1,4 @@
+import '../../ui/workflow_ui.dart';
 import '../../widgets/provider_search_status.dart';
 import '../../l10n/app_strings.dart';
 import 'dart:convert';
@@ -151,16 +152,19 @@ class _ScheduledProviderSearchScreenState
               icon: const Icon(Icons.refresh),
               label: Text(context.tr('Refresh availability')),
             ),
-            SizedBox(
-              height: 320,
-              child: YourAreaMapView(
-                userPosition: latLngFromGeoPoint(_origin!),
-                pins: pins,
-                interactive: true,
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                height: 320,
+                child: YourAreaMapView(
+                  userPosition: latLngFromGeoPoint(_origin!),
+                  pins: pins,
+                  interactive: true,
+                ),
               ),
             ),
             for (final r in ranked)
-              Card(
+              WorkflowSurface(
                 child: ListTile(
                   leading: CircleAvatar(child: Text('${r.rank}')),
                   title: Text(users[r.profile.userId]?.fullName ?? 'Provider'),
@@ -187,11 +191,15 @@ class _ScheduledProviderSearchScreenState
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: Text(context.tr('Find providers for your schedule'))),
-    body: Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1000),
-        child: ListView(
-          padding: const EdgeInsets.all(20),
+    body: WorkflowPage(
+      title: context.tr('Find providers for your schedule'),
+      subtitle:
+          'Choose when and where you need help, then compare available providers.',
+      maxWidth: 1040,
+      children: [
+        WorkflowSection(
+          title: 'Work location and schedule',
+          icon: Icons.event_available_outlined,
           children: [
             const Text(
               'Choose the work location, start time, consecutive days and hours per day. All times are in Asia/Manila.',
@@ -270,6 +278,12 @@ class _ScheduledProviderSearchScreenState
               onChanged: (v) => setState(() => _hours = v!),
             ),
             const SizedBox(height: 16),
+          ],
+        ),
+        WorkflowSection(
+          title: 'Available providers',
+          icon: Icons.people_outline,
+          children: [
             if (_origin == null)
               const Text('Choose a work location to check service coverage.')
             else
@@ -295,7 +309,7 @@ class _ScheduledProviderSearchScreenState
               ),
           ],
         ),
-      ),
+      ],
     ),
   );
 }

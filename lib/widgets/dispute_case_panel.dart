@@ -1,3 +1,4 @@
+import '../ui/workflow_ui.dart';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -81,12 +82,12 @@ class _DisputeCasePanelState extends State<DisputeCasePanel> {
           await (widget.command?.call(payload) ??
               MarketplaceService.command('reportCommand', payload));
       if (!mounted) return;
-      if (action == 'startReview' && result['inquiryId'] is String) {
-        widget.onOpenConversation?.call(result['inquiryId'] as String);
-      }
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Case updated.')));
+      if (action == 'startReview' && result['inquiryId'] is String) {
+        widget.onOpenConversation?.call(result['inquiryId'] as String);
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -118,7 +119,7 @@ class _DisputeCasePanelState extends State<DisputeCasePanel> {
     final proposal = report.resolutionProposal!;
     final yes = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => WorkflowDialog(
         title: const Text('Confirm proposed resolution?'),
         content: SingleChildScrollView(
           child: Text(
@@ -172,224 +173,223 @@ class _DisputeCasePanelState extends State<DisputeCasePanel> {
       );
       final hasNotes = _notes.text.trim().length >= 10;
       final enabled = !_busy && !report.isClosed;
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'Dispute case',
-            style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            report.statusLabel,
-            style: GoogleFonts.inter(
-              fontWeight: FontWeight.w600,
-              color: FigmaColors.navy,
+      return WorkflowTheme(
+        child: WorkflowFields(
+          spacing: 12,
+          children: [
+            const WorkflowHeading(
+              title: 'Dispute case',
+              icon: Icons.gavel_outlined,
             ),
-          ),
-          if (report.bookingId.isNotEmpty) Text('Booking: ${report.bookingId}'),
-          const SizedBox(height: 12),
-          Text(
-            report.reason,
-            style: GoogleFonts.inter(fontWeight: FontWeight.w600),
-          ),
-          if (report.details.isNotEmpty) Text(report.details),
-          if (report.photoUrls.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            WorkflowStatus(label: report.statusLabel, status: report.status),
+            if (report.bookingId.isNotEmpty)
+              Text('Booking: ${report.bookingId}'),
             const SizedBox(height: 12),
-            const Text(
-              'Submitted photos',
-              style: TextStyle(fontWeight: FontWeight.w600),
-            ),
-            for (final url in report.photoUrls)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: ChatImage(url: url),
-              ),
-          ],
-          if (report.adminNotes.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Text('Recorded outcome: ${report.adminNotes}'),
-          ],
-          if (report.disputeInquiryId.isNotEmpty &&
-              widget.onOpenConversation != null)
-            TextButton.icon(
-              onPressed: () =>
-                  widget.onOpenConversation!(report.disputeInquiryId),
-              icon: const Icon(Icons.forum_outlined),
-              label: const Text('Open dispute conversation'),
-            ),
-          if (proposal != null) ...[
-            const Divider(height: 24),
             Text(
-              'Proposed ${proposal['type']} resolution',
-              style: const TextStyle(fontWeight: FontWeight.w600),
+              report.reason,
+              style: GoogleFonts.inter(fontWeight: FontWeight.w600),
             ),
-            Text('${proposal['summary']}'),
-            Text('${confirmed.length} of 2 parties confirmed'),
-            if (isParty && !report.isClosed)
-              FilledButton(
-                onPressed: !enabled || confirmed.contains(widget.appUser.userId)
-                    ? null
-                    : () => _confirm(report),
-                child: Text(
-                  confirmed.contains(widget.appUser.userId)
-                      ? 'You confirmed this proposal'
-                      : 'Review and confirm proposal',
-                ),
-              ),
-          ],
-          if (canManage && !report.isClosed) ...[
-            const Divider(height: 24),
-            if (report.assignedAdminId.isEmpty)
-              FilledButton.icon(
-                onPressed: enabled ? () => _act('startReview') : null,
-                icon: const Icon(Icons.forum_outlined),
-                label: const Text('Start review and contact both parties'),
-              )
-            else ...[
-              TextField(
-                controller: _notes,
-                minLines: 3,
-                maxLines: 6,
-                maxLength: 3000,
-                decoration: const InputDecoration(
-                  labelText: 'Evidence, response request or decision notes',
-                  alignLabelWithHint: true,
-                  border: OutlineInputBorder(),
-                ),
-                onChanged: (_) => setState(() {}),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  OutlinedButton(
-                    onPressed: enabled && hasNotes
-                        ? () => _act(
-                            'setStatus',
-                            data: {'status': 'under_review'},
-                          )
-                        : null,
-                    child: const Text('Under review'),
-                  ),
-                  OutlinedButton(
-                    onPressed: enabled && hasNotes
-                        ? () => _act(
-                            'setStatus',
-                            data: {'status': 'waiting_response'},
-                          )
-                        : null,
-                    child: const Text('Request response'),
-                  ),
-                ],
-              ),
+            if (report.details.isNotEmpty) Text(report.details),
+            if (report.photoUrls.isNotEmpty) ...[
               const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                initialValue: _resolutionType,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'Proposed agreement type',
+              const Text(
+                'Submitted photos',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              for (final url in report.photoUrls)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: ChatImage(url: url),
                 ),
-                items: const [
-                  DropdownMenuItem(
-                    value: 'correction',
-                    child: Text('Correction / rework'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'refund',
-                    child: Text('Refund agreement'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'other',
-                    child: Text('Other agreement'),
-                  ),
-                ],
-                onChanged: enabled
-                    ? (v) => setState(() => _resolutionType = v!)
-                    : null,
-              ),
-              const SizedBox(height: 8),
-              OutlinedButton(
-                onPressed: enabled && hasNotes
-                    ? () => _act(
-                        'proposeResolution',
-                        data: {
-                          'resolutionType': _resolutionType,
-                          'proposalId': _proposalReference(),
-                        },
-                      )
-                    : null,
-                child: const Text('Propose agreement for both parties'),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  OutlinedButton(
-                    onPressed: enabled && hasNotes
-                        ? () => _act('resolve', data: {'status': 'dismissed'})
-                        : null,
-                    child: const Text('Dismiss'),
-                  ),
-                  FilledButton(
-                    onPressed:
-                        enabled &&
-                            hasNotes &&
-                            (proposal == null ||
-                                [
-                                  report.reporterId,
-                                  report.reportedUserId,
-                                ].every(confirmed.contains))
-                        ? () => _act('resolve', data: {'status': 'resolved'})
-                        : null,
-                    child: const Text('Resolve with recorded outcome'),
-                  ),
-                ],
-              ),
             ],
-          ] else if (isAdmin && !report.isClosed)
-            const Text('Another administrator is assigned to this case.'),
-          const SizedBox(height: 12),
-          Text(
-            'Agreements here do not automatically transfer money, change schedules or mark work completed.',
-            style: GoogleFonts.inter(fontSize: 12, color: FigmaColors.gray600),
-          ),
-          if (widget.showHistory) ...[
-            const Divider(height: 24),
-            const Text(
-              'Case history',
-              style: TextStyle(fontWeight: FontWeight.w600),
-            ),
-            StreamBuilder<List<Map<String, dynamic>>>(
-              stream: _events,
-              builder: (context, events) {
-                if (events.hasError) {
-                  return const Text('Could not load case history.');
-                }
-                if (!events.hasData) return const LinearProgressIndicator();
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+            if (report.adminNotes.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text('Recorded outcome: ${report.adminNotes}'),
+            ],
+            if (report.disputeInquiryId.isNotEmpty &&
+                widget.onOpenConversation != null)
+              TextButton.icon(
+                onPressed: () =>
+                    widget.onOpenConversation!(report.disputeInquiryId),
+                icon: const Icon(Icons.forum_outlined),
+                label: const Text('Open dispute conversation'),
+              ),
+            if (proposal != null) ...[
+              const Divider(height: 24),
+              Text(
+                'Proposed ${proposal['type']} resolution',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              Text('${proposal['summary']}'),
+              Text('${confirmed.length} of 2 parties confirmed'),
+              if (isParty && !report.isClosed)
+                FilledButton(
+                  onPressed:
+                      !enabled || confirmed.contains(widget.appUser.userId)
+                      ? null
+                      : () => _confirm(report),
+                  child: Text(
+                    confirmed.contains(widget.appUser.userId)
+                        ? 'You confirmed this proposal'
+                        : 'Review and confirm proposal',
+                  ),
+                ),
+            ],
+            if (canManage && !report.isClosed) ...[
+              const Divider(height: 24),
+              if (report.assignedAdminId.isEmpty)
+                FilledButton.icon(
+                  onPressed: enabled ? () => _act('startReview') : null,
+                  icon: const Icon(Icons.forum_outlined),
+                  label: const Text('Start review and contact both parties'),
+                )
+              else ...[
+                TextField(
+                  controller: _notes,
+                  minLines: 3,
+                  maxLines: 6,
+                  maxLength: 3000,
+                  decoration: const InputDecoration(
+                    labelText: 'Evidence, response request or decision notes',
+                    alignLabelWithHint: true,
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
-                    for (final event in events.data!)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Text(
-                          '${event['action']} · ${event['createdAt'] is Timestamp ? DateFormat('MMM d, yyyy h:mm a').format((event['createdAt'] as Timestamp).toDate().toUtc().add(const Duration(hours: 8))) : ''}\n${event['notes'] ?? ''}',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            color: FigmaColors.gray600,
+                    OutlinedButton(
+                      onPressed: enabled && hasNotes
+                          ? () => _act(
+                              'setStatus',
+                              data: {'status': 'under_review'},
+                            )
+                          : null,
+                      child: const Text('Under review'),
+                    ),
+                    OutlinedButton(
+                      onPressed: enabled && hasNotes
+                          ? () => _act(
+                              'setStatus',
+                              data: {'status': 'waiting_response'},
+                            )
+                          : null,
+                      child: const Text('Request response'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: _resolutionType,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Proposed agreement type',
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'correction',
+                      child: Text('Correction / rework'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'refund',
+                      child: Text('Refund agreement'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'other',
+                      child: Text('Other agreement'),
+                    ),
+                  ],
+                  onChanged: enabled
+                      ? (v) => setState(() => _resolutionType = v!)
+                      : null,
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton(
+                  onPressed: enabled && hasNotes
+                      ? () => _act(
+                          'proposeResolution',
+                          data: {
+                            'resolutionType': _resolutionType,
+                            'proposalId': _proposalReference(),
+                          },
+                        )
+                      : null,
+                  child: const Text('Propose agreement for both parties'),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    OutlinedButton(
+                      onPressed: enabled && hasNotes
+                          ? () => _act('resolve', data: {'status': 'dismissed'})
+                          : null,
+                      child: const Text('Dismiss'),
+                    ),
+                    FilledButton(
+                      onPressed:
+                          enabled &&
+                              hasNotes &&
+                              (proposal == null ||
+                                  [
+                                    report.reporterId,
+                                    report.reportedUserId,
+                                  ].every(confirmed.contains))
+                          ? () => _act('resolve', data: {'status': 'resolved'})
+                          : null,
+                      child: const Text('Resolve with recorded outcome'),
+                    ),
+                  ],
+                ),
+              ],
+            ] else if (isAdmin && !report.isClosed)
+              const Text('Another administrator is assigned to this case.'),
+            const SizedBox(height: 12),
+            Text(
+              'Agreements here do not automatically transfer money, change schedules or mark work completed.',
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: FigmaColors.gray600,
+              ),
+            ),
+            if (widget.showHistory) ...[
+              const Divider(height: 24),
+              const Text(
+                'Case history',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              StreamBuilder<List<Map<String, dynamic>>>(
+                stream: _events,
+                builder: (context, events) {
+                  if (events.hasError) {
+                    return const Text('Could not load case history.');
+                  }
+                  if (!events.hasData) return const LinearProgressIndicator();
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final event in events.data!)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            '${event['action']} · ${event['createdAt'] is Timestamp ? DateFormat('MMM d, yyyy h:mm a').format((event['createdAt'] as Timestamp).toDate().toUtc().add(const Duration(hours: 8))) : ''}\n${event['notes'] ?? ''}',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: FigmaColors.gray600,
+                            ),
                           ),
                         ),
-                      ),
-                  ],
-                );
-              },
-            ),
+                    ],
+                  );
+                },
+              ),
+            ],
           ],
-        ],
+        ),
       );
     },
   );

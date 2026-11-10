@@ -1,3 +1,4 @@
+import '../ui/workflow_ui.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../l10n/app_strings.dart';
@@ -61,15 +62,14 @@ class _WorkCasesCardState extends State<WorkCasesCard> {
         b.isAwaitingConfirmation &&
         b.completionResponseDueAt != null &&
         !now.isBefore(b.completionResponseDueAt!.toDate());
-    return Card(
+    return WorkflowSurface(
       child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        padding: const EdgeInsets.all(20),
+        child: WorkflowFields(
           children: [
             Text(
               context.tr('Work follow-ups'),
-              style: Theme.of(context).textTheme.titleMedium,
+              style: WorkflowStyles.sectionTitle,
             ),
             Text(context.tr('Work follow-up notice')),
             if (noShow)
