@@ -1,0 +1,13 @@
+# Upload only the sentiment service and its model for Cloud Build.
+*
+!cloudbuild-sentiment.yaml
+!.dockerignore
+!sentiment_api/
+!sentiment_api/Dockerfile
+!sentiment_api/requirements.production.txt
+!sentiment_api/main.py
+!sentiment_api/vocabulary.py
+!LSTM_train/
+!LSTM_train/neighborhelp_lstm_sentiment.keras
+!LSTM_train/neighborhelp_lstm_sentiment.metadata.json
+!LSTM_train/vocabulary.json

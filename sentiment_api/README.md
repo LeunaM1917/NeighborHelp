@@ -43,68 +43,51 @@ pip install httpx pytest
 pytest test_sentiment.py -q
 ```
 
-## 2) Wire Firebase Functions
+## 2) Connect Firebase Functions
 
-Add to `functions/.env` (then redeploy functions):
+Use a deployed HTTPS service URL in `functions/.env`. `http://localhost:8000` is only for locally running Functions emulators; deployed functions cannot reach your computer through localhost.
 
 ```env
-SENTIMENT_API_URL=http://localhost:8000
-# Or your Cloud Run URL, e.g. https://neighborhelp-sentiment-xxxxx-uc.a.run.app
-SENTIMENT_API_TIMEOUT_MS=15000
+SENTIMENT_API_URL=https://YOUR-CLOUD-RUN-URL
+SENTIMENT_API_TIMEOUT_MS=30000
 ```
 
-Deploy:
+From the repository root, deploy the two review functions:
 
 ```powershell
-cd d:\NeighborHelp
-firebase deploy --only functions
+firebase deploy --only "functions:submitMilestoneReview,functions:onReviewCreated" --project neighborhelp-63771
 ```
 
-When a review with a comment is created, `onReviewCreated` calls `/predict-sentiment` and stores:
+`submitMilestoneReview` analyzes submitted review comments. `onReviewCreated` analyzes reviews that do not already have a saved result. They store `sentiment.label`, `confidence`, `probabilities`, `modelVersion`, `analyzedAt`, and `source` on the Firestore review. A successful model response has source `lstm`; a failed or unavailable API call uses the existing keyword fallback.
 
-- `sentiment.label` — `negative` | `neutral` | `positive`
-- `sentiment.confidence`
-- `sentiment.probabilities`
-- `sentiment.modelVersion`
-- `sentiment.analyzedAt`
-- `sentiment.source` — `lstm`
+## 3) Deploy to Google Cloud Run
 
-## 3) Deploy to Google Cloud Run (production)
+The service is `neighborhelp-sentiment`, in `asia-southeast1`, in Firebase project `neighborhelp-63771`. Billing must be enabled. The deployment reuses the saved model; it does not retrain it.
 
-From repo root (`d:\NeighborHelp`):
+From the repository root, with Google Cloud CLI installed:
 
 ```powershell
 gcloud auth login
 gcloud config set project neighborhelp-63771
-
-docker build -f sentiment_api/Dockerfile -t neighborhelp-sentiment .
-
-docker tag neighborhelp-sentiment gcr.io/neighborhelp-63771/neighborhelp-sentiment
-docker push gcr.io/neighborhelp-63771/neighborhelp-sentiment
-
-gcloud run deploy neighborhelp-sentiment `
-  --image gcr.io/neighborhelp-63771/neighborhelp-sentiment `
-  --platform managed `
-  --region asia-southeast1 `
-  --allow-unauthenticated `
-  --memory 2Gi `
-  --cpu 1 `
-  --timeout 60 `
-  --min-instances 0 `
-  --max-instances 3
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\deploy-sentiment-cloudrun.ps1
 ```
 
-Copy the service URL into `functions/.env`:
+The script builds in Cloud Build and publishes to Artifact Registry, so local Docker is not required. `.gcloudignore` restricts the source upload to the API and saved model. `.dockerignore` restricts the container build context. Keep these exclusions in place; local environment files, application secrets, datasets and test artifacts are excluded.
 
-```env
-SENTIMENT_API_URL=https://YOUR-CLOUD-RUN-URL
-```
+The Docker image uses Python 3.13 and the tested runtime versions in `requirements.production.txt`. It runs with one CPU and 2 GiB memory. The script caps instances at three and permits scaling to zero. Stop if any build or deployment command fails; the script must not report success after an unsuccessful native command.
 
-Redeploy functions:
+After deployment, set the resulting HTTPS URL in `functions/.env` and deploy the two review functions using section 2. Do not commit `.env`.
+
+Verify the running model:
 
 ```powershell
-firebase deploy --only functions
+$sentimentUrl = 'https://YOUR-CLOUD-RUN-URL'
+Invoke-RestMethod "$sentimentUrl/health"
+$review = @{ review_text = 'Great service, very professional and on time!' } | ConvertTo-Json
+Invoke-RestMethod "$sentimentUrl/predict-sentiment" -Method Post -ContentType 'application/json' -Body $review
 ```
+
+Health must report `status: ok`; predictions must report `model_family: lstm`. Verify positive and negative examples and retain the deployed model version. A label displayed by the app alone does not prove the model was reached, because fallback classification is supported. Check the saved review's `sentiment.source` when testing a review through the application.
 
 ## Environment variables
 

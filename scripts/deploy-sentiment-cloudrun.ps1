@@ -36,6 +36,7 @@ if (-not (Test-Path "LSTM_train\neighborhelp_lstm_sentiment.keras")) {
 Write-Host "Enabling required Google Cloud APIs..."
 gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com `
   --project $Project
+if ($LASTEXITCODE -ne 0) { throw "Could not enable the required Google Cloud APIs." }
 
 Write-Host "Ensuring Artifact Registry repo exists..."
 gcloud artifacts repositories describe cloud-run-source-deploy `
@@ -46,6 +47,7 @@ if ($LASTEXITCODE -ne 0) {
     --location $Region `
     --project $Project `
     --description "Cloud Run source deploy images"
+  if ($LASTEXITCODE -ne 0) { throw "Could not create the sentiment image repository." }
 }
 
 Write-Host "Building image in Google Cloud (no local Docker needed)..."
@@ -54,6 +56,7 @@ gcloud builds submit . `
   --config cloudbuild-sentiment.yaml `
   --substitutions=_IMAGE_NAME=$Image `
   --timeout 1200
+if ($LASTEXITCODE -ne 0) { throw "Sentiment image build failed; the current live service was not updated." }
 
 Write-Host "Deploying to Cloud Run..."
 gcloud run deploy $Service `
@@ -67,8 +70,10 @@ gcloud run deploy $Service `
   --timeout 60 `
   --min-instances 0 `
   --max-instances 3
+if ($LASTEXITCODE -ne 0) { throw "Cloud Run deployment failed." }
 
 $Url = gcloud run services describe $Service --region $Region --project $Project --format "value(status.url)"
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($Url)) { throw "Could not verify the deployed service URL." }
 
 Write-Host ""
 Write-Host "Deployed successfully!" -ForegroundColor Green
