@@ -76,8 +76,14 @@ module.exports = ({db, functions, storageBucket = JSON.parse(process.env.FIREBAS
       const proposal = report.resolutionProposal;
       if (closed(report) || !proposal || proposal.id !== data.proposalId) fail('failed-precondition', 'This proposal is no longer awaiting confirmation.');
       if ((proposal.confirmedBy || []).includes(uid)) return {reportId: id, duplicate: true};
+      const disputeRef = db.doc(`inquiries/${report.disputeInquiryId}`), dispute = (await tx.get(disputeRef)).data();
+      if (!dispute || dispute.reportId !== id) fail('failed-precondition', 'The dispute conversation is unavailable.');
       const confirmedBy = [...(proposal.confirmedBy || []), uid];
       tx.update(ref, {resolutionProposal: {...proposal, confirmedBy}, updatedAt: stamp(), updatedBy: uid});
+      const confirmation = `${actor.fullName || 'A party'} confirmed the proposed ${proposal.type} resolution.`;
+      tx.create(disputeRef.collection('messages').doc(), {senderId: uid, senderName: actor.fullName || (uid === dispute.customerId ? 'Customer' : 'Provider'),
+        senderRole: uid === dispute.customerId ? 'Customer' : 'Provider', text: confirmation, sentAt: stamp()});
+      tx.update(disputeRef, {lastMessage: confirmation, updatedAt: stamp(), unreadCounts: Object.fromEntries(dispute.participantIds.map(p => [p, (dispute.unreadCounts?.[p] || 0) + (p === uid ? 0 : 1)]))});
       tx.create(ref.collection('events').doc(), {action: 'resolution.confirmed', actorId: uid, proposalId: proposal.id, createdAt: stamp()});
       notify(tx, db, report, id, [report.assignedAdminId, ...parties.filter(p => p !== uid)], 'Resolution confirmation', 'A party confirmed the proposed resolution. Both parties must confirm any agreement; the administrator records the final outcome.');
       return {reportId: id, confirmedBy};
@@ -124,6 +130,8 @@ module.exports = ({db, functions, storageBucket = JSON.parse(process.env.FIREBAS
     if (action === 'setStatus') {
       status = String(data.status || '');
       if (!['under_review', 'waiting_response'].includes(status)) fail('invalid-argument', 'Choose Under review or Waiting for response.');
+      if (report.status === status && report.lastAdminRequest === notes) return {reportId: id, duplicate: true};
+      tx.update(ref, {lastAdminRequest: notes});
       message = `Case ${status.replaceAll('_', ' ')}: ${notes}`;
     } else if (action === 'proposeResolution') {
       const proposalId = String(data.proposalId || ''), type = String(data.resolutionType || '');
@@ -132,6 +140,9 @@ module.exports = ({db, functions, storageBucket = JSON.parse(process.env.FIREBAS
         if (report.resolutionProposal.summary !== notes || report.resolutionProposal.type !== type) fail('already-exists', 'Proposal reference already used.');
         return {reportId: id, duplicate: true};
       }
+      const proposalRef = ref.collection('proposals').doc(proposalId);
+      if ((await tx.get(proposalRef)).exists) fail('failed-precondition', 'This proposal was replaced. Review the current terms.');
+      tx.create(proposalRef, {type, summary: notes, proposedBy: uid, proposedAt: stamp()});
       tx.update(ref, {resolutionProposal: {id: proposalId, type, summary: notes, proposedBy: uid, proposedAt: Timestamp.now(), confirmedBy: []}});
       status = 'waiting_response';
       message = `Proposed ${type} resolution: ${notes}\nBoth parties must explicitly confirm this proposal. This records an agreement only; it does not transfer money, change the booking schedule or mark work completed.`;
@@ -143,7 +154,8 @@ module.exports = ({db, functions, storageBucket = JSON.parse(process.env.FIREBAS
       message = `Case ${status}. Recorded evidence and outcome: ${notes}\nThis administrative record does not transfer money or automatically mark work completed.`;
     } else fail('invalid-argument', 'Unsupported reporting action.');
     tx.update(ref, {status, updatedAt: stamp(), updatedBy: uid});
-    tx.update(threadRef, {caseStatus: status, lastMessage: message.slice(0, 150), updatedAt: stamp()});
+    tx.update(threadRef, {caseStatus: status, lastMessage: message.slice(0, 150), updatedAt: stamp(),
+      unreadCounts: Object.fromEntries(thread.participantIds.map(p => [p, (thread.unreadCounts?.[p] || 0) + (p === uid ? 0 : 1)]))});
     tx.create(threadRef.collection('messages').doc(), {senderId: uid, senderName: actor.fullName || 'System Administrator', senderRole: 'Administrator', text: message, sentAt: stamp()});
     tx.create(ref.collection('events').doc(), {action, status, notes, actorId: uid, createdAt: stamp()});
     tx.create(db.collection('auditLogs').doc(), {actorId: uid, actorRole: actor.role, action: `report.${action}`, collection: 'bookingUserReports', referenceId: id, createdAt: stamp()});
@@ -154,7 +166,7 @@ module.exports = ({db, functions, storageBucket = JSON.parse(process.env.FIREBAS
 
 function notify(tx, db, report, id, users, title, message) {
   for (const userId of new Set(users.filter(Boolean))) tx.create(db.collection('notifications').doc(), {
-    userId, title, message, relatedBookingId: report.bookingId || '', relatedInquiryId: report.disputeInquiryId || '', relatedReportId: id,
+    userId, title, message: message.length > 400 ? `${message.slice(0, 397)}...` : message, relatedBookingId: report.bookingId || '', relatedInquiryId: report.disputeInquiryId || '', relatedReportId: id,
     notificationType: 'Report Update', isRead: false, createdAt: stamp(),
   });
 }
