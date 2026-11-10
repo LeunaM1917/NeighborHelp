@@ -1,0 +1,12 @@
+---
+description: Preserve the user's existing NeighborHelp UI unless a design change is explicitly requested.
+alwaysApply: true
+---
+
+# Preserve the existing UI
+
+- The user explicitly requested that existing UI be preserved from now on.
+- Do not redesign, rearrange, simplify, replace or restyle screens, components, navigation or UI copy without an explicit user request for that visible change.
+- Fix backend, data-loading and behavior issues within the existing presentation.
+- If a functional fix requires a visible change beyond the user's request, explain the specific change and obtain their approval before making it.
+- Messages uses the existing Upwork-style conversation list, chat area and context sidebar. Keep that layout while maintaining the protected unified messaging backend.

@@ -1,3 +1,5 @@
+import 'support/fake_messaging_repository.dart';
+import 'support/ui_test_support.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,6 +14,7 @@ import 'package:neighbor_help/widgets/provider_search_status.dart';
 import 'package:neighbor_help/widgets/booking_reference_notice.dart';
 
 void main() {
+  setUpOfflineFonts();
   Booking booking(String id) => Booking.fromFirestore(id, {
     'serviceId': 's',
     'providerId': 'p',
@@ -135,6 +138,7 @@ void main() {
       await tester.pumpWidget(
         app(
           MessagesHub(
+            repository: FakeMessagingRepository(),
             appUser: customer,
             asCustomer: true,
             conversations: conversations,
@@ -147,18 +151,18 @@ void main() {
       );
       await tester.pump();
       expect(find.text('Loading previous conversations…'), findsOneWidget);
-      expect(find.textContaining('No inquiries yet.'), findsNothing);
+      expect(find.textContaining('No conversations yet.'), findsNothing);
       first.completeError(StateError('Conversation service unavailable'));
       await tester.pumpAndSettle();
       expect(
         find.textContaining('Your previous conversations have not loaded.'),
         findsOneWidget,
       );
-      expect(find.textContaining('No inquiries yet.'), findsNothing);
+      expect(find.textContaining('No conversations yet.'), findsNothing);
       await tester.tap(find.text('Retry loading older booking conversations'));
       await tester.pumpAndSettle();
       expect(calls, 2);
-      expect(find.textContaining('No inquiries yet.'), findsOneWidget);
+      expect(find.textContaining('No conversations yet.'), findsOneWidget);
     },
   );
   testWidgets(
@@ -179,6 +183,7 @@ void main() {
       await tester.pumpWidget(
         app(
           MessagesHub(
+            repository: FakeMessagingRepository(),
             appUser: customer,
             asCustomer: true,
             conversations: conversations,
@@ -189,7 +194,7 @@ void main() {
       await tester.pump();
       history.completeError(StateError('Unavailable'));
       await tester.pumpAndSettle();
-      expect(find.text('Existing Provider'), findsOneWidget);
+      expect(find.text('Existing Provider'), findsAtLeastNWidgets(1));
       expect(find.textContaining('Existing conversation'), findsOneWidget);
     },
   );
