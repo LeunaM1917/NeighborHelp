@@ -166,7 +166,7 @@ class _AdminCertificateReviewPageState
         const AdminDashboardHeader(
           title: 'Certificate verification',
           subtitle:
-              'The System Administrator verifies TESDA certificates separately from Didit identity checks. PRC licence verification is not supported.',
+              'The System Administrator verifies TESDA certificates separately from ID Analyzer identity checks. PRC licence verification is not supported.',
         ),
         const SizedBox(height: 24),
         StreamBuilder<List<ServiceProviderProfile>>(

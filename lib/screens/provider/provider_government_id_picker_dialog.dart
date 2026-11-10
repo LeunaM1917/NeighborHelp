@@ -7,7 +7,7 @@ import '../../theme/mobile_layout.dart';
 import '../../theme/provider_theme.dart';
 import '../../theme/role_theme.dart';
 
-/// Choose which Philippine government ID to submit for Didit verification.
+/// Choose which Philippine government ID to submit for ID Analyzer verification.
 class ProviderGovernmentIdPickerDialog extends StatefulWidget {
   const ProviderGovernmentIdPickerDialog({
     super.key,
@@ -167,7 +167,7 @@ class _ProviderGovernmentIdPickerDialogState extends State<ProviderGovernmentIdP
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
             ),
-            child: Text('Continue to Didit', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+            child: Text('Continue to ID Analyzer', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -180,7 +180,7 @@ class _ProviderGovernmentIdPickerDialogState extends State<ProviderGovernmentIdP
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
             child: Text(
-              'Pick the document you will use on Didit. Only these four types are supported.',
+              'Pick the document you will use on ID Analyzer. Only these four types are supported.',
               style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray600, height: 1.45),
             ),
           ),
@@ -208,7 +208,7 @@ class _ProviderGovernmentIdPickerDialogState extends State<ProviderGovernmentIdP
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Same document types as Didit (Philippines)',
+                      'Same document types as ID Analyzer (Philippines)',
                       style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray600),
                     ),
                   ],

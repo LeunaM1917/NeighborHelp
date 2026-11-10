@@ -10,7 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../constants/functions_config.dart';
 import 'firestore_service.dart';
 
-/// Thrown when [IdentityVerificationService] cannot create a Didit session.
+/// Thrown when [IdentityVerificationService] cannot create a ID Analyzer session.
 class VerificationStartException implements Exception {
   VerificationStartException(this.message, {this.code});
 
@@ -34,7 +34,7 @@ enum VerificationSubject {
   final String apiValue;
 }
 
-/// Drives Didit hosted identity verification for customers and providers.
+/// Drives ID Analyzer hosted identity verification for customers and providers.
 class IdentityVerificationService {
   IdentityVerificationService({FirebaseFunctions? functions})
       : _functions = functions ??
@@ -58,7 +58,7 @@ class IdentityVerificationService {
       final map = result.data is Map ? Map<String, dynamic>.from(result.data as Map) : <String, dynamic>{};
       final status = (map['diditStatus'] as String?)?.trim() ?? '';
       if (status.isEmpty) {
-        throw VerificationStartException('Refresh succeeded but no Didit status was returned.');
+        throw VerificationStartException('Refresh succeeded but no ID Analyzer status was returned.');
       }
       return status;
     } on FirebaseFunctionsException catch (e) {
@@ -234,7 +234,7 @@ class IdentityVerificationService {
       case 'failed-precondition':
         return serverMsg ??
             detailsMsg ??
-            'Verification is not set up on the server. Deploy functions with Didit keys in functions/.env.';
+            'Verification is not set up on the server. Deploy functions with ID Analyzer keys in functions/.env.';
       case 'unauthenticated':
         return serverMsg ?? 'Please sign in again, then retry verification.';
       case 'invalid-argument':
@@ -258,7 +258,7 @@ class IdentityVerificationService {
       case 'failed-precondition':
         return serverMsg ??
             detailsMsg ??
-            'Verification is not set up on the server. Deploy functions with Didit keys in functions/.env.';
+            'Verification is not set up on the server. Deploy functions with ID Analyzer keys in functions/.env.';
       case 'unauthenticated':
         return serverMsg ?? 'Please sign in again, then retry verification.';
       case 'invalid-argument':

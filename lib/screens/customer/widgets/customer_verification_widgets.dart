@@ -8,7 +8,7 @@ import '../../../services/identity_verification_service.dart';
 import '../../provider/widgets/provider_profile_widgets.dart';
 import '../../../widgets/member_profile/member_profile_kit.dart';
 
-/// Government ID verification for customers (Didit + admin badge).
+/// Government ID verification for customers (ID Analyzer + admin badge).
 class CustomerVerificationTrustCard extends StatelessWidget {
   const CustomerVerificationTrustCard({super.key, required this.user});
 
@@ -28,14 +28,14 @@ class CustomerVerificationTrustCard extends StatelessWidget {
       idSubtitle = idLabel.isNotEmpty ? '$idLabel verified' : 'Government ID verified';
     } else if (awaitingAdmin) {
       idSubtitle = idLabel.isNotEmpty
-          ? '$idLabel verified by Didit — awaiting admin approval'
-          : 'Didit check complete — awaiting admin approval';
+          ? '$idLabel verified by ID Analyzer — awaiting admin approval'
+          : 'ID Analyzer check complete — awaiting admin approval';
     } else if (inReview) {
-      idSubtitle = idLabel.isNotEmpty ? '$idLabel — finish on Didit' : 'Complete verification on Didit';
+      idSubtitle = idLabel.isNotEmpty ? '$idLabel — finish on ID Analyzer' : 'Complete verification on ID Analyzer';
     } else if (declined) {
       idSubtitle = idLabel.isNotEmpty ? '$idLabel — verification failed' : 'Verification failed — try again';
     } else {
-      idSubtitle = 'Verify with National ID, Passport, Driver\'s license, or Residence permit on Didit';
+      idSubtitle = 'Verify with National ID, Passport, Driver\'s license, or Residence permit on ID Analyzer';
     }
 
     return MemberProfileSectionCard(
@@ -88,7 +88,7 @@ class CustomerVerificationTrustCard extends StatelessWidget {
   }
 }
 
-/// Didit return URL that keeps the customer shell after verification.
+/// ID Analyzer return URL that keeps the customer shell after verification.
 String? _customerVerificationCallbackUrl() {
   if (!kIsWeb) return null;
   final base = Uri.base;

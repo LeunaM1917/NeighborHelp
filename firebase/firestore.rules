@@ -36,7 +36,8 @@ service cloud.firestore {
         && request.resource.data.get('verificationStatus', 'Pending') == 'Pending'
         && request.resource.data.get('diditStatus', '') == ''
         && request.resource.data.get('diditSessionId', '') == ''
-        && request.resource.data.get('verificationProvider', '') == '';
+        && request.resource.data.get('verificationProvider', '') == ''
+        && !request.resource.data.keys().hasAny(['identitySessionKey', 'identitySessionUrl', 'identitySessionCallback', 'identitySessionExpiresAt', 'identitySessionRequestId', 'identitySessionRequestedAt', 'verificationDecision']);
       allow update: if actorValid() && (isAdmin() || (signedIn() && request.auth.uid == id
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(ownerProfileFields())
         && (resource.data.role != 'Provider' || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['address', 'location']))
@@ -74,6 +75,7 @@ service cloud.firestore {
         && request.resource.data.get('diditStatus', '') == ''
         && request.resource.data.get('diditSessionId', '') == ''
         && request.resource.data.get('verificationProvider', '') == ''
+        && !request.resource.data.keys().hasAny(['identitySessionKey', 'identitySessionUrl', 'identitySessionCallback', 'identitySessionExpiresAt', 'identitySessionRequestId', 'identitySessionRequestedAt', 'verificationDecision'])
         && request.resource.data.get('averageRating', 0) == 0
         && request.resource.data.get('reviewCount', 0) == 0
         && request.resource.data.get('acceptedBookings', 0) == 0

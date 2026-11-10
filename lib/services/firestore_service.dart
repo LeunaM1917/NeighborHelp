@@ -1711,7 +1711,7 @@ class FirestoreService {
     }
     final user = AppUser.fromFirestore(snap.id, snap.data() ?? {});
     if (!user.canAdminReviewVerification) {
-      throw StateError('Customer has not completed Didit verification.');
+      throw StateError('Customer has not completed ID Analyzer verification.');
     }
     if (approve &&
         ![
@@ -1719,7 +1719,7 @@ class FirestoreService {
           'active',
         ].contains(user.identityVerification.diditStatus.toLowerCase())) {
       throw StateError(
-        'Didit must approve the identity before it can be verified.',
+        'ID Analyzer must approve the identity before it can be verified.',
       );
     }
     await updateUserProfile(
@@ -1761,7 +1761,7 @@ class FirestoreService {
     if (approve &&
         !['approved', 'active'].contains(profile.diditStatus.toLowerCase())) {
       throw StateError(
-        'Didit must approve the identity before it can be verified.',
+        'ID Analyzer must approve the identity before it can be verified.',
       );
     }
     await updateServiceProvider(

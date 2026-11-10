@@ -1,5 +1,17 @@
 {
   "projects": {
     "default": "neighborhelp-63771"
+  },
+  "targets": {
+    "neighborhelp-63771": {
+      "hosting": {
+        "neighborhelp": [
+          "neighborhelp"
+        ],
+        "legacy": [
+          "neighborhelp-63771"
+        ]
+      }
+    }
   }
 }

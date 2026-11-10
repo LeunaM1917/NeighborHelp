@@ -147,9 +147,9 @@ module.exports = function platformOperations({ db, admin, functions, region, mes
       if (!changed.length) return null;
       const identityChanged = before.verificationStatus !== after.verificationStatus || before.isVerified !== after.isVerified;
       const createdBy = !change.before.exists ? collection === 'users' ? context.params.id : after.userId || after.providerId || after.reporterId : null;
-      const actorId = identityChanged && before.diditStatus !== after.diditStatus ? 'didit' : after.updatedBy || createdBy || 'system';
-      const actor = !['system', 'didit'].includes(actorId) ? (await db.collection('users').doc(actorId).get()).data() : null;
-      await db.collection('auditLogs').doc(eventKey(context.eventId)).set({ actorId, actorRole: actorId === 'didit' ? 'Identity service' : actor?.role || 'System',
+      const actorId = identityChanged && before.diditStatus !== after.diditStatus ? (after.verificationProvider === 'idanalyzer' ? 'idanalyzer' : 'didit') : after.updatedBy || createdBy || 'system';
+      const actor = !['system', 'didit', 'idanalyzer'].includes(actorId) ? (await db.collection('users').doc(actorId).get()).data() : null;
+      await db.collection('auditLogs').doc(eventKey(context.eventId)).set({ actorId, actorRole: ['didit', 'idanalyzer'].includes(actorId) ? 'Identity service' : actor?.role || 'System',
         action: `${collection}.${!change.before.exists ? 'created' : !change.after.exists ? 'deleted' : 'updated'}`, collection,
         referenceId: context.params.id, changedFields: changed, createdAt: stamp() });
       if (change.after.exists) {

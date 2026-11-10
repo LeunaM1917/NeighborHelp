@@ -143,7 +143,7 @@ class _AdminVerificationPageState extends State<AdminVerificationPage> {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Customer must finish Didit verification before you can approve or reject.'),
+              content: Text('Customer must finish ID Analyzer verification before you can approve or reject.'),
             ),
           );
         }
@@ -182,7 +182,7 @@ class _AdminVerificationPageState extends State<AdminVerificationPage> {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Provider must finish Didit verification before you can approve or reject.'),
+            content: Text('Provider must finish ID Analyzer verification before you can approve or reject.'),
           ),
         );
       }
@@ -230,13 +230,13 @@ class _AdminVerificationPageState extends State<AdminVerificationPage> {
       );
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Didit status refreshed: $status')),
+          SnackBar(content: Text('ID Analyzer status refreshed: $status')),
         );
       }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not refresh Didit status: $e')),
+          SnackBar(content: Text('Could not refresh ID Analyzer status: $e')),
         );
       }
     }
@@ -248,7 +248,7 @@ class _AdminVerificationPageState extends State<AdminVerificationPage> {
       return AdminPageFrame(
         auth: widget.auth,
         title: 'Identity verification',
-        subtitle: 'Didit verifies identities automatically. Review flagged cases and verification records here.',
+        subtitle: 'ID Analyzer verifies identities automatically. Review flagged cases and verification records here.',
         child: const AdminErrorBox(message: 'Firebase admin required.'),
       );
     }
@@ -289,8 +289,8 @@ class _AdminVerificationPageState extends State<AdminVerificationPage> {
                   AdminVerificationPageHeader(
                     title: widget.forAgency ? 'System Administrator review' : 'Identity verification',
                     subtitle: widget.forAgency
-                        ? 'Review submitted government ID and Didit facial verification. Approve or reject identity requests.'
-                        : 'Didit verifies identities automatically. Review flagged cases and verification records here.',
+                        ? 'Review submitted government ID and ID Analyzer facial verification. Approve or reject identity requests.'
+                        : 'ID Analyzer verifies identities automatically. Review flagged cases and verification records here.',
                   ),
                   const SizedBox(height: 24),
                   AdminMetricGrid(
@@ -298,7 +298,7 @@ class _AdminVerificationPageState extends State<AdminVerificationPage> {
                       AdminVerificationStatCard(
                         value: '$pending',
                         label: 'Pending verification',
-                        hint: 'Didit complete — needs review',
+                        hint: 'ID Analyzer complete — needs review',
                         hintColor: FigmaColors.orange600,
                         icon: Icons.schedule_outlined,
                         iconBg: FigmaColors.yellow50,

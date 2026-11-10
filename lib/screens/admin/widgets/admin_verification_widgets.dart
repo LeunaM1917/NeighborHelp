@@ -13,7 +13,7 @@ class AdminVerificationPageHeader extends StatelessWidget {
   const AdminVerificationPageHeader({
     super.key,
     this.title = 'Identity verification',
-    this.subtitle = 'Monitor Didit ID checks. Primary approval is by the System Administrator.',
+    this.subtitle = 'Monitor ID Analyzer ID checks. Primary approval is by the System Administrator.',
   });
 
   final String title;
@@ -238,13 +238,13 @@ class _VerificationEmptyIllustration extends StatelessWidget {
 }
 
 String _pendingDiditHint(IdentityVerification v) {
-  if (v.isDeclined) return 'Didit declined';
-  if (v.isInReview) return 'Didit in progress';
-  if (v.diditStatus.isNotEmpty) return 'Didit: ${v.diditStatus}';
-  return 'Awaiting Didit verification';
+  if (v.isDeclined) return 'ID Analyzer declined';
+  if (v.isInReview) return 'ID Analyzer in progress';
+  if (v.diditStatus.isNotEmpty) return 'ID Analyzer: ${v.diditStatus}';
+  return 'Awaiting ID Analyzer verification';
 }
 
-/// Compact chip for raw Didit session status on admin queues.
+/// Compact chip for raw ID Analyzer session status on admin queues.
 class AdminDiditStatusChip extends StatelessWidget {
   const AdminDiditStatusChip({super.key, required this.status});
 
@@ -272,7 +272,7 @@ class AdminDiditStatusChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
       child: Text(
-        'Didit: $status',
+        'Verification: $status',
         style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: fg),
       ),
     );
@@ -408,7 +408,7 @@ class AdminVerificationApplicationCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
-            label: Text('Refresh Didit', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+            label: Text('Refresh ID Analyzer', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
           ),
         ]
         else

@@ -351,7 +351,7 @@ class _AgencyAboutPage extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             _bullet(
-              'Review government ID and Didit facial verification results.',
+              'Review government ID and ID Analyzer facial verification results.',
             ),
             _bullet(
               'Approve or reject provider and customer identity requests.',
@@ -386,7 +386,7 @@ class _AgencyAboutPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
-            _bullet('1. Provider submits ID + selfie through Didit.'),
+            _bullet('1. Provider submits ID + selfie through ID Analyzer.'),
             _bullet(
               '2. System Administrator reviews and approves/rejects identity.',
             ),

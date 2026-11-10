@@ -285,14 +285,14 @@ class ProviderVerificationTrustCard extends StatelessWidget {
       idSubtitle = idLabel.isNotEmpty ? '$idLabel verified' : 'Government ID verified';
     } else if (awaitingAdmin) {
       idSubtitle = idLabel.isNotEmpty
-          ? '$idLabel verified by Didit — awaiting admin approval'
-          : 'Didit check complete — awaiting admin approval';
+          ? '$idLabel verified by ID Analyzer — awaiting admin approval'
+          : 'ID Analyzer check complete — awaiting admin approval';
     } else if (inReview) {
-      idSubtitle = idLabel.isNotEmpty ? '$idLabel — finish on Didit' : 'Complete verification on Didit';
+      idSubtitle = idLabel.isNotEmpty ? '$idLabel — finish on ID Analyzer' : 'Complete verification on ID Analyzer';
     } else if (declined) {
       idSubtitle = idLabel.isNotEmpty ? '$idLabel — verification failed' : 'Verification failed — try again';
     } else {
-      idSubtitle = 'Choose National ID, Passport, Driver\'s license, or Residence permit on Didit';
+      idSubtitle = 'Choose National ID, Passport, Driver\'s license, or Residence permit on ID Analyzer';
     }
 
     return ProviderProfilePanel(
@@ -479,10 +479,10 @@ class ProviderVerificationDetailsDialog extends StatelessWidget {
               value: verified
                   ? 'Verified'
                   : (awaitingAdmin
-                      ? 'Didit approved — awaiting admin'
-                      : (inReview ? 'In review on Didit' : (declined ? 'Failed' : 'Not verified'))),
+                      ? 'ID Analyzer approved — awaiting admin'
+                      : (inReview ? 'In review on ID Analyzer' : (declined ? 'Failed' : 'Not verified'))),
             ),
-            if (p?.diditStatus.isNotEmpty == true) _DetailRow(label: 'Didit status', value: p!.diditStatus),
+            if (p?.diditStatus.isNotEmpty == true) _DetailRow(label: 'Identity status', value: p!.diditStatus),
             if (idLabel.isNotEmpty) _DetailRow(label: 'ID type', value: idLabel),
             if (idCode.isNotEmpty && idLabel.isEmpty) _DetailRow(label: 'ID type', value: idCode),
             if (p?.verificationProvider.isNotEmpty == true)
@@ -550,7 +550,7 @@ class _DetailRow extends StatelessWidget {
   }
 }
 
-/// Opens PH government ID picker, then launches the Didit hosted verification flow.
+/// Opens PH government ID picker, then launches the ID Analyzer hosted verification flow.
 class ProviderVerifyIdentityButton extends StatefulWidget {
   const ProviderVerifyIdentityButton({
     super.key,
@@ -583,7 +583,7 @@ class _ProviderVerifyIdentityButtonState extends State<ProviderVerifyIdentityBut
   Future<void> _start() async {
     if (_busy) return;
 
-    // One in-app step: pick PH government ID, then open Didit (no extra app dialogs).
+    // One in-app step: pick PH government ID, then open ID Analyzer (no extra app dialogs).
     PhilippineGovernmentIdType? idType;
     if (widget.inReview && widget.governmentIdTypeCode.isNotEmpty) {
       final code = widget.governmentIdTypeCode;
@@ -614,15 +614,15 @@ class _ProviderVerifyIdentityButtonState extends State<ProviderVerifyIdentityBut
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Complete ${idType.label} on Didit (the page that just opened). '
-              'After Didit approves, a NeighborHelp admin will review and grant your verified badge.',
+              'Complete ${idType.label} on ID Analyzer (the page that just opened). '
+              'After ID Analyzer approves, a NeighborHelp admin will review and grant your verified badge.',
             ),
             duration: const Duration(seconds: 6),
           ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open the Didit verification page. Allow pop-ups and try again.')),
+          const SnackBar(content: Text('Could not open the ID Analyzer verification page. Allow pop-ups and try again.')),
         );
       }
     } on VerificationStartException catch (e) {
@@ -651,7 +651,7 @@ class _ProviderVerifyIdentityButtonState extends State<ProviderVerifyIdentityBut
         : widget.declined
             ? 'Retry verification'
             : widget.inReview
-                ? 'Continue on Didit'
+                ? 'Continue on ID Analyzer'
                 : 'Verify government ID';
 
     final leading = _busy

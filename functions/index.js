@@ -16,6 +16,8 @@ admin.initializeApp();
 
 const db = getFirestore();
 const C = 10;
+const idAnalyzer = require('./id_analyzer')({db, functions, region: 'us-central1'});
+exports.idAnalyzerWebhook = idAnalyzer.webhook;
 
 // ---------------------------------------------------------------------------
 // Didit identity verification (KYC) for service providers.
@@ -278,9 +280,11 @@ exports.refreshDiditStatus = functions
 
     const callerSnap = await db.collection('users').doc(callerUid).get();
     const callerRole = (callerSnap.data()?.role || '').trim().toLowerCase();
-    if (!(callerRole === 'admin' || callerRole === 'administrator')) {
+    if (callerSnap.data()?.accountStatus !== 'Active' || !(callerRole === 'admin' || callerRole === 'administrator')) {
       throw new functions.https.HttpsError('permission-denied', 'Admin access required.');
     }
+
+    await require('./admin_security').assertAdminToken(context, (code, message) => { throw new functions.https.HttpsError(code, message); }, db);
 
     const userId = data && typeof data.userId === 'string' ? data.userId.trim() : '';
     if (!userId) {
@@ -299,6 +303,10 @@ exports.refreshDiditStatus = functions
         ? db.collection('users').doc(userId)
         : db.collection('serviceProviders').doc(userId);
     const targetSnap = await docRef.get();
+    if (targetSnap.data()?.verificationProvider === 'idanalyzer') {
+      try { return await idAnalyzer.refresh(userId, subject); }
+      catch (err) { throw new functions.https.HttpsError(err.code || 'internal', err.message || 'Could not refresh verification.'); }
+    }
     const diditSessionId = (targetSnap.data()?.diditSessionId || '').trim();
     if (!diditSessionId) {
       throw new functions.https.HttpsError(
@@ -318,19 +326,15 @@ exports.refreshDiditStatus = functions
           latest = fallback;
         }
       }
-      const mapped = mapDiditStatus(latest.diditStatus, (await docRef.get()).data());
-      await docRef.set(
-        {
-          verificationProvider: 'didit',
-          diditStatus: latest.diditStatus,
-          diditSessionId: latest.sessionId || diditSessionId,
-          isVerified: mapped.isVerified,
-          verificationStatus: mapped.verificationStatus,
-          verificationUpdatedAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      );
+      await db.runTransaction(async tx => {
+        const current = (await tx.get(docRef)).data() || {};
+        if (current.verificationProvider === 'idanalyzer' || current.diditSessionId !== diditSessionId) {
+          throw verificationFailure('failed-precondition', 'A newer verification session is active. Refresh again.');
+        }
+        tx.set(docRef, {verificationProvider: 'didit', diditStatus: latest.diditStatus,
+          diditSessionId: latest.sessionId || diditSessionId, ...mapDiditStatus(latest.diditStatus, current),
+          verificationUpdatedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+      });
       return { ok: true, diditStatus: latest.diditStatus, subject, userId };
     } catch (err) {
       if (err && err.code && err.message) {
@@ -358,121 +362,10 @@ function resolveVerificationSubject(data, userRole) {
   return 'provider';
 }
 
+// Keep these endpoint names for existing Flutter installations. All NEW
+// verification sessions use ID Analyzer; legacy Didit records remain readable.
 async function createDiditSessionCore(uid, data) {
-  const documentType =
-    data && typeof data.documentType === 'string' ? data.documentType.trim().toUpperCase() : '';
-  const userSnap = await db.collection('users').doc(uid).get();
-  const userRole = userSnap.exists ? userSnap.data().role : '';
-  let subject = resolveVerificationSubject(data, userRole);
-  const roleNorm = (userRole || '').trim().toLowerCase();
-  if (roleNorm === 'customer' || roleNorm === 'client') {
-    subject = 'customer';
-  }
-  functions.logger.info('createDiditSession start', { uid, documentType, subject });
-
-  const { apiKey, workflowId } = diditEnv();
-  if (!apiKey || !workflowId) {
-    functions.logger.error('Didit env missing on createDiditSession', {
-      hasApiKey: Boolean(apiKey),
-      hasWorkflowId: Boolean(workflowId),
-    });
-    throw verificationFailure(
-      'failed-precondition',
-      'Didit keys missing on the server. Redeploy: firebase deploy --only functions'
-    );
-  }
-
-  if (!ALLOWED_DIDIT_DOCUMENT_TYPES.has(documentType)) {
-    throw verificationFailure(
-      'invalid-argument',
-      'Select a valid Philippine government ID type before verifying.'
-    );
-  }
-  const documentLabel =
-    data && typeof data.documentLabel === 'string' ? data.documentLabel.trim() : '';
-
-  const body = {
-    workflow_id: workflowId,
-    vendor_data: uid,
-    language: 'en',
-    expected_details: {
-      expected_document_types: [documentType],
-      id_country: 'PHL',
-    },
-    metadata: {
-      government_id_type: documentType,
-      government_id_label: documentLabel || documentType,
-      country: 'PHL',
-      subject,
-    },
-  };
-  if (data && typeof data.callback === 'string' && data.callback.length > 0) {
-    body.callback = data.callback;
-  }
-
-  let resp;
-  try {
-    resp = await fetch(DIDIT_SESSION_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-      },
-      body: JSON.stringify(body),
-    });
-  } catch (err) {
-    functions.logger.error('Didit session request failed', err);
-    throw verificationFailure('unavailable', 'Could not reach Didit.');
-  }
-
-  const json = await resp.json().catch(() => null);
-  const sessionUrl = json && (json.url || json.session_url);
-  if (!resp.ok || !sessionUrl) {
-    const detail = formatDiditError(json, resp.status);
-    functions.logger.error('Didit session error', { status: resp.status, json, detail });
-    throw verificationFailure('failed-precondition', detail);
-  }
-
-  const verificationPatch = {
-    verificationProvider: 'didit',
-    verificationManualDecision: FieldValue.delete(),
-    diditSessionId: json.session_id || null,
-    diditStatus: diditStatusWhenLaunchingHostedFlow(json.status),
-    verificationStatus: 'Pending',
-    isVerified: false,
-    governmentIdTypeCode: documentType,
-    governmentIdTypeLabel: documentLabel || documentType,
-    verificationUpdatedAt: FieldValue.serverTimestamp(),
-  };
-
-  try {
-    if (subject === 'customer') {
-      await db.collection('users').doc(uid).set(
-        {
-          ...verificationPatch,
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      );
-    } else {
-      await db.collection('serviceProviders').doc(uid).set(
-        {
-          ...verificationPatch,
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      );
-    }
-  } catch (err) {
-    functions.logger.error('Failed to store verification session', { subject, err });
-    throw verificationFailure(
-      'internal',
-      'Didit session was created but could not save to your profile. Try again.'
-    );
-  }
-
-  functions.logger.info('createDiditSession ok', { uid, subject, sessionId: json.session_id || null });
-  return { url: sessionUrl, sessionId: json.session_id || null };
+  return idAnalyzer.createSession(uid, data);
 }
 
 /** @returns {VerificationFailure} */
@@ -484,6 +377,10 @@ function httpStatusForVerificationCode(code) {
   switch (code) {
     case 'unauthenticated':
       return 401;
+    case 'permission-denied':
+      return 403;
+    case 'resource-exhausted':
+      return 429;
     case 'invalid-argument':
       return 400;
     case 'failed-precondition':
@@ -890,28 +787,15 @@ exports.diditWebhook = functions.region(functionsRegion).https.onRequest(async (
   }
 
   const targetRef = db.collection(subject === 'customer' ? 'users' : 'serviceProviders').doc(userId);
-  const current = (await targetRef.get()).data() || {};
-  if (current.diditSessionId && event.session_id && current.diditSessionId !== event.session_id) {
-    res.status(200).json({ ok: true, ignored: 'superseded verification session' });
-    return;
-  }
-  const mapped = mapDiditStatus(diditStatus, current);
-  const patch = {
-    verificationProvider: 'didit',
-    diditStatus,
-    diditSessionId: event.session_id || null,
-    isVerified: mapped.isVerified,
-    verificationStatus: mapped.verificationStatus,
-    verificationUpdatedAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  };
-
   try {
-    if (subject === 'customer') {
-      await db.collection('users').doc(userId).set(patch, { merge: true });
-    } else {
-      await db.collection('serviceProviders').doc(userId).set(patch, { merge: true });
-    }
+    await db.runTransaction(async tx => {
+      const current = (await tx.get(targetRef)).data() || {};
+      if (current.verificationProvider && current.verificationProvider !== 'didit') return;
+      if (!current.diditSessionId || !event.session_id || current.diditSessionId !== event.session_id) return;
+      tx.set(targetRef, {verificationProvider: 'didit', diditStatus, diditSessionId: event.session_id,
+        ...mapDiditStatus(diditStatus, current), verificationUpdatedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+    });
   } catch (err) {
     functions.logger.error('Failed to update verification', { subject, err });
     // 5xx so Didit retries.
