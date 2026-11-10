@@ -83,21 +83,20 @@ test('no-show reports require an accepted unstarted job past its grace period an
   const result=await cases.command(data,auth('c'));assert.equal((await db.doc(`workCases/${result.caseId}`).get()).data().status,'open');
   assert.equal((await db.doc('bookings/b').get()).data().status,'Accepted');
 });
-test('admin review requires verified email, supports recorded cancellation, and cannot confirm money or completion',async()=>{
+test('active admin review accepts an unverified email, records cancellation and cannot confirm money or completion',async()=>{
   await db.doc('bookings/b').update({status:'Accepted'});
   const {caseId}=await cases.command({action:'report',bookingId:'b',type:'no_show',reason:'The other party has not arrived for the work.'},auth('c'));
   const response={action:'resolve',caseId,decision:'Cancelled after review',notes:'Reviewed both parties and recorded agreed cancellation.'};
-  await assert.rejects(cases.command(response,auth('a',{})),/Verify/);
   await assert.rejects(cases.command(response,auth('p')),/Administrator/);
-  await cases.command(response,auth('a'));
+  await cases.command(response,auth('a',{email_verified:false}));
   const b=(await db.doc('bookings/b').get()).data();assert.equal(b.status,'Cancelled');assert.equal(b.completedAt,undefined);assert.equal(b.confirmedPaymentCents,70000);
   assert.equal((await db.collection(`workCases/${caseId}/events`).get()).size,1);
 });
-test('MFA policy rejects a primary-only verified admin token and accepts a second-factor token',async()=>{
+test('MFA policy rejects a primary-only admin token and accepts a second factor regardless of email verification',async()=>{
   await db.doc('bookings/b').update({status:'Accepted'});await db.doc('securityPolicy/admin').set({requireMfa:true});
   const {caseId}=await cases.command({action:'report',bookingId:'b',type:'no_show',reason:'Please review the missed appointment.'},auth('c'));
   const response={action:'review',caseId,notes:'Gathering evidence from both participants.'};
-  await assert.rejects(cases.command(response,auth('a')),/Two-step/);
-  await cases.command(response,auth('a',{email_verified:true,firebase:{sign_in_second_factor:'phone'}}));
+  await assert.rejects(cases.command(response,auth('a',{email_verified:false})),/Two-step/);
+  await cases.command(response,auth('a',{email_verified:false,firebase:{sign_in_second_factor:'phone'}}));
   assert.equal((await db.doc(`workCases/${caseId}`).get()).data().status,'reviewing');
 });

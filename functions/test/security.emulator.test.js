@@ -176,16 +176,22 @@ test('providers cannot publish custom services or reintroduce hourly listings',a
   await assertFails(setDoc(doc(db,'services','electric'),{...data,category:'Repair and Technical Services',serviceTitle:'Electrical Repair'}));
 });
 
-test('unverified administrators cannot read privileged records and MFA policy covers Firestore and certificate Storage',async()=>{
-  await assertFails(getDoc(doc(env.authenticatedContext('admin').firestore(),'users','customer')));
+test('active admins do not need email verification; role, account status and MFA still protect admin data',async()=>{
+  const unverified=env.authenticatedContext('admin',{email_verified:false});
+  await assertSucceeds(getDoc(doc(unverified.firestore(),'users','customer')));
   const bytes=new Uint8Array([137,80,78,71]);
   await assertSucceeds(uploadBytes(ref(env.authenticatedContext('provider').storage(),'certificates/provider/cert/mfa-proof.png'),bytes,{contentType:'image/png'}));
-  await assertFails(getBytes(ref(env.authenticatedContext('admin').storage(),'certificates/provider/cert/mfa-proof.png')));
+  await assertSucceeds(getBytes(ref(unverified.storage(),'certificates/provider/cert/mfa-proof.png')));
+  for(const uid of ['customer','provider','stranger','agency'])await assertFails(getDoc(doc(env.authenticatedContext(uid).firestore(),'users','admin')));
+  await env.withSecurityRulesDisabled(async c=>{await updateDoc(doc(c.firestore(),'users','admin'),{accountStatus:'Suspended'});});
+  await assertFails(getDoc(doc(unverified.firestore(),'users','customer')));
+  await assertFails(getBytes(ref(unverified.storage(),'certificates/provider/cert/mfa-proof.png')));
+  await env.withSecurityRulesDisabled(async c=>{await updateDoc(doc(c.firestore(),'users','admin'),{accountStatus:'Active'});});
   await env.withSecurityRulesDisabled(async c=>{await setDoc(doc(c.firestore(),'securityPolicy','admin'),{requireMfa:true});});
-  const primary=env.authenticatedContext('admin',{email_verified:true});
+  const primary=env.authenticatedContext('admin',{email_verified:false});
   await assertFails(getDoc(doc(primary.firestore(),'users','customer')));
   await assertFails(getBytes(ref(primary.storage(),'certificates/provider/cert/mfa-proof.png')));
-  const mfa=env.authenticatedContext('admin',{email_verified:true,firebase:{sign_in_provider:'password',identities:{},sign_in_second_factor:'phone'}});
+  const mfa=env.authenticatedContext('admin',{email_verified:false,firebase:{sign_in_provider:'password',identities:{},sign_in_second_factor:'phone'}});
   await assertSucceeds(getDoc(doc(mfa.firestore(),'users','customer')));
   await assertSucceeds(getBytes(ref(mfa.storage(),'certificates/provider/cert/mfa-proof.png')));
   await assertFails(updateDoc(doc(mfa.firestore(),'securityPolicy','admin'),{requireMfa:false}));

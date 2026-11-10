@@ -10,7 +10,7 @@ service cloud.firestore {
         || (request.auth.token.get('firebase', {}).get('sign_in_second_factor', '') is string
           && request.auth.token.get('firebase', {}).get('sign_in_second_factor', '').size() > 0);
     }
-    function isAdmin() { return activeUser() && get(userPath()).data.role == 'Administrator' && request.auth.token.get('email_verified', false) == true && adminMfa(); }
+    function isAdmin() { return activeUser() && get(userPath()).data.role == 'Administrator' && adminMfa(); }
     match /securityPolicy/admin {
       allow read: if activeUser() && get(userPath()).data.role == 'Administrator';
       allow write: if false;

@@ -10,7 +10,7 @@ service firebase.storage {
         || (request.auth.token.get('firebase', {}).get('sign_in_second_factor', '') is string
           && request.auth.token.get('firebase', {}).get('sign_in_second_factor', '').size() > 0);
     }
-    function admin() { return active() && user().role == 'Administrator' && request.auth.token.get('email_verified', false) == true && adminMfa(); }
+    function admin() { return active() && user().role == 'Administrator' && adminMfa(); }
     function image() { return request.resource != null && request.resource.size <= 5 * 1024 * 1024 && request.resource.contentType.matches('image/(jpeg|png|webp)'); }
     match /users/{userId}/{allPaths=**} {
       allow read: if active();

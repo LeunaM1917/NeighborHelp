@@ -4,7 +4,7 @@ Implemented locally on 2026-11-09. No production deployment, cloud account chang
 
 ## Administrator accounts
 
-The shared demonstration credential and unauthenticated admin route are removed. Administrators use individually assigned Firebase accounts and must verify their email. Admin commands and Firestore/Storage rules enforce verification. Phone MFA enrollment/challenge is implemented, with a console-managed `securityPolicy/admin.requireMfa` policy covering the same layers. See [account setup and migration](../firebase/ADMIN_SETUP.md). Configure Identity Platform and test enrollment/recovery before enabling that policy. Existing cloud passwords were not rotated automatically.
+The shared demonstration credential and unauthenticated admin route are removed. Administrators use individually assigned Firebase accounts with the active Administrator role. On 2026-11-10, the email-verification prerequisite was removed from the console, admin commands and Firestore/Storage rules at the user's request. Phone MFA enrollment/challenge is implemented, with a console-managed `securityPolicy/admin.requireMfa` policy covering the same layers. See [account setup and migration](../firebase/ADMIN_SETUP.md). Configure Identity Platform and test enrollment/recovery before enabling that policy. Existing cloud passwords were not rotated automatically.
 
 ## Assets and application size
 
