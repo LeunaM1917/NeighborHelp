@@ -10,6 +10,8 @@ import '../../../models/booking.dart';
 import '../../../models/booking_user_report.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/firestore_service.dart';
+import '../../../utils/user_report_stats.dart';
+import '../widgets/admin_user_report_charts.dart';
 import '../widgets/admin_dashboard_widgets.dart';
 import '../widgets/admin_detail_dialog.dart';
 import '../widgets/admin_widgets.dart';
@@ -184,6 +186,9 @@ class _AdminUserReportsPageState extends State<AdminUserReportsPage> {
           if (reportSnap.connectionState == ConnectionState.waiting) {
             return const AdminLoadingBox(message: 'Loading user reports…');
           }
+          if (reportSnap.hasError) {
+            return const AdminErrorBox(message: 'Could not load user reports. Check your connection and try again.');
+          }
 
           final reportsRaw = reportSnap.data ?? [];
           final reports = _applyFilters(reportsRaw);
@@ -224,16 +229,8 @@ class _AdminUserReportsPageState extends State<AdminUserReportsPage> {
                   final usersById = {for (final u in users) u.userId: u};
 
                   // Metrics
-                  var open = 0, resolved = 0, dismissed = 0;
-                  for (final r in reportsRaw) {
-                    if (r.status == BookingUserReport.statusResolved) {
-                      resolved++;
-                    } else if (r.status == BookingUserReport.statusDismissed) {
-                      dismissed++;
-                    } else {
-                      open++;
-                    }
-                  }
+                  final stats = UserReportStats.fromReports(reportsRaw,
+                    isLimited: reportsRaw.length >= FirestoreService.userReportsQueryLimit);
 
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -248,7 +245,7 @@ class _AdminUserReportsPageState extends State<AdminUserReportsPage> {
                         children: [
                           AdminMetricCard(
                             label: 'Open reports',
-                            value: '$open',
+                            value: '${stats.open}',
                             icon: Icons.flag_outlined,
                             iconBg: FigmaColors.orange50,
                             iconColor: FigmaColors.orange600,
@@ -256,7 +253,7 @@ class _AdminUserReportsPageState extends State<AdminUserReportsPage> {
                           ),
                           AdminMetricCard(
                             label: 'Resolved',
-                            value: '$resolved',
+                            value: '${stats.resolved}',
                             icon: Icons.check_circle_outline,
                             iconBg: FigmaColors.tintGreen,
                             iconColor: FigmaColors.green,
@@ -264,7 +261,7 @@ class _AdminUserReportsPageState extends State<AdminUserReportsPage> {
                           ),
                           AdminMetricCard(
                             label: 'Dismissed',
-                            value: '$dismissed',
+                            value: '${stats.dismissed}',
                             icon: Icons.cancel_outlined,
                             iconBg: FigmaColors.red50,
                             iconColor: FigmaColors.red600,
@@ -272,6 +269,8 @@ class _AdminUserReportsPageState extends State<AdminUserReportsPage> {
                           ),
                         ],
                       ),
+                      const SizedBox(height: 24),
+                      AdminUserReportCharts(stats: stats),
                       const SizedBox(height: 24),
                       AdminSplitSection(
                         breakpoint: 720,

@@ -32,6 +32,7 @@ import 'marketplace_service.dart';
 /// tabs can re-subscribe without creating duplicate listeners (fixes stuck
 /// loading on Flutter web).
 class FirestoreService {
+  static const userReportsQueryLimit = 250;
   FirestoreService._internal({FirebaseFirestore? firestore})
     : _db = firestore ?? FirebaseFirestore.instance;
 
@@ -952,7 +953,7 @@ class FirestoreService {
       return _db
           .collection(FirestoreCollections.bookingUserReports)
           .orderBy('createdAt', descending: true)
-          .limit(250)
+          .limit(userReportsQueryLimit)
           .snapshots()
           .map((s) {
             final list = s.docs

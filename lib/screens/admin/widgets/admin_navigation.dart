@@ -112,11 +112,13 @@ class AdminNavigation extends StatelessWidget {
     required this.currentIndex,
     required this.onSelect,
     this.compact = false,
+    this.bottomActions,
   });
 
   final int currentIndex;
   final ValueChanged<int> onSelect;
   final bool compact;
+  final Widget? bottomActions;
 
   @override
   Widget build(BuildContext context) => compact
@@ -129,5 +131,6 @@ class AdminNavigation extends StatelessWidget {
           items: adminNavigationItems,
           currentIndex: currentIndex,
           onSelect: onSelect,
+          bottomActions: bottomActions,
         );
 }
