@@ -1546,5 +1546,5 @@ String memberProfileMemberSince(DateTime date) {
 
 String memberProfileLocation(AppUser user) {
   if (user.address?.trim().isNotEmpty == true) return user.address!.trim();
-  return 'Panabo City, Davao del Norte';
+  return 'Location not provided';
 }

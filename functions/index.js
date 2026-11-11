@@ -18,6 +18,8 @@ const db = getFirestore();
 const C = 10;
 const idAnalyzer = require('./id_analyzer')({db, functions, region: 'us-central1'});
 exports.idAnalyzerWebhook = idAnalyzer.webhook;
+exports.identityReviewCommand = functions.region('us-central1').runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK==='true'})
+  .https.onCall(require('./identity_review_commands')({db,functions,refreshIdentity:idAnalyzer.refresh}));
 
 // ---------------------------------------------------------------------------
 // Didit identity verification (KYC) for service providers.

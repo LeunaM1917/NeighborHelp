@@ -92,6 +92,7 @@ class _ProviderJobsTabState extends State<ProviderJobsTab> {
       final responded = await reviewAndRespondToOffer(
         context,
         booking: booking,
+        appUser: widget.appUser,
         providerId: widget.appUser.userId,
         accept: accept,
       );

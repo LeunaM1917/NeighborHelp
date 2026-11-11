@@ -10,6 +10,7 @@ import '../../services/firestore_service.dart';
 import '../../services/marketplace_service.dart';
 import '../../widgets/service_location_picker.dart';
 import '../../widgets/service_agreement_card.dart';
+import '../../widgets/account_setup_gate.dart';
 
 class ContractOfferScreen extends StatefulWidget {
   const ContractOfferScreen({
@@ -19,6 +20,11 @@ class ContractOfferScreen extends StatefulWidget {
   });
   final AppUser appUser;
   final Inquiry inquiry;
+  static Future<void> open(BuildContext context, {required AppUser appUser, required Inquiry inquiry}) async {
+    if (!await requireAccountSetup(context, appUser: appUser, action: 'book a service')) return;
+    if (!context.mounted) return;
+    await Navigator.push<void>(context, MaterialPageRoute(builder: (_) => ContractOfferScreen(appUser: appUser, inquiry: inquiry)));
+  }
   @override
   State<ContractOfferScreen> createState() => _ContractOfferScreenState();
 }
@@ -55,6 +61,9 @@ class _ContractOfferScreenState extends State<ContractOfferScreen> {
   }
 
   Future<void> _preview() async {
+    if (_busy) return;
+    if (!await requireAccountSetup(context, appUser: widget.appUser, action: 'book a service')) return;
+    if (!mounted) return;
     if (!_form.currentState!.validate()) return;
     if (_date == null ||
         _location == null ||

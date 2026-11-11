@@ -1,39 +1,35 @@
-# Required account setup
+# Account setup checks at booking and listing actions
 
-Customer and provider sign-ins, including email registration, Google registration,
-returning sessions and ID Analyzer return links, pass through `AccountSetupGate`
-before the existing dashboard shell is mounted. There is no dismiss or skip flag.
-Existing accounts with incomplete details also finish setup on their next visit.
-Administrator and retired verification-agency account handling is unchanged.
+Customers and providers can sign in and browse the normal dashboard, services,
+messages and profile pages without completing setup. `RootGate` does not replace
+their shell with an onboarding page or open a popup automatically.
 
-Required details:
+`requireAccountSetup` checks current server records when a customer prepares or
+previews a contract offer, or a provider opens/submits a service listing, resumes
+its visibility, or accepts a booking. Incomplete profiles and unapproved KYC show
+a dismissible popup with Complete profile, identity verification and Refresh status
+actions. Keep browsing closes the popup without performing the protected action.
+After completing the requirements, Continue resumes that action. Duplicate clicks
+share one pending check; connection errors block the action and permit browsing.
 
-- Both roles: full name and contact phone number.
-- Customers: address, or barangay and city. A profile GPS pin is optional; the
-  actual job location is selected separately in a contract offer.
-- Providers: a valid base barangay and at least one valid service barangay.
-  Exact home coordinates are not required or published.
+Both roles need a name and phone number. Customers supply an address or barangay
+and city; providers select a valid base barangay and service barangays. KYC keeps
+the existing ID Analyzer approval flow. Unfinished capture can restart, pending
+review waits for a decision, and rejected checks can be retried. Certificate and
+listing approval requirements still apply separately to each provider service.
 
-KYC uses the existing ID Analyzer government ID and face verification flow.
-The account opens only when the platform identity fields indicate approval.
-An accepted authoritative ID Analyzer result retains its existing approval
-behavior. Pending review, unfinished capture and rejected results remain blocked;
-legacy records awaiting System Administrator approval continue to show that state.
-The gate does not create paid verification sessions in the background. Refreshing
-uses the existing status reconciliation endpoint, and errors leave setup required.
+Booking commands and listing rules enforce eligibility independently of these
+popups. There is no client-editable setup-complete flag. Private drafts and
+deactivation remain available to the backend without granting publication rights.
 
-The setup screen reuses the existing profile editors. Required field validation
-is enabled when opened from setup. Optional profile items such as photos,
-education, portfolios, reviews and a first listing are not onboarding prerequisites.
-Each listing still requires a current matching administrator-approved TESDA
-certificate and separate listing approval.
+Profile address text is saved as entered, including house, street and purok details.
+Profile geocoding changes coordinates without replacing the address with Google's
+formatted city result; stale lookup responses cannot overwrite later edits.
+Provider address details are private in `users`, readable only by the owner and
+administrators. Public provider maps use barangay centers and service barangays.
+Area selection and location maintenance preserve the private address while
+removing exact provider home pins. Empty profiles show Location not provided.
 
-The booking command validates customer setup and KYC before previewing/creating
-an offer and rechecks participant eligibility before acceptance. Provider listing
-rules require approved KYC and required account details for submissions or
-activation, while private inactive drafts and deactivation remain possible.
-These guards do not manufacture verification decisions or modify old contracts.
-
-Tests cover layout at 390 and 1280 pixels, incomplete and rejected KYC, pending
-approval, retry/error paths, automatic access after approval, required editor
-validation and server/rules bypass attempts against the demo emulator.
+Tests cover browsing, popup dismissal, profile/KYC completion, pending and rejected
+checks, retries and duplicate clicks, address save/reopen, geocoding preservation,
+and server/rules eligibility and private-address access in the demo emulator.

@@ -47,6 +47,20 @@ test('provider area command accepts catalog selections only and clears the old u
   await assert.rejects(command({baseBarangayId:catalog[0].id,serviceBarangayIds:[catalog[0].id]},auth('c')),/provider/);
   await command({baseBarangayId:catalog[0].id,serviceBarangayIds:[catalog[1].id]},auth('p'));
   assert.equal((await db.doc('users/p').get()).data().location,undefined);assert.deepEqual((await db.doc('serviceProviders/p').get()).data().serviceBarangayIds,[catalog[1].id]);
+  assert.equal((await db.doc('users/p').get()).data().address,'Home street');
+});
+
+test('complete customer and provider addresses stay private and survive later barangay selections',async()=>{
+  const address='House 12-A, Purok 3, New Visayas, Panabo City, Davao del Norte';
+  const customer=env.authenticatedContext('c').firestore(),provider=env.authenticatedContext('p').firestore();
+  await assertSucceeds(updateDoc(doc(customer,'users/c'),{address}));
+  await assertSucceeds(updateDoc(doc(provider,'users/p'),{address}));
+  assert.equal((await getDoc(doc(customer,'users/c'))).data().address,address);
+  await area.command({db,functions})({baseBarangayId:catalog[0].id,serviceBarangayIds:[catalog[1].id]},auth('p'));
+  assert.equal((await getDoc(doc(provider,'users/p'))).data().address,address);
+  await assertFails(getDoc(doc(customer,'users/p')));
+  await assertFails(getDoc(doc(provider,'users/c')));
+  assert.equal(area.publicArea((await db.doc('serviceProviders/p').get()).data()).serviceArea.includes('House 12-A'),false);
 });
 test('old public records and direct owner location/time-off/legacy-message writes are denied',async()=>{
   const c=env.authenticatedContext('c').firestore(),p=env.authenticatedContext('p').firestore();
@@ -57,7 +71,9 @@ test('old public records and direct owner location/time-off/legacy-message write
     if(patch.timeOff)patch.timeOff=[{start:ClientTimestamp.fromMillis(Date.now()),end:ClientTimestamp.fromMillis(Date.now()+1000)}];
     await assertFails(updateDoc(doc(p,'serviceProviders/p'),patch));
   }
-  await assertFails(updateDoc(doc(p,'users/p'),{address:'Private home street'}));
+  await assertSucceeds(updateDoc(doc(p,'users/p'),{address:'House 12, Private home street, Panabo City'}));
+  await assertFails(getDoc(doc(c,'users/p')));
+  await assertFails(updateDoc(doc(p,'users/p'),{location:new ClientGeoPoint(7.3,125.6)}));
   await legacy();await assertFails(setDoc(doc(c,'messages/new'),{bookingId:'b',senderId:'c',receiverId:'p',messageText:'Bypass',isRead:false,messageType:'Text'}));
 });
 test('location migration scrubs current provider pins, hides unselected providers and preserves historical terms',async()=>{
@@ -65,7 +81,7 @@ test('location migration scrubs current provider pins, hides unselected provider
   await db.doc('publicProviders/p').set({location:new GeoPoint(7.3,125.6)});
   const migrate=require('../provider_location_migration');assert.equal((await migrate(db)).scrubbed,0);
   await migrate(db,{apply:true});await migrate(db,{apply:true});
-  assert.equal((await db.doc('publicProviders/p').get()).exists,false);assert.equal((await db.doc('serviceProviders/p').get()).data().location,undefined);assert.equal((await db.doc('users/p').get()).data().address,undefined);
+  assert.equal((await db.doc('publicProviders/p').get()).exists,false);assert.equal((await db.doc('serviceProviders/p').get()).data().location,undefined);assert.equal((await db.doc('users/p').get()).data().address,'Home address');
   const b=(await db.doc('bookings/b').get()).data();assert.equal(b.serviceLocation,'Historical private job address');assert.equal(b.agreement.text,'Historical terms');
 });
 test('legacy chat imports valid history exactly once, preserves blocks and joins the existing inquiry',async()=>{

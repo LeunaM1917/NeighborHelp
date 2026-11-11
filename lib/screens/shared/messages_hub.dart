@@ -1764,15 +1764,7 @@ class _InfoPaneState extends State<_InfoPane> {
                       onPressed:
                           widget.thread.inquiry.hasDiscussion &&
                               !widget.thread.inquiry.isBlocked
-                          ? () => Navigator.push(
-                              context,
-                              MaterialPageRoute<void>(
-                                builder: (_) => ContractOfferScreen(
-                                  appUser: widget.appUser,
-                                  inquiry: widget.thread.inquiry,
-                                ),
-                              ),
-                            )
+                          ? () => ContractOfferScreen.open(context, appUser: widget.appUser, inquiry: widget.thread.inquiry)
                           : null,
                       icon: const Icon(Icons.description_outlined),
                       label: const Text('Prepare fixed or daily offer'),

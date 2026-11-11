@@ -96,6 +96,7 @@ class _ProviderOverviewSettingsScreenState
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _name;
   late final TextEditingController _phone;
+  late final TextEditingController _address;
   late final TextEditingController _email;
   String? _baseId;
   late Set<String> _serviceIds;
@@ -112,6 +113,7 @@ class _ProviderOverviewSettingsScreenState
     _serviceIds = widget.profile.serviceBarangayIds.toSet();
     _photoUrl = widget.appUser.profilePhotoUrl;
     _name = TextEditingController(text: widget.appUser.fullName);
+    _address = TextEditingController(text: widget.appUser.address ?? '');
     _phone = TextEditingController(
       text: widget.appUser.contactNumber?.trim().isNotEmpty == true
           ? widget.appUser.contactNumber!
@@ -129,6 +131,7 @@ class _ProviderOverviewSettingsScreenState
   void dispose() {
     _name.dispose();
     _phone.dispose();
+    _address.dispose();
     _email.dispose();
     _bio.dispose();
     super.dispose();
@@ -195,6 +198,7 @@ class _ProviderOverviewSettingsScreenState
         userId: widget.appUser.userId,
         data: {
           'fullName': _name.text.trim(),
+          'address': _address.text.trim().isEmpty ? null : _address.text.trim(),
           'contactNumber': _phone.text.trim().isEmpty
               ? null
               : normalizedAccountPhone(_phone.text),
@@ -346,6 +350,14 @@ class _ProviderOverviewSettingsScreenState
               _baseId = base;
               _serviceIds = ids;
             }),
+          ),
+          const SizedBox(height: 18),
+          _field(
+            label: 'Address',
+            helper: 'Saved privately on your profile. Customers see your service barangays.',
+            field: TextFormField(controller: _address, maxLines: 2,
+              validator: (v) => (v ?? '').length > 500 ? 'Keep your address within 500 characters' : null,
+              decoration: _inputDecoration(context, prefixIcon: Icons.place_outlined)),
           ),
           const SizedBox(height: 18),
           _field(

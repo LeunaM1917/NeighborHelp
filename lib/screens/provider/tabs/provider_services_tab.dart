@@ -16,6 +16,7 @@ import '../../../services/firestore_service.dart';
 import '../../../theme/mobile_layout.dart';
 import '../../../theme/role_theme.dart';
 import '../../../widgets/loading_indicator.dart';
+import '../../../widgets/account_setup_gate.dart';
 import '../../../widgets/stream_snapshot.dart';
 import '../provider_availability_screen.dart';
 import '../provider_service_form_screen.dart';
@@ -100,6 +101,8 @@ class _ProviderServicesTabState extends State<ProviderServicesTab> {
       return;
     }
     try {
+      if (!service.isActive && !await requireAccountSetup(context, appUser: widget.appUser, action: 'list a service')) return;
+      if (!context.mounted) return;
       await _firestore.setServiceActive(service.serviceId, !service.isActive);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

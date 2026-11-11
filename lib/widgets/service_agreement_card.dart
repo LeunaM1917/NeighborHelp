@@ -6,14 +6,20 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/booking.dart';
+import '../models/app_user.dart';
+import '../models/user_role.dart';
+import 'account_setup_gate.dart';
 import '../services/firestore_service.dart';
 
 Future<bool> reviewAndRespondToOffer(
   BuildContext context, {
   required Booking booking,
+  required AppUser appUser,
   required String providerId,
   required bool accept,
 }) async {
+  if (accept && !await requireAccountSetup(context, appUser: appUser, role: UserRole.provider, action: 'accept a booking')) return false;
+  if (!context.mounted) return false;
   final current = await FirestoreService().getBooking(booking.bookingId);
   if (current == null || !context.mounted) return false;
   if (current.isExpired) {

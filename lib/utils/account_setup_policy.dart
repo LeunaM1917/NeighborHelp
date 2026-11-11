@@ -2,6 +2,34 @@ import '../data/panabo_barangays.dart';
 import '../models/app_user.dart';
 import '../models/provider.dart';
 import '../models/user_role.dart';
+import '../models/identity_verification.dart';
+
+class AccountSetupStatus {
+  const AccountSetupStatus({
+    required this.user,
+    required this.role,
+    this.profile,
+  });
+  final AppUser user;
+  final UserRole role;
+  final ServiceProviderProfile? profile;
+  List<String> get missing =>
+      missingAccountDetails(user, role: role, profile: profile);
+  IdentityVerification get verification => role == UserRole.provider
+      ? IdentityVerification(
+          isVerified: profile?.isVerifiedProvider ?? false,
+          verificationStatus: profile?.verificationStatus ?? 'Pending',
+          diditStatus: profile?.diditStatus ?? '',
+          verificationProvider: profile?.verificationProvider ?? '',
+          governmentIdTypeCode: profile?.governmentIdTypeCode ?? '',
+          governmentIdTypeLabel: profile?.governmentIdTypeLabel ?? '',
+        )
+      : user.identityVerification;
+  bool get ready =>
+      user.accountStatus.firestoreValue == 'Active' &&
+      missing.isEmpty &&
+      verification.isVerifiedOnPlatform;
+}
 
 String normalizedAccountPhone(String? value) =>
     (value ?? '').replaceAll(RegExp(r'[\s()-]'), '');

@@ -17,6 +17,8 @@ import '../../theme/mobile_layout.dart';
 import '../../theme/provider_theme.dart';
 import '../../utils/service_certification_policy.dart';
 import '../../ui/workflow_ui.dart';
+import '../../widgets/account_setup_gate.dart';
+import '../../models/user_role.dart';
 import 'provider_certification_dialog.dart';
 import '../admin/widgets/admin_services_widgets.dart' show serviceCategoryIcon;
 
@@ -41,7 +43,9 @@ class ProviderServiceFormScreen extends StatefulWidget {
     BuildContext context, {
     required AppUser appUser,
     ServiceListing? existing,
-  }) {
+  }) async {
+    if (!await requireAccountSetup(context, appUser: appUser, role: UserRole.provider, action: 'list a service')) return false;
+    if (!context.mounted) return false;
     if (MobileLayout.useMobileChrome(context)) {
       return Navigator.of(context).push<bool>(
         MaterialPageRoute(
@@ -245,6 +249,11 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
 
   Future<void> _save({required bool publish}) async {
     if (_saving) return;
+    if (publish && !await requireAccountSetup(context, appUser: widget.appUser,
+      role: UserRole.provider, action: 'list a service', firestore: widget.firestore)) {
+      return;
+    }
+    if (!mounted) return;
     if (!_formKey.currentState!.validate()) return;
     final category = _category;
     final duration = _duration;

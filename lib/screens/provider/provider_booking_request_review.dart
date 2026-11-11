@@ -94,6 +94,7 @@ class _ProviderBookingRequestReviewBodyState
       final responded = await reviewAndRespondToOffer(
         context,
         booking: widget.booking,
+        appUser: widget.appUser,
         providerId: widget.appUser.userId,
         accept: accept,
       );

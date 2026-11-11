@@ -74,6 +74,7 @@ class _ProviderBookingDetailScreenState
       final responded = await reviewAndRespondToOffer(
         context,
         booking: booking,
+        appUser: widget.appUser,
         providerId: widget.appUser.userId,
         accept: accept,
       );

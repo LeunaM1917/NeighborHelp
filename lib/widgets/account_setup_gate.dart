@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../models/app_user.dart';
-import '../models/identity_verification.dart';
 import '../models/provider.dart';
 import '../models/user_role.dart';
 import '../screens/customer/customer_settings_screen.dart';
@@ -11,64 +10,112 @@ import '../services/identity_verification_service.dart';
 import '../ui/workflow_ui.dart';
 import '../utils/account_setup_policy.dart';
 
-/// Runs on every sign-in, including Google sign-up and verification returns.
-/// No client-editable "setup complete" flag can skip these requirements.
-class AccountSetupGate extends StatefulWidget {
-  const AccountSetupGate({
-    super.key,
-    required this.appUser,
-    required this.role,
-    required this.onSignOut,
-    required this.child,
-    this.providerProfiles,
-    this.onEditProfile,
-    this.onRefresh,
-  });
-  final AppUser appUser;
-  final UserRole role;
-  final Future<void> Function() onSignOut;
-  final Widget child;
-  final Stream<ServiceProviderProfile?>? providerProfiles;
-  final Future<void> Function()? onEditProfile;
-  final Future<void> Function()? onRefresh;
-  @override
-  State<AccountSetupGate> createState() => _AccountSetupGateState();
-}
+typedef AccountSetupLoader = Future<AccountSetupStatus> Function();
+final _activeSetupChecks = <String>{};
 
-class _AccountSetupGateState extends State<AccountSetupGate> {
-  Stream<ServiceProviderProfile?>? _profiles;
-  bool _busy = false;
-  @override
-  void initState() {
-    super.initState();
-    if (widget.role == UserRole.provider) {
-      _profiles =
-          widget.providerProfiles ??
-          FirestoreService().providerProfileForUser(widget.appUser.userId);
+/// Browsing never calls this guard. Only booking and listing entry points do.
+Future<bool> requireAccountSetup(
+  BuildContext context, {
+  required AppUser appUser,
+  required String action,
+  UserRole? role,
+  FirestoreService? firestore,
+  AccountSetupLoader? loadStatus,
+  Future<void> Function()? editProfile,
+  Future<void> Function()? refreshVerification,
+}) async {
+  final subject = role ?? appUser.role;
+  if (subject != UserRole.customer && subject != UserRole.provider) return true;
+  final key = '${appUser.userId}:${subject.name}';
+  if (!_activeSetupChecks.add(key)) return false;
+  Future<AccountSetupStatus> load() async {
+    if (loadStatus != null) return loadStatus();
+    final store = firestore ?? FirestoreService();
+    final user = await store.getUserForAccountSetup(appUser.userId);
+    if (user == null || user.role != subject) {
+      throw StateError('Account unavailable');
     }
+    final profile = subject == UserRole.provider
+        ? await store.getProviderProfileForListing(appUser.userId)
+        : null;
+    return AccountSetupStatus(user: user, role: subject, profile: profile);
   }
 
+  try {
+    final status = await load();
+    if (!context.mounted) return false;
+    if (status.ready) return true;
+    return await showDialog<bool>(
+          context: context,
+          builder: (_) => AccountSetupDialog(
+            initial: status,
+            action: action,
+            loadStatus: load,
+            editProfile: editProfile,
+            refreshVerification: refreshVerification,
+          ),
+        ) ??
+        false;
+  } catch (_) {
+    if (context.mounted) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => WorkflowDialog(
+          title: const Text('Could not check account setup'),
+          content: const Text(
+            'Check your connection and try again. You can keep browsing, but booking and listing require a completed profile and approved identity verification.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Keep browsing'),
+            ),
+          ],
+        ),
+      );
+    }
+    return false;
+  } finally {
+    _activeSetupChecks.remove(key);
+  }
+}
+
+class AccountSetupDialog extends StatefulWidget {
+  const AccountSetupDialog({
+    super.key,
+    required this.initial,
+    required this.action,
+    required this.loadStatus,
+    this.editProfile,
+    this.refreshVerification,
+  });
+  final AccountSetupStatus initial;
+  final String action;
+  final AccountSetupLoader loadStatus;
+  final Future<void> Function()? editProfile, refreshVerification;
+  @override
+  State<AccountSetupDialog> createState() => _AccountSetupDialogState();
+}
+
+class _AccountSetupDialogState extends State<AccountSetupDialog> {
+  late AccountSetupStatus _status = widget.initial;
+  bool _busy = false;
+  String? _error;
   Future<void> _run(Future<void> Function() action) async {
     if (_busy) return;
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
     try {
       await action();
+      final latest = await widget.loadStatus();
+      if (mounted) setState(() => _status = latest);
     } catch (_) {
       if (mounted) {
-        await showDialog<void>(
-          context: context,
-          builder: (ctx) => WorkflowDialog(
-            title: const Text('Could not update account setup'),
-            content: const Text(
-              'Check your connection and try again. Your account setup is still required.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
+        setState(
+          () => _error =
+              'Could not refresh your account. Check your connection and retry. You can still keep browsing.',
         );
       }
     } finally {
@@ -76,201 +123,141 @@ class _AccountSetupGateState extends State<AccountSetupGate> {
     }
   }
 
-  Future<void> _edit(ServiceProviderProfile? profile) async {
-    if (widget.onEditProfile != null) return widget.onEditProfile!();
-    if (widget.role == UserRole.provider) {
+  Future<void> _edit() async {
+    if (widget.editProfile != null) return widget.editProfile!();
+    if (_status.role == UserRole.provider) {
       await FirestoreService().ensureServiceProviderProfile(
-        widget.appUser.userId,
+        _status.user.userId,
       );
       if (!mounted) return;
       await ProviderOverviewSettingsScreen.open(
         context,
-        appUser: widget.appUser,
+        appUser: _status.user,
         profile:
-            profile ??
-            ServiceProviderProfile.fromFirestore(widget.appUser.userId, {
-              'userId': widget.appUser.userId,
+            _status.profile ??
+            ServiceProviderProfile.fromFirestore(_status.user.userId, {
+              'userId': _status.user.userId,
             }),
         requireAccountDetails: true,
       );
     } else {
       await CustomerSettingsScreen.open(
         context,
-        appUser: widget.appUser,
+        appUser: _status.user,
         requireAccountDetails: true,
       );
     }
   }
 
-  Future<void> _refresh(IdentityVerification verification) async {
-    if (widget.onRefresh != null) return widget.onRefresh!();
-    if (verification.hasStarted && !verification.isVerifiedOnPlatform) {
+  Future<void> _refresh() async {
+    if (widget.refreshVerification != null) {
+      return widget.refreshVerification!();
+    }
+    if (_status.verification.hasStarted &&
+        !_status.verification.isVerifiedOnPlatform) {
       await IdentityVerificationService().refreshDiditStatusForAdmin(
-        userId: widget.appUser.userId,
-        subject: widget.role == UserRole.provider
+        userId: _status.user.userId,
+        subject: _status.role == UserRole.provider
             ? VerificationSubject.provider
             : VerificationSubject.customer,
       );
     }
-    await FirestoreService().retryDataLoads();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (widget.role != UserRole.customer && widget.role != UserRole.provider) {
-      return widget.child;
-    }
-    if (widget.role != UserRole.provider) return _content(null);
-    return StreamBuilder<ServiceProviderProfile?>(
-      stream: _profiles,
-      builder: (context, snap) {
-        if (snap.hasError) {
-          return Scaffold(
-            body: WorkflowPage(
-              title: 'Account setup',
-              subtitle:
-                  'We could not load your provider profile. Please retry.',
-              children: [
-                FilledButton(
-                  onPressed: _busy
-                      ? null
-                      : () => _run(
-                          widget.onRefresh ??
-                              () => FirestoreService().retryDataLoads(),
-                        ),
-                  child: const Text('Retry'),
-                ),
-                TextButton(
-                  onPressed: _busy ? null : () => _run(widget.onSignOut),
-                  child: const Text('Sign out'),
-                ),
-              ],
-            ),
-          );
-        }
-        if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-        return _content(snap.data);
-      },
-    );
-  }
-
-  Widget _content(ServiceProviderProfile? profile) {
-    final provider = widget.role == UserRole.provider;
-    final missing = missingAccountDetails(
-      widget.appUser,
-      role: widget.role,
-      profile: profile,
-    );
-    final verification = provider
-        ? IdentityVerification(
-            isVerified: profile?.isVerifiedProvider ?? false,
-            verificationStatus: profile?.verificationStatus ?? 'Pending',
-            diditStatus: profile?.diditStatus ?? '',
-            verificationProvider: profile?.verificationProvider ?? '',
-            governmentIdTypeCode: profile?.governmentIdTypeCode ?? '',
-            governmentIdTypeLabel: profile?.governmentIdTypeLabel ?? '',
-          )
-        : widget.appUser.identityVerification;
-    if (missing.isEmpty && verification.isVerifiedOnPlatform) {
-      return widget.child;
-    }
-    final String status;
-    if (verification.isVerifiedOnPlatform) {
-      status = 'Identity verified. Finish your account details to continue.';
-    } else if (verification.isAwaitingAdminApproval) {
-      status =
-          'ID check complete. Awaiting System Administrator approval. You cannot hire or offer services until approved.';
-    } else if (verification.isDeclined) {
-      status =
-          'Verification was rejected. Review the result and retry with your own valid government ID.';
-    } else if (verification.isInReview && !verification.isIncomplete) {
-      status =
-          'Your identity check is under review. Refresh the status after the review finishes.';
+    final v = _status.verification;
+    final missing = _status.missing;
+    final String verificationMessage;
+    if (v.isVerifiedOnPlatform) {
+      verificationMessage = 'Identity verification approved.';
+    } else if (v.isAwaitingAdminApproval) {
+      verificationMessage =
+          'ID check complete. Awaiting System Administrator approval.';
+    } else if (v.isDeclined) {
+      verificationMessage =
+          'Verification was rejected. Retry with your own valid government ID.';
+    } else if (v.isInReview && !v.isIncomplete) {
+      verificationMessage =
+          'Your identity check is under review. Refresh its status after the review finishes.';
     } else {
-      status =
-          'Complete the government ID and face check on ID Analyzer. Account access opens after identity verification is approved.';
+      verificationMessage =
+          'Complete the government ID and face check on ID Analyzer before you can ${widget.action}.';
     }
-    return Scaffold(
-      body: SafeArea(
-        child: WorkflowPage(
-          title: 'Complete your account setup',
-          subtitle:
-              'Finish your profile and identity verification before using your ${provider ? 'provider' : 'customer'} account.',
-          maxWidth: 760,
+    return WorkflowDialog(
+      scrollable: true,
+      title: const Text('Complete your profile and verification'),
+      content: SizedBox(
+        width: 520,
+        child: WorkflowFields(
           children: [
-            WorkflowSection(
-              title: '1. Complete your profile',
-              icon: Icons.person_outline,
-              children: [
-                Text(
-                  missing.isEmpty
-                      ? 'Required profile details are complete.'
-                      : 'Still needed: ${missing.join(', ')}.',
-                ),
-                if (provider)
-                  const Text(
-                    'Your public location uses your barangay center. Your home pin is not required.',
-                  ),
-                OutlinedButton.icon(
-                  onPressed: _busy ? null : () => _run(() => _edit(profile)),
-                  icon: const Icon(Icons.person_outline),
-                  label: Text(
-                    missing.isEmpty ? 'Edit profile' : 'Complete profile',
-                  ),
-                ),
-              ],
+            Text(
+              'Complete these requirements to ${widget.action}. You can keep browsing the system.',
             ),
-            WorkflowSection(
-              title: '2. Verify your identity (KYC)',
-              icon: Icons.verified_user_outlined,
-              children: [
-                Text(status),
-                if (missing.isNotEmpty && !verification.isVerifiedOnPlatform)
-                  const Text(
-                    'Save the required profile details first to unlock identity verification.',
-                  ),
-                if (missing.isEmpty &&
-                    !verification.isVerifiedOnPlatform &&
-                    !verification.isAwaitingAdminApproval &&
-                    (!verification.isInReview || verification.isIncomplete))
-                  ProviderVerifyIdentityButton(
-                    subject: provider
-                        ? VerificationSubject.provider
-                        : VerificationSubject.customer,
-                    governmentIdTypeCode: verification.governmentIdTypeCode,
-                    governmentIdTypeLabel: verification.governmentIdTypeLabel,
-                    inReview: verification.isInReview,
-                    restartFromIdPicker: verification.isIncomplete,
-                    declined: verification.isDeclined,
-                    callbackUrl:
-                        Uri.base.hasScheme && Uri.base.scheme.startsWith('http')
-                        ? Uri.base.toString()
-                        : null,
-                  ),
-                OutlinedButton.icon(
-                  onPressed: _busy
-                      ? null
-                      : () => _run(() => _refresh(verification)),
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Refresh verification status'),
-                ),
-              ],
+            Text('Profile details', style: WorkflowStyles.sectionTitle),
+            Text(
+              missing.isEmpty
+                  ? 'Required profile details are complete.'
+                  : 'Still needed: ${missing.join(', ')}.',
             ),
-            if (provider)
-              const Text(
-                'After account setup, each service listing requires a matching, current TESDA certificate authenticated by the System Administrator.',
+            OutlinedButton.icon(
+              onPressed: _busy ? null : () => _run(_edit),
+              icon: const Icon(Icons.person_outline),
+              label: Text(
+                missing.isEmpty ? 'Edit profile' : 'Complete profile',
               ),
-            TextButton(
-              onPressed: _busy ? null : () => _run(widget.onSignOut),
-              child: const Text('Sign out'),
             ),
+            Text(
+              'Identity verification (KYC)',
+              style: WorkflowStyles.sectionTitle,
+            ),
+            Text(verificationMessage),
+            if (missing.isEmpty &&
+                !v.isVerifiedOnPlatform &&
+                !v.isAwaitingAdminApproval &&
+                (!v.isInReview || v.isIncomplete))
+              ProviderVerifyIdentityButton(
+                subject: _status.role == UserRole.provider
+                    ? VerificationSubject.provider
+                    : VerificationSubject.customer,
+                governmentIdTypeCode: v.governmentIdTypeCode,
+                governmentIdTypeLabel: v.governmentIdTypeLabel,
+                inReview: v.isInReview,
+                restartFromIdPicker: v.isIncomplete,
+                declined: v.isDeclined,
+                callbackUrl:
+                    Uri.base.hasScheme && Uri.base.scheme.startsWith('http')
+                    ? Uri.base.toString()
+                    : null,
+              ),
+            if (missing.isNotEmpty && !v.isVerifiedOnPlatform)
+              const Text(
+                'Save your required profile details first to start verification.',
+              ),
+            OutlinedButton.icon(
+              onPressed: _busy ? null : () => _run(_refresh),
+              icon: const Icon(Icons.refresh),
+              label: Text(_busy ? 'Checking account…' : 'Refresh status'),
+            ),
+            if (_error != null) Text(_error!),
+            if (_status.ready)
+              const Text(
+                'Your account is ready. You can continue with this action.',
+              ),
           ],
         ),
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Keep browsing'),
+        ),
+        if (_status.ready)
+          FilledButton(
+            onPressed: _busy ? null : () => Navigator.pop(context, true),
+            child: const Text('Continue'),
+          ),
+      ],
     );
   }
 }

@@ -4,64 +4,83 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:neighbor_help/models/app_user.dart';
 import 'package:neighbor_help/models/provider.dart';
 import 'package:neighbor_help/models/user_role.dart';
-import 'package:neighbor_help/screens/customer/customer_settings_screen.dart';
-import 'package:neighbor_help/screens/provider/provider_overview_settings_screen.dart';
 import 'package:neighbor_help/screens/provider/widgets/provider_profile_widgets.dart';
 import 'package:neighbor_help/utils/account_setup_policy.dart';
 import 'package:neighbor_help/widgets/account_setup_gate.dart';
 import 'support/ui_test_support.dart';
 
-AppUser user({
-  bool complete = true,
-  String role = 'Customer',
-  bool verified = false,
-  String decision = '',
-  String status = 'Pending',
-}) => AppUser.fromFirestore('new-user', {
-  'fullName': 'New Member',
-  'email': 'member@example.test',
-  'role': role,
-  'contactNumber': complete ? '09123456789' : null,
-  'address': complete ? 'New Visayas, Panabo City' : null,
-  'isVerified': verified,
-  'verificationStatus': status,
-  'diditStatus': decision,
-  'verificationProvider': decision.isNotEmpty ? 'idanalyzer' : '',
-});
-ServiceProviderProfile profile({
+AccountSetupStatus status({
+  bool provider = false,
   bool complete = true,
   bool verified = false,
   String decision = '',
-}) => ServiceProviderProfile.fromFirestore('new-user', {
-  'userId': 'new-user',
-  'isVerified': verified,
-  'diditStatus': decision,
-  'verificationProvider': decision.isNotEmpty ? 'idanalyzer' : '',
-  if (complete) 'baseBarangayId': '1102315026',
-  'serviceBarangayIds': complete ? ['1102315026'] : <String>[],
-});
+}) => AccountSetupStatus(
+  role: provider ? UserRole.provider : UserRole.customer,
+  user: AppUser.fromFirestore('new-user', {
+    'fullName': 'New Member',
+    'role': provider ? 'Provider' : 'Customer',
+    'accountStatus': 'Active',
+    'contactNumber': complete ? '09123456789' : null,
+    'address': complete ? 'House 12, New Visayas, Panabo City' : null,
+    'isVerified': verified,
+    'diditStatus': decision,
+    'verificationProvider': decision.isEmpty ? '' : 'idanalyzer',
+  }),
+  profile: provider
+      ? ServiceProviderProfile.fromFirestore('new-user', {
+          'userId': 'new-user',
+          'isVerified': verified,
+          'diditStatus': decision,
+          'verificationProvider': decision.isEmpty ? '' : 'idanalyzer',
+          if (complete) 'baseBarangayId': '1102315026',
+          'serviceBarangayIds': complete ? ['1102315026'] : <String>[],
+        })
+      : null,
+);
 
-Future<void> mount(
-  WidgetTester tester,
-  AppUser value, {
-  double width = 390,
-  Stream<ServiceProviderProfile?>? profiles,
+Future<void> home(
+  WidgetTester tester, {
+  required AccountSetupStatus initial,
+  required AccountSetupLoader load,
+  required VoidCallback onAllowed,
   Future<void> Function()? edit,
   Future<void> Function()? refresh,
-  Future<void> Function()? signOut,
+  double width = 390,
 }) async {
   tester.view.devicePixelRatio = 1;
   tester.view.physicalSize = Size(width, 1000);
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(
     MaterialApp(
-      home: AccountSetupGate(
-        appUser: value,
-        role: value.role,
-        providerProfiles: profiles,
-        onEditProfile: edit ?? () async {},
-        onRefresh: refresh ?? () async {},
-        onSignOut: signOut ?? () async {},
-        child: const Scaffold(body: Text('Dashboard unlocked')),
+      home: Builder(
+        builder: (context) => Scaffold(
+          body: Column(
+            children: [
+              const Text('Browse services'),
+              TextButton(
+                onPressed: () async {
+                  final ready = await requireAccountSetup(
+                    context,
+                    appUser: initial.user,
+                    action: initial.role == UserRole.provider
+                        ? 'list a service'
+                        : 'book a service',
+                    loadStatus: load,
+                    editProfile: edit,
+                    refreshVerification: refresh,
+                  );
+                  if (ready) onAllowed();
+                },
+                child: Text(
+                  initial.role == UserRole.provider
+                      ? 'Add your service'
+                      : 'Book service',
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     ),
   );
@@ -71,240 +90,172 @@ Future<void> mount(
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpOfflineFonts();
-
-  testOnPlatform(
-    'administrator accounts are outside customer and provider setup',
-    (tester) async {
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      await mount(tester, user(role: 'Administrator', complete: false));
-      expect(find.text('Dashboard unlocked'), findsOneWidget);
-      expect(find.text('Complete your account setup'), findsNothing);
-    },
-  );
-
-  testOnPlatform(
-    'failed provider profile load stays blocked and can be retried',
-    (tester) async {
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      final profiles = StreamController<ServiceProviderProfile?>();
-      addTearDown(profiles.close);
-      profiles.addError(StateError('offline'));
-      await mount(
-        tester,
-        user(role: 'Provider'),
-        profiles: profiles.stream,
-        refresh: () async {
-          profiles.add(profile(verified: true));
+  test('only required details and approved KYC qualify actions', () {
+    expect(status(complete: false).missing, [
+      'Valid phone number',
+      'Address or barangay and city',
+    ]);
+    expect(status(provider: true, complete: false).missing, [
+      'Valid phone number',
+      'Home barangay',
+      'Service barangays',
+    ]);
+    expect(status(verified: true).ready, true);
+    expect(status(complete: false, verified: true).ready, false);
+    expect(status(provider: true, verified: true).ready, true);
+    expect(status().ready, false);
+    expect(validAccountPhone('+63 (912) 345-6789'), true);
+    expect(validAccountPhone('abc'), false);
+  });
+  for (final provider in [false, true]) {
+    for (final width in [390.0, 1280.0]) {
+      testOnPlatform(
+        'browse freely and dismiss setup at $width (provider: $provider)',
+        (tester) async {
+          final current = status(provider: provider, complete: false);
+          var actions = 0;
+          await home(
+            tester,
+            initial: current,
+            load: () async => current,
+            onAllowed: () => actions++,
+            width: width,
+          );
+          expect(find.text('Browse services'), findsOneWidget);
+          expect(find.byType(AccountSetupDialog), findsNothing);
+          await tester.tap(
+            find.text(provider ? 'Add your service' : 'Book service'),
+          );
+          await tester.pumpAndSettle();
+          expect(find.byType(AccountSetupDialog), findsOneWidget);
+          expect(find.text('Complete profile'), findsOneWidget);
+          expect(find.byType(ProviderVerifyIdentityButton), findsNothing);
+          expect(actions, 0);
+          await tester.tap(find.text('Keep browsing'));
+          await tester.pumpAndSettle();
+          expect(find.byType(AccountSetupDialog), findsNothing);
+          expect(find.text('Browse services'), findsOneWidget);
+          expect(actions, 0);
+          expect(tester.takeException(), isNull);
         },
       );
-      expect(find.text('Dashboard unlocked'), findsNothing);
-      expect(find.text('Retry'), findsOneWidget);
-      await tester.tap(find.text('Retry'));
-      await tester.pumpAndSettle();
-      expect(find.text('Dashboard unlocked'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    },
-  );
-  test(
-    'required details exclude optional profile score and private provider GPS',
-    () {
-      expect(missingAccountDetails(user(), role: UserRole.customer), isEmpty);
-      expect(
-        missingAccountDetails(user(complete: false), role: UserRole.customer),
-        ['Valid phone number', 'Address or barangay and city'],
-      );
-      expect(
-        missingAccountDetails(
-          user(role: 'Provider'),
-          role: UserRole.provider,
-          profile: profile(),
-        ),
-        isEmpty,
-      );
-      expect(
-        missingAccountDetails(
-          user(role: 'Provider'),
-          role: UserRole.provider,
-          profile: profile(complete: false),
-        ),
-        ['Home barangay', 'Service barangays'],
-      );
-      expect(validAccountPhone('+63 (912) 345-6789'), isTrue);
-      expect(validAccountPhone('123'), isFalse);
-      expect(validAccountPhone('not a phone'), isFalse);
-    },
-  );
-
-  for (final width in [390.0, 1280.0]) {
+    }
     testOnPlatform(
-      'new customer must finish details and KYC before dashboard at $width',
+      'complete profile then refresh approval to continue (provider: $provider)',
       (tester) async {
-        addTearDown(tester.view.resetPhysicalSize);
-        addTearDown(tester.view.resetDevicePixelRatio);
-        var edits = 0;
-        await mount(
+        var current = status(provider: provider, complete: false);
+        var actions = 0;
+        await home(
           tester,
-          user(complete: false),
-          width: width,
+          initial: current,
+          load: () async => current,
+          onAllowed: () => actions++,
           edit: () async {
-            edits++;
+            current = status(provider: provider);
+          },
+          refresh: () async {
+            current = status(provider: provider, verified: true);
           },
         );
-        expect(find.text('Complete your account setup'), findsOneWidget);
-        expect(find.text('Dashboard unlocked'), findsNothing);
-        expect(find.byType(ProviderVerifyIdentityButton), findsNothing);
+        await tester.tap(
+          find.text(provider ? 'Add your service' : 'Book service'),
+        );
+        await tester.pumpAndSettle();
         await tester.tap(find.text('Complete profile'));
         await tester.pumpAndSettle();
-        expect(edits, 1);
-        await mount(tester, user(), width: width);
         expect(find.byType(ProviderVerifyIdentityButton), findsOneWidget);
-        expect(find.text('Dashboard unlocked'), findsNothing);
-        await mount(tester, user(decision: 'Approved'), width: width);
-        expect(
-          find.textContaining('Awaiting System Administrator approval'),
-          findsOneWidget,
-        );
-        expect(find.byType(ProviderVerifyIdentityButton), findsNothing);
-        expect(find.text('Dashboard unlocked'), findsNothing);
-        await mount(tester, user(verified: true), width: width);
-        expect(find.text('Dashboard unlocked'), findsOneWidget);
+        expect(actions, 0);
+        await tester.ensureVisible(find.text('Refresh status'));
+        await tester.tap(find.text('Refresh status'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Continue'));
+        await tester.pumpAndSettle();
+        expect(actions, 1);
+        expect(find.byType(AccountSetupDialog), findsNothing);
         expect(tester.takeException(), isNull);
       },
     );
   }
-
-  for (final decision in ['Declined', 'In Review', 'In Progress']) {
+  for (final decision in ['Approved', 'In Review', 'Declined', 'In Progress']) {
     testOnPlatform(
-      '$decision does not grant access and shows the appropriate action',
+      '$decision without platform approval still blocks only the action',
       (tester) async {
-        addTearDown(tester.view.resetPhysicalSize);
-        addTearDown(tester.view.resetDevicePixelRatio);
-        await mount(tester, user(decision: decision));
-        expect(find.text('Dashboard unlocked'), findsNothing);
-        final buttons = find.byType(ProviderVerifyIdentityButton);
-        if (decision == 'In Review') {
-          expect(buttons, findsNothing);
-          expect(find.textContaining('under review'), findsOneWidget);
+        final current = status(decision: decision);
+        var actions = 0;
+        await home(
+          tester,
+          initial: current,
+          load: () async => current,
+          onAllowed: () => actions++,
+        );
+        await tester.tap(find.text('Book service'));
+        await tester.pumpAndSettle();
+        expect(find.byType(AccountSetupDialog), findsOneWidget);
+        expect(find.text('Continue'), findsNothing);
+        expect(actions, 0);
+        if (decision == 'Approved' || decision == 'In Review') {
+          expect(find.byType(ProviderVerifyIdentityButton), findsNothing);
         } else {
-          final button = tester.widget<ProviderVerifyIdentityButton>(buttons);
+          final button = tester.widget<ProviderVerifyIdentityButton>(
+            find.byType(ProviderVerifyIdentityButton),
+          );
           expect(button.declined, decision == 'Declined');
           expect(button.restartFromIdPicker, decision == 'In Progress');
         }
+        await tester.tap(find.text('Keep browsing'));
+        await tester.pumpAndSettle();
+        expect(find.text('Browse services'), findsOneWidget);
         expect(tester.takeException(), isNull);
       },
     );
   }
-
   testOnPlatform(
-    'KYC approval cannot bypass missing profile details after sign-in',
+    'loading failures allow browsing and a successful fresh retry',
     (tester) async {
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      await mount(tester, user(complete: false, verified: true));
-      expect(find.text('Dashboard unlocked'), findsNothing);
-      expect(find.textContaining('Identity verified'), findsOneWidget);
-      expect(find.text('Complete profile'), findsOneWidget);
+      var fail = true, actions = 0;
+      await home(
+        tester,
+        initial: status(),
+        load: () async {
+          if (fail) throw StateError('offline');
+          return status(verified: true);
+        },
+        onAllowed: () => actions++,
+      );
+      await tester.tap(find.text('Book service'));
+      await tester.pumpAndSettle();
+      expect(find.text('Could not check account setup'), findsOneWidget);
+      expect(actions, 0);
+      await tester.tap(find.text('Keep browsing'));
+      await tester.pumpAndSettle();
+      fail = false;
+      await tester.tap(find.text('Book service'));
+      await tester.pumpAndSettle();
+      expect(actions, 1);
+      expect(find.byType(AccountSetupDialog), findsNothing);
     },
   );
-
-  for (final width in [390.0, 1280.0]) {
-    testOnPlatform(
-      'provider unlocks only after barangay setup and approved KYC at $width',
-      (tester) async {
-        addTearDown(tester.view.resetPhysicalSize);
-        addTearDown(tester.view.resetDevicePixelRatio);
-        final profiles = StreamController<ServiceProviderProfile?>();
-        addTearDown(profiles.close);
-        profiles.add(profile(complete: false, verified: true));
-        await mount(
-          tester,
-          user(role: 'Provider'),
-          width: width,
-          profiles: profiles.stream,
-        );
-        expect(find.text('Complete profile'), findsOneWidget);
-        expect(find.text('Dashboard unlocked'), findsNothing);
-        profiles.add(profile(decision: 'Approved'));
-        await tester.pumpAndSettle();
-        expect(
-          find.textContaining('Awaiting System Administrator approval'),
-          findsOneWidget,
-        );
-        expect(find.text('Dashboard unlocked'), findsNothing);
-        profiles.add(profile(verified: true));
-        await tester.pumpAndSettle();
-        expect(find.text('Dashboard unlocked'), findsOneWidget);
-        expect(tester.takeException(), isNull);
-      },
-    );
-  }
-
-  testOnPlatform('refresh failure offers a popup and leaves sign-out usable', (
-    tester,
-  ) async {
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    var signedOut = false;
-    await mount(
-      tester,
-      user(decision: 'Approved'),
-      refresh: () async {
-        throw StateError('offline');
-      },
-      signOut: () async {
-        signedOut = true;
-      },
-    );
-    await tester.ensureVisible(find.text('Refresh verification status'));
-    await tester.tap(find.text('Refresh verification status'));
-    await tester.pumpAndSettle();
-    expect(find.text('Could not update account setup'), findsOneWidget);
-    await tester.tap(find.text('OK'));
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Sign out'));
-    await tester.tap(find.text('Sign out'));
-    await tester.pumpAndSettle();
-    expect(signedOut, isTrue);
-    expect(find.text('Dashboard unlocked'), findsNothing);
-    expect(tester.takeException(), isNull);
-  });
-
   testOnPlatform(
-    'setup profile editor validates phone and address before saving',
+    'duplicate clicks cannot create duplicate dialogs or actions',
     (tester) async {
-      for (final provider in [false, true]) {
-        await tester.pumpWidget(
-          MaterialApp(
-            home: provider
-                ? ProviderOverviewSettingsScreen(
-                    appUser: user(role: 'Provider', complete: false),
-                    profile: profile(),
-                    requireAccountDetails: true,
-                  )
-                : CustomerSettingsScreen(
-                    appUser: user(complete: false),
-                    requireAccountDetails: true,
-                  ),
-          ),
-        );
-        await tester.pumpAndSettle();
-        final form = tester.state<FormState>(find.byType(Form).first);
-        form.validate();
-        await tester.pumpAndSettle();
-        expect(
-          find.text('Enter a valid phone number, such as 09123456789'),
-          findsOneWidget,
-        );
-        if (!provider) {
-          expect(
-            find.text('Enter your barangay and city or address'),
-            findsOneWidget,
-          );
-        }
-        expect(tester.takeException(), isNull);
-      }
+      final pending = Completer<AccountSetupStatus>();
+      var reads = 0, actions = 0;
+      await home(
+        tester,
+        initial: status(),
+        load: () {
+          reads++;
+          return pending.future;
+        },
+        onAllowed: () => actions++,
+      );
+      await tester.tap(find.text('Book service'));
+      await tester.tap(find.text('Book service'));
+      expect(reads, 1);
+      pending.complete(status(verified: true));
+      await tester.pumpAndSettle();
+      expect(actions, 1);
+      expect(tester.takeException(), isNull);
     },
   );
 }

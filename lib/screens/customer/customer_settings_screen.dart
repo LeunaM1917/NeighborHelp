@@ -27,11 +27,13 @@ class CustomerSettingsScreen extends StatefulWidget {
     required this.appUser,
     this.inDialog = false,
     this.requireAccountDetails = false,
+    this.firestore,
   });
 
   final AppUser appUser;
   final bool inDialog;
   final bool requireAccountDetails;
+  final FirestoreService? firestore;
 
   static Future<bool?> open(BuildContext context, {required AppUser appUser, bool requireAccountDetails = false}) {
     if (MobileLayout.useMobileChrome(context)) {
@@ -154,7 +156,7 @@ class _CustomerSettingsScreenState extends State<CustomerSettingsScreen> {
     try {
       final address = _address.text.trim();
       final bio = _bio.text.trim();
-      await FirestoreService().updateUserProfile(
+      await (widget.firestore ?? FirestoreService()).updateUserProfile(
         userId: widget.appUser.userId,
         data: {
           'fullName': _name.text.trim(),

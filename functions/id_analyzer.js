@@ -11,6 +11,7 @@ const fail = (code, message) => { throw Object.assign(new Error(message), {code}
 const stamp = () => FieldValue.serverTimestamp();
 const millis = v => v?.toMillis?.() || 0;
 const SESSION_MS = 24 * 3600000;
+const {mandatoryDecisions,assessIdentity,QUALITY_POLICY_VERSION}=require('./identity_quality');
 
 function config() {
   const apiKey = text(process.env.IDANALYZER_API_KEY);
@@ -51,10 +52,11 @@ function resultFor(decision, current = {}) {
   const normalized = text(decision).toLowerCase();
   if (!['accept', 'review', 'reject'].includes(normalized)) return null;
   const rejected = current.verificationManualDecision === 'Rejected';
+  const manuallyApproved = current.verificationManualDecision === 'Approved' && normalized !== 'reject';
   return {verificationDecision: normalized,
     diditStatus: normalized === 'accept' ? 'Approved' : normalized === 'reject' ? 'Declined' : 'In Review',
-    isVerified: !rejected && normalized === 'accept',
-    verificationStatus: rejected || normalized === 'reject' ? 'Rejected' : normalized === 'accept' ? 'Approved' : 'Pending'};
+    isVerified: !rejected && (normalized === 'accept' || manuallyApproved),
+    verificationStatus: rejected || normalized === 'reject' ? 'Rejected' : normalized === 'accept' || manuallyApproved ? 'Approved' : 'Pending'};
 }
 
 module.exports = function idAnalyzer({db, functions, region = 'us-central1',
@@ -121,9 +123,7 @@ module.exports = function idAnalyzer({db, functions, region = 'us-central1',
       const json = await api('/docupass', 'POST', {version: '3', profile: c.profileId, mode: 0,
         language: 'en', customData: key, profileOverride: {webhook, docupass,
           decisionTrigger: {review: 1, reject: 1},
-          decisions: Object.fromEntries(['FAKE_ID', 'FACE_MISMATCH', 'FACE_LIVENESS_ERR', 'RECAPTURED_FACE',
-            'DOCUMENT_EXPIRED', 'COUNTRY_NOT_ACCEPTED', 'TYPE_NOT_ACCEPTED'].map(code =>
-            [code, {enabled: true, review: -1, reject: 0, weight: 1}])),
+          decisions: mandatoryDecisions(),
           acceptedDocuments: {documentType: TYPES[documentType], documentCountry: 'PH', documentState: ''}}});
       let url;
       try { url = new URL(json.url); } catch (_) { fail('unavailable', 'The identity service did not return a verification link.'); }
@@ -136,11 +136,12 @@ module.exports = function idAnalyzer({db, functions, region = 'us-central1',
         const current = (await tx.get(ref)).data();
         if (current?.identitySessionRequestId !== key) fail('aborted', 'A newer verification attempt has started.');
         tx.create(db.doc(`identitySessions/${key}`), {uid, subject, documentType, reference: json.reference,
-          profileId: c.profileId, createdAt: stamp(), expiresAt, syncToken: null});
+          profileId: c.profileId, qualityPolicyVersion:QUALITY_POLICY_VERSION, createdAt: stamp(), expiresAt, syncToken: null});
         tx.update(ref, {verificationProvider: 'idanalyzer', diditSessionId: json.reference, diditStatus: 'In Progress',
           identitySessionKey: key, identitySessionUrl: url.toString(), identitySessionCallback: callback,
           identitySessionExpiresAt: expiresAt, identitySessionRequestId: FieldValue.delete(),
           verificationDecision: FieldValue.delete(), verificationManualDecision: FieldValue.delete(),
+          verificationRetakeRequired:false, verificationIssueCodes:[],
           verificationStatus: 'Pending', isVerified: false, governmentIdTypeCode: documentType,
           governmentIdTypeLabel: ({ID: 'National ID card', P: 'Passport', DL: "Driver's license", RP: 'Residence permit'})[documentType],
           verificationUpdatedAt: stamp(), updatedAt: stamp()});
@@ -194,12 +195,15 @@ module.exports = function idAnalyzer({db, functions, region = 'us-central1',
         // Some DocuPass responses omit expiry despite a per-link expiry override.
         // Enforce the platform deadline independently of the hosted page.
         const completedMs = Number(hosted.completedAt) * 1000;
-        const effectiveDecision = !Number.isFinite(completedMs) || completedMs > millis(session.expiresAt)
+        const quality=assessIdentity(transaction);
+        const effectiveDecision = quality.blocked || !Number.isFinite(completedMs) || completedMs > millis(session.expiresAt)
           ? 'reject' : decision;
-        const patch = resultFor(effectiveDecision, current);
-        const changed = Object.entries(patch).some(([k, value]) => current[k] !== value);
+        const patch = {...resultFor(effectiveDecision, current),verificationRetakeRequired:quality.retakeRequired,
+          verificationIssueCodes:quality.codes};
+        const changed = Object.entries(patch).some(([k, value]) => JSON.stringify(current[k]) !== JSON.stringify(value));
         if (changed) tx.update(targetRef, {...patch, verificationUpdatedAt: stamp(), updatedAt: stamp()});
-        tx.update(ref, {decision: patch.verificationDecision, transactionId, completedAt: stamp()});
+        tx.update(ref, {decision: patch.verificationDecision, transactionId, completedAt: stamp(),
+          qualityPolicyVersion:quality.policyVersion,qualityPassed:!quality.blocked,retakeRequired:quality.retakeRequired,issueCodes:quality.codes});
         return {ok: true, status: patch.diditStatus, changed};
       });
     } finally {

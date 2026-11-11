@@ -28,7 +28,7 @@ function command({db,functions}) {return async(data,context)=>{
     const u=(await tx.get(userRef)).data(),p=(await tx.get(ref)).data();
     if(u?.role!=='Provider'||u.accountStatus!=='Active'||!p)fail('permission-denied','An active provider account is required.');
     tx.update(ref,{...area,location:new GeoPoint(area.location.latitude,area.location.longitude),serviceRadiusKm:FieldValue.delete(),updatedAt:FieldValue.serverTimestamp(),updatedBy:uid});
-    tx.update(userRef,{address:`${base(data).name}, Panabo City`,location:FieldValue.delete(),updatedAt:FieldValue.serverTimestamp(),updatedBy:uid});
+    tx.update(userRef,{location:FieldValue.delete(),updatedAt:FieldValue.serverTimestamp(),updatedBy:uid});
     tx.create(db.collection('auditLogs').doc(),{action:'provider.selectBarangays',actorId:uid,collection:'serviceProviders',referenceId:uid,createdAt:FieldValue.serverTimestamp()});
     return {saved:true};
   });

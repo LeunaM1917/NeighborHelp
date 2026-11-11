@@ -15,7 +15,7 @@ module.exports=async function migrate(db,{cursor='',apply=false}={}) {
       if(area)Object.assign(patch,area,{location:new GeoPoint(area.location.latitude,area.location.longitude)});
       else Object.assign(patch,{location:FieldValue.delete(),serviceArea:'',baseBarangayId:FieldValue.delete(),serviceBarangayIds:[],locationPolicyVersion:0});
       tx.update(doc.ref,patch);
-      if(u?.role==='Provider')tx.update(uRef,{location:FieldValue.delete(),address:area?area.serviceArea:FieldValue.delete()});
+      if(u?.role==='Provider')tx.update(uRef,{location:FieldValue.delete()});
       // Projection trigger will republish selected, eligible providers safely.
       tx.delete(db.doc(`publicProviders/${doc.id}`));
     });scrubbed++;

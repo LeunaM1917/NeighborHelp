@@ -1,6 +1,5 @@
 import '../../widgets/session_idle_guard.dart';
 import '../../widgets/admin_account_gate.dart';
-import '../../widgets/account_setup_gate.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -368,11 +367,9 @@ class _SignedInApp extends StatelessWidget {
   Widget build(BuildContext context) {
     switch (role) {
       case UserRole.provider:
-        return AccountSetupGate(key: ValueKey('${appUser.userId}:provider'), appUser: appUser, role: role,
-          onSignOut: auth.signOut, child: ProviderShell(appUser: appUser, auth: auth));
+        return ProviderShell(appUser: appUser, auth: auth);
       case UserRole.customer:
-        return AccountSetupGate(key: ValueKey('${appUser.userId}:customer'), appUser: appUser, role: role,
-          onSignOut: auth.signOut, child: CustomerShell(appUser: appUser, auth: auth));
+        return CustomerShell(appUser: appUser, auth: auth);
       case UserRole.administrator:
         return AdminShell(appUser: appUser, auth: auth);
       case UserRole.verificationAgency:

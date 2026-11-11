@@ -21,6 +21,8 @@ ServiceProviderProfile profile({
 }) => ServiceProviderProfile.fromFirestore('provider', {
   'userId': 'provider',
   'isVerified': verified,
+  'baseBarangayId': '1102315026',
+  'serviceBarangayIds': ['1102315026'],
   'approvedCertificationIds': approved ? ['cert'] : <String>[],
   'certificationHistory': [
     if (status != null)
@@ -46,6 +48,14 @@ class ListingStore implements FirestoreService {
   bool failSave = false;
   int reads = 0;
   final writes = <Map<String, dynamic>>[];
+  @override
+  Future<AppUser?> getUserForAccountSetup(String userId) async =>
+      AppUser.fromFirestore(userId, {
+        'fullName': 'Test Provider',
+        'role': 'Provider',
+        'accountStatus': 'Active',
+        'contactNumber': '09123456789',
+      });
   @override
   Future<ServiceProviderProfile?> getProviderProfileForListing(
     String userId,
@@ -254,7 +264,7 @@ void main() {
       store.profile = profile(status: 'Approved');
       await tester.tap(find.text('Save changes'));
       await tester.pumpAndSettle();
-      expect(store.reads, 2);
+      expect(store.reads, 4);
       expect(store.writes.single['approvalStatus'], 'Pending');
       expect(store.writes.single['isActive'], false);
       expect(find.text('Open listing'), findsOneWidget);
@@ -269,8 +279,8 @@ void main() {
       await openForm(tester, store, 390);
       await tester.tap(find.text('Save changes'));
       await tester.pumpAndSettle();
-      expect(find.text('Could not check verification'), findsOneWidget);
-      await tester.tap(find.text('Keep editing'));
+      expect(find.text('Could not check account setup'), findsOneWidget);
+      await tester.tap(find.text('Keep browsing'));
       await tester.pumpAndSettle();
       store.failRead = false;
       store.failSave = true;
@@ -294,7 +304,7 @@ void main() {
     await openForm(tester, store, 390);
     await tester.tap(find.text('Save changes'));
     await tester.pumpAndSettle();
-    expect(find.text('Identity verification required'), findsOneWidget);
+    expect(find.text('Complete your profile and verification'), findsOneWidget);
     expect(store.writes, isEmpty);
     expect(tester.takeException(), isNull);
   });

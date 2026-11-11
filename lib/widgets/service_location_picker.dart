@@ -12,10 +12,14 @@ class ServiceLocationPicker extends StatefulWidget {
     required this.onSelected,
     this.origin,
     this.pinTitle = 'Pin the service address',
+    this.preserveAddressText = false,
+    this.lookupAddress,
   });
   final TextEditingController address;
   final GeoPoint? origin;
   final String pinTitle;
+  final bool preserveAddressText;
+  final Future<Map<String, dynamic>> Function(String)? lookupAddress;
   final ValueChanged<GeoPoint> onSelected;
   @override
   State<ServiceLocationPicker> createState() => _ServiceLocationPickerState();
@@ -26,14 +30,20 @@ class _ServiceLocationPickerState extends State<ServiceLocationPicker> {
   Future<void> _lookup() async {
     setState(() => _busy = true);
     try {
-      final result =
-          await FirebaseFunctions.instanceFor(
-            region: kNeighborHelpFunctionsRegion,
-          ).httpsCallable('geocodeServiceAddress').call({
-            'address': widget.address.text.trim(),
-          });
-      final data = Map<String, dynamic>.from(result.data as Map);
-      widget.address.text = data['address'] as String;
+      final requested = widget.address.text.trim();
+      final Map<String, dynamic> data;
+      if (widget.lookupAddress != null) {
+        data = await widget.lookupAddress!(requested);
+      } else {
+        final result = await FirebaseFunctions.instanceFor(
+          region: kNeighborHelpFunctionsRegion,
+        ).httpsCallable('geocodeServiceAddress').call({'address': requested});
+        data = Map<String, dynamic>.from(result.data as Map);
+      }
+      if (!mounted || widget.address.text.trim() != requested) return;
+      if (!widget.preserveAddressText) {
+        widget.address.text = data['address'] as String;
+      }
       widget.onSelected(
         GeoPoint(
           (data['latitude'] as num).toDouble(),
@@ -44,9 +54,12 @@ class _ServiceLocationPickerState extends State<ServiceLocationPicker> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(error is FirebaseFunctionsException && error.code == 'failed-precondition'
-                ? 'Address lookup is unavailable. Choose a map pin or use your current location.'
-                : 'Could not locate the address. Add your barangay and city, or choose a map pin.'),
+            content: Text(
+              error is FirebaseFunctionsException &&
+                      error.code == 'failed-precondition'
+                  ? 'Address lookup is unavailable. Choose a map pin or use your current location.'
+                  : 'Could not locate the address. Add your barangay and city, or choose a map pin.',
+            ),
           ),
         );
       }

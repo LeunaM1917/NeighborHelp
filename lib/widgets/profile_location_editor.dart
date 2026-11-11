@@ -94,6 +94,7 @@ class _ProfileLocationEditorState extends State<ProfileLocationEditor> {
       const SizedBox(height: 4),
       ServiceLocationPicker(
         address: widget.address,
+        preserveAddressText: true,
         origin: geoPointOrNull(widget.location),
         pinTitle: widget.providerLocation
             ? 'Pin your service base'
