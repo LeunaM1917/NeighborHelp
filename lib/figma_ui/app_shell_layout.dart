@@ -31,6 +31,7 @@ class AppShellLayout extends StatelessWidget {
     required this.onSignOut,
     required this.child,
     this.showUtilityActions = true,
+    this.showFooter = true,
     this.scrollController,
     this.messagesTabIndex,
   });
@@ -45,6 +46,8 @@ class AppShellLayout extends StatelessWidget {
 
   /// Notification and help actions in the desktop rail or mobile header.
   final bool showUtilityActions;
+
+  final bool showFooter;
 
   /// Active tab scroll (back-to-top FAB + re-tap tab).
   final ScrollController? scrollController;
@@ -95,7 +98,7 @@ class AppShellLayout extends StatelessWidget {
         compact: mobile,
         desktop: wide,
       ),
-      footer: AppFooter(roleLabel: roleBadge),
+      footer: showFooter ? AppFooter(roleLabel: roleBadge) : null,
       bottomNavigation: _ShellBottomNav(
         tabs: tabs,
         currentIndex: currentIndex,
@@ -106,7 +109,7 @@ class AppShellLayout extends StatelessWidget {
       ),
       child: AppShellScrollChrome(
         scrollController: scrollController,
-        footerClearance: wide ? 0 : 300,
+        footerClearance: wide || !showFooter ? 0 : 300,
         child: child,
       ),
     );

@@ -52,6 +52,13 @@ class IdentityVerification {
 
   bool get canAdminReview => hasStarted;
 
+  /// Capture has not finished; the customer can choose their document again.
+  bool get isIncomplete =>
+      !isVerifiedOnPlatform &&
+      !isDeclined &&
+      const ['not started', 'in progress', 'awaiting user', 'resubmitted']
+          .contains(_diditNormalized);
+
   bool get isInReview =>
       !isVerifiedOnPlatform &&
       !isAwaitingAdminApproval &&

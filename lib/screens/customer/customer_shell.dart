@@ -88,6 +88,7 @@ class _CustomerShellState extends State<CustomerShell> {
         scrollController: _tabScroll.controllerFor(_tab),
         appUser: widget.appUser,
         roleBadge: 'Customer',
+        showFooter: _tab != _messagesTabIndex && _tab != 4,
         onSignOut: () => widget.auth.signOut(),
         messagesTabIndex: _messagesTabIndex,
         child: IndexedStack(

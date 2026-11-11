@@ -146,6 +146,7 @@ class _ProviderGovernmentIdPickerDialogState extends State<ProviderGovernmentIdP
     final footer = Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           OutlinedButton(
             onPressed: () => Navigator.pop(context),
@@ -157,8 +158,8 @@ class _ProviderGovernmentIdPickerDialogState extends State<ProviderGovernmentIdP
             ),
             child: Text('Cancel', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
           ),
-          const Spacer(),
-          FilledButton(
+          Flexible(
+            child: FilledButton(
             onPressed: _selected == null ? null : _continue,
             style: FilledButton.styleFrom(
               backgroundColor: _selected == null ? FigmaColors.gray300 : rc.primary,
@@ -168,6 +169,7 @@ class _ProviderGovernmentIdPickerDialogState extends State<ProviderGovernmentIdP
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
             ),
             child: Text('Continue to ID Analyzer', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+            ),
           ),
         ],
       ),

@@ -558,6 +558,7 @@ class ProviderVerifyIdentityButton extends StatefulWidget {
     this.governmentIdTypeCode = '',
     this.governmentIdTypeLabel = '',
     this.inReview = false,
+    this.restartFromIdPicker = false,
     this.declined = false,
     this.identityService,
     this.callbackUrl,
@@ -567,6 +568,7 @@ class ProviderVerifyIdentityButton extends StatefulWidget {
   final String governmentIdTypeCode;
   final String governmentIdTypeLabel;
   final bool inReview;
+  final bool restartFromIdPicker;
   final bool declined;
   final IdentityVerificationService? identityService;
   final String? callbackUrl;
@@ -585,7 +587,7 @@ class _ProviderVerifyIdentityButtonState extends State<ProviderVerifyIdentityBut
 
     // One in-app step: pick PH government ID, then open ID Analyzer (no extra app dialogs).
     PhilippineGovernmentIdType? idType;
-    if (widget.inReview && widget.governmentIdTypeCode.isNotEmpty) {
+    if (widget.inReview && !widget.restartFromIdPicker && widget.governmentIdTypeCode.isNotEmpty) {
       final code = widget.governmentIdTypeCode;
       final label = widget.governmentIdTypeLabel;
       idType = PhilippineGovernmentIdType(
@@ -595,7 +597,8 @@ class _ProviderVerifyIdentityButtonState extends State<ProviderVerifyIdentityBut
     } else {
       idType = await ProviderGovernmentIdPickerDialog.open(
         context,
-        initialCode: widget.governmentIdTypeCode.isNotEmpty ? widget.governmentIdTypeCode : null,
+        initialCode: !widget.restartFromIdPicker && widget.governmentIdTypeCode.isNotEmpty
+            ? widget.governmentIdTypeCode : null,
       );
       if (idType == null || !mounted) return;
     }
@@ -650,6 +653,8 @@ class _ProviderVerifyIdentityButtonState extends State<ProviderVerifyIdentityBut
         ? 'Starting…'
         : widget.declined
             ? 'Retry verification'
+            : widget.restartFromIdPicker
+                ? 'Restart verification'
             : widget.inReview
                 ? 'Continue on ID Analyzer'
                 : 'Verify government ID';

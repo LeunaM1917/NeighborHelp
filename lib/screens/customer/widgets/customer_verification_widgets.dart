@@ -30,8 +30,10 @@ class CustomerVerificationTrustCard extends StatelessWidget {
       idSubtitle = idLabel.isNotEmpty
           ? '$idLabel verified by ID Analyzer — awaiting admin approval'
           : 'ID Analyzer check complete — awaiting admin approval';
+    } else if (v.isIncomplete) {
+      idSubtitle = 'Verification incomplete. Choose your government ID again.';
     } else if (inReview) {
-      idSubtitle = idLabel.isNotEmpty ? '$idLabel — finish on ID Analyzer' : 'Complete verification on ID Analyzer';
+      idSubtitle = idLabel.isNotEmpty ? '$idLabel — awaiting identity review' : 'Your identity verification is awaiting review';
     } else if (declined) {
       idSubtitle = idLabel.isNotEmpty ? '$idLabel — verification failed' : 'Verification failed — try again';
     } else {
@@ -58,7 +60,7 @@ class CustomerVerificationTrustCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Government ID verified',
+                      verified ? 'Government ID verified' : 'Government ID verification',
                       style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700, color: FigmaColors.gray900),
                     ),
                     const SizedBox(height: 4),
@@ -78,6 +80,7 @@ class CustomerVerificationTrustCard extends StatelessWidget {
               governmentIdTypeCode: v.governmentIdTypeCode,
               governmentIdTypeLabel: v.governmentIdTypeLabel,
               inReview: inReview,
+              restartFromIdPicker: v.isIncomplete,
               declined: declined,
               callbackUrl: _customerVerificationCallbackUrl(),
             ),
