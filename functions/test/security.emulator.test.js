@@ -17,8 +17,8 @@ beforeEach(async () => {
   await env.withSecurityRulesDisabled(async c => {
     const db = c.firestore();
     for (const [uid,role] of [['customer','Customer'],['provider','Provider'],['admin','Administrator'],['stranger','Customer'],['agency','Verification Agency']])
-      await setDoc(doc(db,'users',uid), {role, accountStatus:'Active',fullName:uid,email:`${uid}@example.test`});
-    await setDoc(doc(db,'serviceProviders','provider'), {userId:'provider', isVerified:true, averageRating:4, acceptedBookings:1, certificationHistory:[], approvedCertificationIds:[]});
+      await setDoc(doc(db,'users',uid), {role, accountStatus:'Active',fullName:uid,email:`${uid}@example.test`,contactNumber:'09123456789'});
+    await setDoc(doc(db,'serviceProviders','provider'), {userId:'provider', isVerified:true, averageRating:4, acceptedBookings:1, certificationHistory:[], approvedCertificationIds:[],locationPolicyVersion:1,baseBarangayId:'1102315026',serviceBarangayIds:['1102315026']});
     await setDoc(doc(db,'bookings','booking'), {customerId:'customer',providerId:'provider',contractId:'contract',status:'Accepted',totalFee:100});
     await setDoc(doc(db,'contracts','contract'), {customerId:'customer',providerId:'provider',status:'active'});
     await setDoc(doc(db,'messages','message'), {bookingId:'booking',threadId:'customer_provider',senderId:'customer',receiverId:'provider',messageText:'hello',isRead:false});
@@ -174,6 +174,22 @@ test('providers cannot publish custom services or reintroduce hourly listings',a
   await assertFails(setDoc(doc(db,'services','hourly'),{...data,priceType:'hourly'}));
   await assertFails(setDoc(doc(db,'services','custom'),{...data,category:'Custom Services',serviceTitle:'Anything'}));
   await assertFails(setDoc(doc(db,'services','electric'),{...data,category:'Repair and Technical Services',serviceTitle:'Electrical Repair'}));
+});
+
+test('providers need profile completion and KYC for submissions but can keep private drafts',async()=>{
+  const db=env.authenticatedContext('provider').firestore();
+  const data={providerId:'provider',category:'Cleaning',serviceTitle:'House Cleaning',priceType:'fixed',approvalStatus:'Pending',isActive:false};
+  await env.withSecurityRulesDisabled(c=>updateDoc(doc(c.firestore(),'serviceProviders','provider'),{isVerified:false}));
+  await assertFails(setDoc(doc(db,'services','blocked'),data));
+  await assertSucceeds(setDoc(doc(db,'services','draft'),{...data,approvalStatus:'Draft'}));
+  await assertFails(updateDoc(doc(db,'services','draft'),{approvalStatus:'Pending'}));
+  await env.withSecurityRulesDisabled(async c=>{
+    await updateDoc(doc(c.firestore(),'serviceProviders','provider'),{isVerified:true});
+    await updateDoc(doc(c.firestore(),'users','provider'),{contactNumber:''});
+  });
+  await assertFails(setDoc(doc(db,'services','blocked'),data));
+  await env.withSecurityRulesDisabled(c=>updateDoc(doc(c.firestore(),'users','provider'),{contactNumber:'09123456789'}));
+  await assertSucceeds(updateDoc(doc(db,'services','draft'),{approvalStatus:'Pending'}));
 });
 
 test('construction catalog submissions stay pending and cannot become self-approved listings',async()=>{

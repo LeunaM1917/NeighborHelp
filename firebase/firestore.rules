@@ -90,6 +90,18 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/serviceProviders/$(id)).data.isVerified == true
         && get(/databases/$(database)/documents/users/$(id)).data.accountStatus == 'Active';
     }
+    function providerSetupReady(id) {
+      let user = get(/databases/$(database)/documents/users/$(id)).data;
+      let profile = get(/databases/$(database)/documents/serviceProviders/$(id)).data;
+      return providerVerified(id) && user.role == 'Provider'
+        && user.get('fullName', '').size() >= 2
+        && user.get('contactNumber', '') is string
+        && user.get('contactNumber', '').matches('^[+0-9][0-9 ()-]{6,19}$')
+        && profile.get('locationPolicyVersion', 0) == 1
+        && profile.get('baseBarangayId', '') is string
+        && profile.get('baseBarangayId', '').size() > 0
+        && profile.get('serviceBarangayIds', []).size() > 0;
+    }
     function supportedService(s) {
       return s.get('priceType','') in ['fixed','daily','negotiable'] && (
         (s.category == 'Home Repair' && s.serviceTitle in ['Basic Carpentry','Carpentry','Door Repair','Furniture Repair'])
@@ -103,8 +115,12 @@ service cloud.firestore {
       allow create: if owns(request.resource.data.providerId)
         && supportedService(request.resource.data)
         && request.resource.data.approvalStatus in ['Draft', 'Pending']
+        && (request.resource.data.approvalStatus == 'Draft' || providerSetupReady(request.auth.uid))
         && request.resource.data.isActive == false;
       allow update: if actorValid() && (isAdmin() || (owns(resource.data.providerId)
+        && ((request.resource.data.approvalStatus == 'Draft' && request.resource.data.isActive == false)
+          || providerSetupReady(request.auth.uid)
+          || (request.resource.data.isActive == false && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isActive','updatedAt','updatedBy'])))
         && (supportedService(request.resource.data) || (request.resource.data.isActive == false && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isActive','updatedAt','updatedBy'])) )
         && request.resource.data.providerId == resource.data.providerId
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['serviceTitle', 'category', 'description', 'estimatedPrice',

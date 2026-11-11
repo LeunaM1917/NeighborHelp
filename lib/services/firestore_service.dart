@@ -594,6 +594,19 @@ class FirestoreService {
   Future<ServiceProviderProfile?> getProviderProfile(String userId) =>
       _read('provider:$userId', () => providerProfileForUser(userId).first);
 
+  /// Submission must use the latest server review, never a memoized approval.
+  Future<ServiceProviderProfile?> getProviderProfileForListing(
+    String userId,
+  ) async {
+    final snap = await _db
+        .collection(FirestoreCollections.serviceProviders)
+        .doc(userId)
+        .get(const GetOptions(source: Source.server));
+    return snap.exists
+        ? ServiceProviderProfile.fromFirestore(snap.id, snap.data()!)
+        : null;
+  }
+
   Future<String> createServiceListing({
     required String providerId,
     required String serviceTitle,

@@ -16,7 +16,7 @@ before(async () => {
 after(async () => { await require('firebase-admin/app').deleteApp(app); await env?.cleanup(); });
 beforeEach(async () => {
   await env.clearFirestore();
-  for (const [id, role] of [['customer','Customer'],['second','Customer'],['provider','Provider'],['admin','Administrator']]) await db.collection('users').doc(id).set({role,accountStatus:'Active'});
+  for (const [id, role] of [['customer','Customer'],['second','Customer'],['provider','Provider'],['admin','Administrator']]) await db.collection('users').doc(id).set({role,accountStatus:'Active',fullName:`Test ${id}`,contactNumber:'09123456789',address:'New Visayas, Panabo City',isVerified:role==='Customer'});
   await db.collection('serviceProviders').doc('provider').set({userId:'provider',isVerified:true,location:new GeoPoint(7.3,125.6),serviceRadiusKm:10,acceptedBookings:0,completedBookings:0,...credentials()});
   await db.collection('services').doc('cleaning').set({providerId:'provider',category:'Cleaning',serviceTitle:'House cleaning',isActive:true,approvalStatus:'Approved',estimatedPrice:100,priceType:'Hourly'});
 });
@@ -33,6 +33,31 @@ async function respond(bookingId,uid='provider') {
   const b=(await db.doc('bookings/'+bookingId).get()).data();
   return command({action:'accept',bookingId,acceptAgreement:true,agreementHash:b.agreement.hash},auth(uid));
 }
+
+test('profile completion and approved customer KYC cannot be bypassed by a direct offer call', async () => {
+  for (const patch of [
+    {isVerified:false,verificationStatus:'Pending',diditStatus:'Approved'},
+    {isVerified:false,verificationStatus:'Rejected'},
+    {contactNumber:''}, {fullName:''}, {address:''},
+  ]) {
+    const original=(await db.doc('users/customer').get()).data();
+    await db.doc('users/customer').update(patch);
+    await assert.rejects(create('blocked'), /Complete your profile and government ID verification/);
+    await db.doc('users/customer').set(original);
+  }
+  await create('ready');
+  await db.doc('users/customer').update({isVerified:false,verificationStatus:'Pending'});
+  await assert.rejects(respond('ready'), /Both parties must complete account setup/);
+  assert.equal((await db.doc('bookings/ready').get()).data().status,'Pending');
+});
+
+test('incomplete provider details block offers even when provider KYC is approved', async () => {
+  await db.doc('users/provider').update({contactNumber:''});
+  await assert.rejects(create('blocked'), /provider must complete/);
+  await db.doc('users/provider').update({contactNumber:'09123456789'});
+  await db.doc('serviceProviders/provider').update({serviceBarangayIds:[]});
+  await assert.rejects(create('blocked'), /provider must complete/);
+});
 
 test('creation validates identity, coverage, schedule, service approval and server fee', async () => {
   await create('one');

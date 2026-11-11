@@ -18,7 +18,7 @@ before(async()=>{
 after(async()=>{await require('firebase-admin/app').deleteApp(app);await env.cleanup();});
 beforeEach(async()=>{
   await env.clearFirestore();
-  for(const [id,role] of [['c','Customer'],['p','Provider'],['s','Customer'],['a','Administrator']])await db.doc(`users/${id}`).set({role,accountStatus:'Active',fullName:id});
+  for(const [id,role] of [['c','Customer'],['p','Provider'],['s','Customer'],['a','Administrator']])await db.doc(`users/${id}`).set({role,accountStatus:'Active',fullName:`Test ${id}`,contactNumber:'09123456789',address:'New Visayas, Panabo City',isVerified:role==='Customer'});
   await db.doc('serviceProviders/p').set({userId:'p',isVerified:true,...credentials(),location:new GeoPoint(7.3,125.6),serviceArea:'Private street address',timeOff:[]});
   await db.doc('services/s').set({providerId:'p',category:'Cleaning',serviceTitle:'House Cleaning',isActive:true,approvalStatus:'Approved'});
 });

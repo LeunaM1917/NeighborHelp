@@ -2,6 +2,55 @@ import '../models/provider.dart';
 import 'approved_service_catalog.dart';
 export 'approved_service_catalog.dart';
 
+enum ServiceCertificateStatus {
+  approved,
+  missing,
+  pending,
+  rejected,
+  expired,
+  needsReview,
+}
+
+/// Explains a failed eligibility check without treating an unreviewed upload as approval.
+ServiceCertificateStatus serviceCertificateStatus(
+  ServiceProviderProfile profile, {
+  required String category,
+  required String serviceTitle,
+  DateTime? now,
+}) {
+  if (hasMatchingServiceCertificate(
+    profile,
+    category: category,
+    serviceTitle: serviceTitle,
+    now: now,
+  )) {
+    return ServiceCertificateStatus.approved;
+  }
+  final family = approvedServiceFamily(category, serviceTitle);
+  final accepted = (approvedQualifications[family] ?? <String>[])
+      .map(normalizeCredential)
+      .toSet();
+  final matching = profile.certificationHistory
+      .where(
+        (c) =>
+            normalizeCredential(c.provider) == 'tesda' &&
+            accepted.contains(normalizeCredential(c.name)),
+      )
+      .toList();
+  if (matching.isEmpty) return ServiceCertificateStatus.missing;
+  if (matching.any((c) => c.isPending)) return ServiceCertificateStatus.pending;
+  if (matching.any((c) => c.isRejected)) {
+    return ServiceCertificateStatus.rejected;
+  }
+  if (matching.every((c) {
+    final expires = DateTime.tryParse('${c.expirationDate}T23:59:59.999+08:00');
+    return expires != null && expires.isBefore(now ?? DateTime.now());
+  })) {
+    return ServiceCertificateStatus.expired;
+  }
+  return ServiceCertificateStatus.needsReview;
+}
+
 /// All listings require a matching TESDA credential. Unsupported tasks fail closed.
 bool serviceRequiresCertification({
   required String category,

@@ -17,12 +17,14 @@ class ProviderCertificationDialog extends StatefulWidget {
     super.key,
     required this.providerId,
     this.initial,
+    this.initialQualification,
     this.editIndex,
     this.inDialog = true,
   });
 
   final String providerId;
   final ProviderCertificationEntry? initial;
+  final String? initialQualification;
   final int? editIndex;
   final bool inDialog;
 
@@ -32,11 +34,13 @@ class ProviderCertificationDialog extends StatefulWidget {
     BuildContext context, {
     required String providerId,
     ProviderCertificationEntry? initial,
+    String? initialQualification,
     int? editIndex,
   }) {
     final body = ProviderCertificationDialog(
       providerId: providerId,
       initial: initial,
+      initialQualification: initialQualification,
       editIndex: editIndex,
       inDialog: !MobileLayout.useMobileChrome(context),
     );
@@ -113,7 +117,9 @@ class _ProviderCertificationDialogState
   void initState() {
     super.initState();
     final e = widget.initial;
-    _name = TextEditingController(text: e?.name ?? '');
+    _name = TextEditingController(
+      text: e?.name ?? widget.initialQualification ?? '',
+    );
     _provider = TextEditingController(text: 'TESDA');
     _description = TextEditingController(text: e?.description ?? '');
     _certId = TextEditingController(text: e?.certificationId ?? '');
@@ -388,6 +394,7 @@ class _ProviderCertificationDialogState
                 child: _dateField(
                   label: 'Expiration date',
                   required: true,
+                  expiration: true,
                   value: _expirationDate,
                   onTap: () => _pickDate(expiration: true),
                 ),
@@ -451,7 +458,10 @@ class _ProviderCertificationDialogState
 
     final footer = Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
-      child: Row(
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        spacing: 12,
+        runSpacing: 12,
         children: [
           OutlinedButton(
             onPressed: _saving ? null : () => Navigator.pop(context),
@@ -471,7 +481,6 @@ class _ProviderCertificationDialogState
               ),
             ),
           ),
-          const Spacer(),
           FilledButton(
             onPressed: _saving || !_canSave ? null : _save,
             style: FilledButton.styleFrom(
@@ -582,6 +591,7 @@ class _ProviderCertificationDialogState
     required String? value,
     required VoidCallback onTap,
     bool required = false,
+    bool expiration = false,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -598,10 +608,12 @@ class _ProviderCertificationDialogState
         TextFormField(
           readOnly: true,
           onTap: onTap,
-          controller: required ? _issueDisplay : _expirationDisplay,
+          controller: expiration ? _expirationDisplay : _issueDisplay,
           validator: required
-              ? (_) => (_issueDate == null || _issueDate!.isEmpty)
-                    ? 'Select an issue date'
+              ? (_) => (value == null || value.isEmpty)
+                    ? (expiration
+                          ? 'Select an expiration date'
+                          : 'Select an issue date')
                     : null
               : null,
           decoration: _inputDecoration(hint: 'mm/dd/yyyy').copyWith(

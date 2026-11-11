@@ -16,7 +16,7 @@ before(async()=>{
 after(async()=>{await require('firebase-admin/app').deleteApp(app);await env?.cleanup();});
 beforeEach(async()=>{
   await env.clearFirestore();
-  for(const [id,role] of [['c','Customer'],['c2','Customer'],['p','Provider'],['p2','Provider'],['a','Administrator'],['agency','Verification Agency']]) await db.doc(`users/${id}`).set({role,accountStatus:'Active',fullName:id});
+  for(const [id,role] of [['c','Customer'],['c2','Customer'],['p','Provider'],['p2','Provider'],['a','Administrator'],['agency','Verification Agency']]) await db.doc(`users/${id}`).set({role,accountStatus:'Active',fullName:`Test ${id}`,contactNumber:'09123456789',address:'New Visayas, Panabo City',isVerified:role==='Customer'});
   for(const id of ['p','p2']) {
     await db.doc(`serviceProviders/${id}`).set({userId:id,isVerified:true,location:new GeoPoint(7.3,125.6),serviceRadiusKm:10,acceptedBookings:0,...credentials()});
     await db.doc(`services/${id}`).set({providerId:id,category:'Cleaning',serviceTitle:'House Cleaning',isActive:true,approvalStatus:'Approved',estimatedPrice:999,priceType:'hourly'});

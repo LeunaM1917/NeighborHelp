@@ -5,6 +5,7 @@ const { active, windowFor, validWindow, hasMatchingCertificate } = require('./do
 const {validateOffer, makeAgreement} = require('./agreements');
 const {coversSchedule, conflicts} = require('./scheduling');
 const offerExpiry=require('./offer_expiry');
+const accountSetup = require('./account_setup');
 
 module.exports = function bookingCommands({ db, admin, functions }) {
   const fail = (code, message) => { throw new functions.https.HttpsError(code, message); };
@@ -39,6 +40,7 @@ module.exports = function bookingCommands({ db, admin, functions }) {
           fail('already-exists', 'Booking already exists.');
         }
         if (actor.role !== 'Customer') fail('permission-denied', 'Only customers can request services.');
+        if (!accountSetup.detailsComplete(actor) || !accountSetup.verified(actor)) fail('failed-precondition', 'Complete your profile and government ID verification, and receive verification approval, before sending an offer.');
         const serviceSnap = await tx.get(db.collection('services').doc(String(data.serviceId || '')));
         const service = serviceSnap.data();
         if (!service || !service.isActive || service.approvalStatus !== 'Approved' || service.archivedAt) fail('failed-precondition', 'This service is unavailable.');
@@ -46,6 +48,7 @@ module.exports = function bookingCommands({ db, admin, functions }) {
         const profile = (await tx.get(db.collection('serviceProviders').doc(providerId))).data();
         const provider = (await tx.get(db.collection('users').doc(providerId))).data();
         if (!profile?.isVerified || provider?.accountStatus !== 'Active') fail('failed-precondition', 'This provider is not currently eligible for bookings.');
+        if (!accountSetup.detailsComplete(provider, profile)) fail('failed-precondition', 'This provider must complete their required account details before receiving offers.');
         if (!hasMatchingCertificate(profile, service.category, service.serviceTitle)) fail('failed-precondition', 'The provider needs a valid certificate for this service.');
         const location = point(data.location);
         if (!require('./provider_area').covers(profile,location)) fail('failed-precondition', 'Choose a job address within the provider selected service barangays. Discuss boundary estimates in messages.');
@@ -191,6 +194,8 @@ module.exports = function bookingCommands({ db, admin, functions }) {
         const profile = (await tx.get(profileRef)).data();
         const customer = (await tx.get(db.collection('users').doc(b.customerId))).data();
         const service = (await tx.get(db.collection('services').doc(b.serviceId))).data();
+        if (!accountSetup.detailsComplete(customer) || !accountSetup.verified(customer)
+          || !accountSetup.detailsComplete(actor, profile)) fail('failed-precondition', 'Both parties must complete account setup and the customer must have approved identity verification before this offer can be accepted.');
         if (!profile?.isVerified || customer?.accountStatus !== 'Active' || !service?.isActive || service.approvalStatus !== 'Approved'
           || !hasMatchingCertificate(profile, service.category, service.serviceTitle)) fail('failed-precondition', 'The service or one of its participants is no longer eligible for booking.');
         if(!require('./provider_area').covers(profile,b.location)) fail('failed-precondition','The provider no longer serves this barangay. Discuss coverage before sending a new offer.');

@@ -5,6 +5,7 @@ import '../../widgets/profile_avatar.dart';
 import '../../widgets/app_preferences_panel.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../../utils/account_setup_policy.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -28,22 +29,29 @@ class ProviderOverviewSettingsScreen extends StatefulWidget {
     required this.appUser,
     required this.profile,
     this.inDialog = false,
+    this.requireAccountDetails = false,
   });
 
   final AppUser appUser;
   final ServiceProviderProfile profile;
   final bool inDialog;
+  final bool requireAccountDetails;
 
   static Future<bool?> open(
     BuildContext context, {
     required AppUser appUser,
     required ServiceProviderProfile profile,
+    bool requireAccountDetails = false,
   }) {
     if (MobileLayout.useMobileChrome(context)) {
       return Navigator.of(context).push<bool>(
         MaterialPageRoute(
           builder: (_) => providerThemed(
-            ProviderOverviewSettingsScreen(appUser: appUser, profile: profile),
+            ProviderOverviewSettingsScreen(
+              appUser: appUser,
+              profile: profile,
+              requireAccountDetails: requireAccountDetails,
+            ),
           ),
         ),
       );
@@ -69,6 +77,7 @@ class ProviderOverviewSettingsScreen extends StatefulWidget {
                 appUser: appUser,
                 profile: profile,
                 inDialog: true,
+                requireAccountDetails: requireAccountDetails,
               ),
             ),
           ),
@@ -188,7 +197,7 @@ class _ProviderOverviewSettingsScreenState
           'fullName': _name.text.trim(),
           'contactNumber': _phone.text.trim().isEmpty
               ? null
-              : _phone.text.trim(),
+              : normalizedAccountPhone(_phone.text),
         },
       );
       await FirestoreService().updateServiceProvider(
@@ -243,7 +252,9 @@ class _ProviderOverviewSettingsScreenState
               child: Row(
                 children: [
                   IconButton(
-                    tooltip: widget.inDialog ? 'Close profile settings' : 'Back',
+                    tooltip: widget.inDialog
+                        ? 'Close profile settings'
+                        : 'Back',
                     onPressed: () => Navigator.pop(context),
                     icon: const Icon(Icons.close_rounded),
                   ),
@@ -284,7 +295,7 @@ class _ProviderOverviewSettingsScreenState
             helper: 'This is the name that will be shown to your clients.',
             field: TextFormField(
               controller: _name,
-              validator: (v) => (v == null || v.trim().isEmpty)
+              validator: (v) => (v == null || v.trim().length < 2)
                   ? 'Enter your full name'
                   : null,
               decoration: _inputDecoration(
@@ -300,6 +311,11 @@ class _ProviderOverviewSettingsScreenState
             field: TextFormField(
               controller: _phone,
               keyboardType: TextInputType.phone,
+              validator: widget.requireAccountDetails
+                  ? (v) => validAccountPhone(v)
+                        ? null
+                        : 'Enter a valid phone number, such as 09123456789'
+                  : null,
               decoration: _inputDecoration(
                 context,
                 prefixIcon: Icons.phone_outlined,

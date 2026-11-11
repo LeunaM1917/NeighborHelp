@@ -16,6 +16,8 @@ import '../../services/storage_service.dart';
 import '../../theme/mobile_layout.dart';
 import '../../theme/provider_theme.dart';
 import '../../utils/service_certification_policy.dart';
+import '../../ui/workflow_ui.dart';
+import 'provider_certification_dialog.dart';
 import '../admin/widgets/admin_services_widgets.dart' show serviceCategoryIcon;
 
 /// Add / edit provider service — modal on wide web, full screen on compact/native.
@@ -25,11 +27,13 @@ class ProviderServiceFormScreen extends StatefulWidget {
     required this.appUser,
     this.existing,
     this.inDialog = false,
+    this.firestore,
   });
 
   final AppUser appUser;
   final ServiceListing? existing;
   final bool inDialog;
+  final FirestoreService? firestore;
 
   bool get isEditing => existing != null;
 
@@ -204,11 +208,10 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
   }
 
   Future<List<String>> _uploadImages(String serviceId) async {
-    final storage = StorageService();
     final urls = List<String>.from(_imageUrls);
     for (var i = 0; i < _localImages.length; i++) {
       final local = _localImages[i];
-      final url = await storage.uploadServiceImage(
+      final url = await StorageService().uploadServiceImage(
         providerId: widget.appUser.userId,
         serviceId: serviceId,
         bytes: local.bytes,
@@ -241,6 +244,7 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
   }
 
   Future<void> _save({required bool publish}) async {
+    if (_saving) return;
     if (!_formKey.currentState!.validate()) return;
     final category = _category;
     final duration = _duration;
@@ -254,7 +258,6 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
     }
 
     setState(() => _saving = true);
-    final firestore = FirestoreService();
     final price = double.tryParse(_price.text.trim()) ?? 0;
 
     if (!isSupportedService(category, _title.text.trim())) {
@@ -264,51 +267,45 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
       }
       return;
     }
-    if (publish) {
-      final profile = await firestore.getProviderProfile(widget.appUser.userId);
-      if (!(profile?.isVerifiedProvider ?? false)) {
-        if (mounted) {
-          setState(() => _saving = false);
-          _snack(
-            'Complete identity verification (System Administrator approval) before publishing.',
-          );
-        }
-        return;
-      }
-      final title = _title.text.trim();
-      // Only services that need credentials are gated — not the whole provider.
-      if (serviceRequiresCertification(
-            category: category,
-            serviceTitle: title,
-          ) &&
-          !(profile != null &&
-              hasMatchingServiceCertificate(
+    var checkingEligibility = publish;
+    try {
+      final firestore = widget.firestore ?? FirestoreService();
+      if (publish) {
+        final profile = await firestore.getProviderProfileForListing(
+          widget.appUser.userId,
+        );
+        if (!mounted) return;
+        final status = profile == null
+            ? ServiceCertificateStatus.missing
+            : serviceCertificateStatus(
                 profile,
                 category: category,
-                serviceTitle: title,
-              ))) {
-        if (mounted) {
-          setState(() => _saving = false);
-          _snack(
-            'This service needs an authenticated certificate. '
-            'Submit one on your profile for System Administrator review, then try again.',
-          );
+                serviceTitle: _title.text.trim(),
+              );
+        if (status != ServiceCertificateStatus.approved) {
+          await _showCertificateHelp(status, category, _title.text.trim());
+          return;
         }
-        return;
+        if (!(profile?.isVerifiedProvider ?? false)) {
+          await _showListingNotice(
+            'Identity verification required',
+            'Your certificate qualifies for this service. Complete government ID verification in your profile and wait for System Administrator approval before submitting your listing. You can keep editing or save a draft.',
+          );
+          return;
+        }
       }
-    }
+      checkingEligibility = false;
 
-    final existing = widget.existing;
-    final approval = publish
-        ? ServiceApprovalStatus.pending
-        : (existing?.approvalStatus ?? ServiceApprovalStatus.draft);
-    final titleForPolicy = _title.text.trim();
-    final needsCert = serviceRequiresCertification(
-      category: category,
-      serviceTitle: titleForPolicy,
-    );
+      final existing = widget.existing;
+      final approval = publish
+          ? ServiceApprovalStatus.pending
+          : (existing?.approvalStatus ?? ServiceApprovalStatus.draft);
+      final titleForPolicy = _title.text.trim();
+      final needsCert = serviceRequiresCertification(
+        category: category,
+        serviceTitle: titleForPolicy,
+      );
 
-    try {
       if (widget.isEditing) {
         final id = existing!.serviceId;
         var images = await _uploadImages(id);
@@ -361,9 +358,111 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
       }
       Navigator.pop(context, true);
     } catch (_) {
-      if (mounted) _snack('Could not save service. Try again.');
+      if (mounted) {
+        await _showListingNotice(
+          checkingEligibility
+              ? 'Could not check verification'
+              : 'Could not save service',
+          checkingEligibility
+              ? 'We could not load your latest certificate and identity status. Check your connection and try again. Your form is still here.'
+              : 'We could not confirm that all listing details and photos were saved. Your form is still here. Check your connection, then check your service list before submitting again.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _showListingNotice(String title, String message) =>
+      _listingDialog<void>(
+        context: context,
+        builder: (ctx) => WorkflowDialog(
+          scrollable: true,
+          title: Text(title),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Keep editing'),
+            ),
+          ],
+        ),
+      );
+
+  Future<T?> _listingDialog<T>({
+    required BuildContext context,
+    required WidgetBuilder builder,
+  }) {
+    // No request is running while the provider reads guidance or uploads a certificate.
+    setState(() => _saving = false);
+    return showDialog<T>(context: context, builder: builder);
+  }
+
+  Future<void> _showCertificateHelp(
+    ServiceCertificateStatus status,
+    String category,
+    String title,
+  ) async {
+    final family = approvedServiceFamily(category, title);
+    final qualifications = approvedQualifications[family] ?? <String>[];
+    final (heading, guidance) = switch (status) {
+      ServiceCertificateStatus.pending => (
+        'Certificate awaiting review',
+        'Your matching certificate is pending System Administrator review. You will receive a status notification. Submit this listing after approval; you can save it as a draft while waiting.',
+      ),
+      ServiceCertificateStatus.rejected => (
+        'Certificate rejected',
+        'Your matching certificate was rejected. Check the administrator’s reason in your profile, then upload a corrected certificate for review.',
+      ),
+      ServiceCertificateStatus.expired => (
+        'Certificate expired',
+        'Your matching certificate has expired. Upload a renewed certificate and wait for System Administrator approval before submitting this listing.',
+      ),
+      ServiceCertificateStatus.needsReview => (
+        'Certificate needs authentication',
+        'Your matching certificate does not have a complete, current approval record. Ask the System Administrator to review it before submitting this listing.',
+      ),
+      _ => (
+        'Matching certificate required',
+        'Upload a matching TESDA certificate for System Administrator authentication before submitting this listing. Certificates for other trades do not qualify for this service.',
+      ),
+    };
+    final canUpload =
+        status == ServiceCertificateStatus.missing ||
+        status == ServiceCertificateStatus.rejected ||
+        status == ServiceCertificateStatus.expired;
+    final upload = await _listingDialog<bool>(
+      context: context,
+      builder: (ctx) => WorkflowDialog(
+        scrollable: true,
+        title: Text(heading),
+        content: Text(
+          '$title requires ${qualifications.join(' or ')}.\n\n$guidance\n\nYour listing details will stay here.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep editing'),
+          ),
+          if (canUpload)
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Upload certificate'),
+            ),
+        ],
+      ),
+    );
+    if (upload != true || !mounted) return;
+    final saved = await ProviderCertificationDialog.open(
+      context,
+      providerId: widget.appUser.userId,
+      initialQualification: qualifications.firstOrNull,
+    );
+    if (saved == true && mounted) {
+      await _showListingNotice(
+        'Certificate submitted',
+        'Your certificate is pending System Administrator review. Uploading it does not publish your listing. You will receive a status notification; submit your listing after approval. Your listing details are still here.',
+      );
     }
   }
 
@@ -643,8 +742,15 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
         if (isSupportedService(_category ?? '', _title.text.trim())) ...[
           const SizedBox(height: 8),
           Text(
-            certificationRequirementMessage(category: _category!, serviceTitle: _title.text.trim()),
-            style: GoogleFonts.inter(fontSize: 12, color: FigmaColors.gray600, height: 1.35),
+            certificationRequirementMessage(
+              category: _category!,
+              serviceTitle: _title.text.trim(),
+            ),
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              color: FigmaColors.gray600,
+              height: 1.35,
+            ),
           ),
         ],
         const SizedBox(height: 16),
@@ -926,10 +1032,10 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
                   Expanded(
                     child: Text(
                       'Tips for a great listing',
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                    ),
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ],

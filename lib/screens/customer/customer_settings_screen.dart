@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../utils/geo_location.dart';
+import '../../utils/account_setup_policy.dart';
 import '../../widgets/profile_location_editor.dart';
 import '../../utils/image_upload.dart';
 import '../../widgets/profile_avatar.dart';
@@ -25,17 +26,19 @@ class CustomerSettingsScreen extends StatefulWidget {
     super.key,
     required this.appUser,
     this.inDialog = false,
+    this.requireAccountDetails = false,
   });
 
   final AppUser appUser;
   final bool inDialog;
+  final bool requireAccountDetails;
 
-  static Future<bool?> open(BuildContext context, {required AppUser appUser}) {
+  static Future<bool?> open(BuildContext context, {required AppUser appUser, bool requireAccountDetails = false}) {
     if (MobileLayout.useMobileChrome(context)) {
       return Navigator.of(context).push<bool>(
         MaterialPageRoute(
           builder: (_) => _customerThemed(
-            CustomerSettingsScreen(appUser: appUser),
+            CustomerSettingsScreen(appUser: appUser, requireAccountDetails: requireAccountDetails),
           ),
         ),
       );
@@ -55,7 +58,7 @@ class CustomerSettingsScreen extends StatefulWidget {
               color: FigmaColors.gray50,
               borderRadius: BorderRadius.circular(14),
               clipBehavior: Clip.antiAlias,
-              child: CustomerSettingsScreen(appUser: appUser, inDialog: true),
+              child: CustomerSettingsScreen(appUser: appUser, inDialog: true, requireAccountDetails: requireAccountDetails),
             ),
           ),
         ),
@@ -155,7 +158,7 @@ class _CustomerSettingsScreenState extends State<CustomerSettingsScreen> {
         userId: widget.appUser.userId,
         data: {
           'fullName': _name.text.trim(),
-          'contactNumber': _phone.text.trim().isEmpty ? null : _phone.text.trim(),
+          'contactNumber': _phone.text.trim().isEmpty ? null : normalizedAccountPhone(_phone.text),
           'address': address.isEmpty ? null : address,
           'location': _mapLocation,
           'bio': bio.isEmpty ? null : bio,
@@ -235,7 +238,7 @@ class _CustomerSettingsScreenState extends State<CustomerSettingsScreen> {
             helper: 'This is the name displayed on your account.',
             field: TextFormField(
               controller: _name,
-              validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter your full name' : null,
+              validator: (v) => (v == null || v.trim().length < 2) ? 'Enter your full name' : null,
               decoration: _inputDecoration(context, prefixIcon: Icons.person_outline),
             ),
           ),
@@ -246,6 +249,7 @@ class _CustomerSettingsScreenState extends State<CustomerSettingsScreen> {
             field: TextFormField(
               controller: _phone,
               keyboardType: TextInputType.phone,
+              validator: widget.requireAccountDetails ? (v) => validAccountPhone(v) ? null : 'Enter a valid phone number, such as 09123456789' : null,
               decoration: _inputDecoration(context, prefixIcon: Icons.phone_outlined),
             ),
           ),
@@ -256,6 +260,7 @@ class _CustomerSettingsScreenState extends State<CustomerSettingsScreen> {
             field: TextFormField(
               controller: _address,
               maxLines: 2,
+              validator: widget.requireAccountDetails ? (v) => (v ?? '').trim().length >= 5 ? null : 'Enter your barangay and city or address' : null,
               decoration: _inputDecoration(
                 context,
                 prefixIcon: Icons.place_outlined,
