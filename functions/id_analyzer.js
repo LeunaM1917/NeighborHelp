@@ -197,7 +197,11 @@ module.exports = function idAnalyzer({db, functions, region = 'us-central1',
         // Some DocuPass responses omit expiry despite a per-link expiry override.
         // Enforce the platform deadline independently of the hosted page.
         const completedMs = Number(hosted.completedAt) * 1000;
-        const quality=assessIdentity(transaction);
+        // Honor existing hosted acceptances. New links carry the readability
+        // policy at creation; refreshing an older link must not upgrade it.
+        // Fraud, binding and expiry checks still apply to every session.
+        const legacyAccepted=decision==='accept' && Number(session.qualityPolicyVersion||0)<QUALITY_POLICY_VERSION;
+        const quality=assessIdentity(transaction,{enforceReadability:!legacyAccepted});
         const effectiveDecision = quality.blocked || !Number.isFinite(completedMs) || completedMs > millis(session.expiresAt)
           ? 'reject' : decision;
         const patch = {...resultFor(effectiveDecision, current),verificationRetakeRequired:quality.retakeRequired,
@@ -205,7 +209,7 @@ module.exports = function idAnalyzer({db, functions, region = 'us-central1',
         const changed = Object.entries(patch).some(([k, value]) => JSON.stringify(current[k]) !== JSON.stringify(value));
         if (changed) tx.update(targetRef, {...patch, verificationUpdatedAt: stamp(), updatedAt: stamp()});
         tx.update(ref, {decision: patch.verificationDecision, transactionId, completedAt: stamp(),
-          qualityPolicyVersion:quality.policyVersion,qualityPassed:!quality.blocked,retakeRequired:quality.retakeRequired,issueCodes:quality.codes});
+          assessedQualityPolicyVersion:quality.policyVersion,qualityPassed:!quality.blocked,retakeRequired:quality.retakeRequired,issueCodes:quality.codes});
         return {ok: true, status: patch.diditStatus, changed};
       });
     } finally {

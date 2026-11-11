@@ -3,7 +3,7 @@ const {before, after, beforeEach, test} = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const {initializeApp, deleteApp} = require('firebase-admin/app');
-const {getFirestore, Timestamp} = require('firebase-admin/firestore');
+const {getFirestore, Timestamp, FieldValue} = require('firebase-admin/firestore');
 const functions = require('firebase-functions/v1');
 const {initializeTestEnvironment, assertFails} = require('@firebase/rules-unit-testing');
 const {doc, getDoc, setDoc, updateDoc} = require('firebase/firestore');
@@ -60,6 +60,7 @@ test('authenticated session uses bound owner, ID type, signed webhook destinatio
   assert.deepEqual(body.profileOverride.acceptedDocuments,{documentType:'D',documentCountry:'PH',documentState:''});
   assert.match(body.profileOverride.webhook,/idAnalyzerWebhook\?session=/);
   assert.equal(body.profileOverride.docupass.allowFileUpload,false);
+  assert.equal((await db.doc('identitySessions/'+profile.identitySessionKey).get()).data().qualityPolicyVersion,2);
   assert.equal(body.profileOverride.decisions.FACE_LIVENESS_ERR.reject,0);
   for(const code of ['UNRECOGNIZED_DOCUMENT','UNRECOGNIZED_BACK_DOCUMENT','LOW_TEXT_CONFIDENCE','IMAGE_TOO_BLURRY'])assert.equal(body.profileOverride.decisions[code].reject,0);
   assert.equal(profile.verificationProvider,'idanalyzer');assert.equal(profile.diditStatus,'In Progress');assert.equal(profile.isVerified,false);
@@ -147,6 +148,29 @@ test('clients cannot read/write session bindings or forge server session fields'
   const signup=env.authenticatedContext('new-user').firestore();
   await assertFails(setDoc(doc(signup,'users','new-user'),{role:'Customer',accountStatus:'Active',identitySessionKey:'forged'}));
 });
+
+for(const version of [undefined,1]) {
+  test(`older accepted check with policy ${version??'unset'} remains accepted despite unreadable back`,async()=>{
+    await create();const {target,current,event}=await finish();
+    const sessionRef=db.doc('identitySessions/'+current.identitySessionKey);
+    await sessionRef.update({qualityPolicyVersion:version??FieldValue.delete()});
+    hosted.get(current.diditSessionId).finalTransaction.warning=[{code:'UNRECOGNIZED_BACK_DOCUMENT'}];
+    await target.update({isVerified:false,verificationStatus:'Rejected',verificationRetakeRequired:true});
+    await webhook(current.identitySessionKey,event);await identity.refresh('customer','customer');
+    const result=(await target.get()).data();
+    assert.equal(result.isVerified,true);assert.equal(result.verificationStatus,'Approved');
+    assert.equal(result.verificationRetakeRequired,false);
+    assert.equal((await sessionRef.get()).data().qualityPolicyVersion,version);
+    // A new fraud failure or an explicit NeighborHelp rejection still wins.
+    await target.update({verificationManualDecision:'Rejected'});
+    await identity.refresh('customer','customer');
+    assert.equal((await target.get()).data().isVerified,false);
+    await target.update({verificationManualDecision:FieldValue.delete()});
+    hosted.get(current.diditSessionId).finalTransaction.warning=[{code:'FAKE_ID'}];
+    await identity.refresh('customer','customer');
+    assert.equal((await target.get()).data().verificationStatus,'Rejected');
+  });
+}
 
 for(const code of ['UNRECOGNIZED_DOCUMENT','UNRECOGNIZED_BACK_DOCUMENT','LOW_TEXT_CONFIDENCE','IMAGE_TOO_BLURRY']) {
   test(`${code} requires a retake even when hosted verification says accept`,async()=>{

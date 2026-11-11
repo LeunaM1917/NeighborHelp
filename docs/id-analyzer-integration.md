@@ -110,8 +110,12 @@ not an account verification within NeighborHelp.
 New app-created links explicitly reject unreadable front/back documents, low OCR
 confidence, missing identity text, blurred/small images and missing faces. A server
 quality check also inspects the authoritative completed transaction independently
-of its overall decision: an unrecognized licence back cannot become verified even
-if the vendor decision was changed to accept. Only warning codes and a retake flag
+of its overall decision. New links use readability policy version 2: an unreadable
+result requires a retake even if the vendor decision says accept. Older links
+already accepted in ID Analyzer keep that acceptance; a refresh never upgrades
+their creation-time policy. Fraud warnings, account/session binding, expiry and
+explicit NeighborHelp administrator rejections still apply to older links.
+Only warning codes and a retake flag
 are saved in NeighborHelp; extracted names, ID numbers and document images are not
 copied into these application records. Receiving a photo for analysis is not proof
 that the identity check passed.
@@ -128,9 +132,15 @@ unfinished and unreadable results cannot. Rejection works for submitted checks
 without needing the vendor API. Actor identity and role are server-derived, review
 actions are audited, and the existing status-change triggers provide notifications.
 Manual approval of a readable review survives duplicate callbacks, while later
-quality failures still remove eligibility. Stale or wrong-role applications fail
+quality failures on new-policy links still remove eligibility. Stale or wrong-role applications fail
 with a specific explanation. The admin UI no longer labels every validation or
 connection error as a permissions problem.
 
 ID Analyzer reference: https://developer.idanalyzer.com/help/decision-flow
 Profile/API reference: https://developer.idanalyzer.com/help/id-analyzer-api-v2
+
+The NeighborHelp retake message is shown after analysis returns a readability
+failure. The camera and immediate photo-capture warnings are hosted by DocuPass;
+backend decision overrides cannot insert a popup inside that third-party page.
+An actual blurry-photo capture must be checked there to validate its inline retry
+behavior; emulator tests validate NeighborHelp's returned-result handling only.

@@ -15,6 +15,8 @@ test('identity quality fails closed on missing OCR and ignored readability warni
   }
   assert.equal(assessIdentity({...valid,warning:[{code:'IMAGE_EDITED',decision:'review'}]}).blocked,false);
   assert.equal(assessIdentity({...valid,warning:[{code:'FAKE_ID',decision:'review'}]}).blocked,true);
+  assert.equal(assessIdentity({...valid,warning:[{code:'UNRECOGNIZED_BACK_DOCUMENT'}]},{enforceReadability:false}).blocked,false);
+  assert.equal(assessIdentity({...valid,warning:[{code:'FAKE_ID'}]},{enforceReadability:false}).blocked,true);
   assert.equal(resultFor('review',{verificationManualDecision:'Approved'}).isVerified,true);
   assert.equal(resultFor('reject',{verificationManualDecision:'Approved'}).isVerified,false);
 });

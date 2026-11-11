@@ -5,7 +5,8 @@ const RETAKE_CODES = new Set(['UNRECOGNIZED_DOCUMENT','UNRECOGNIZED_BACK_DOCUMEN
   'MISSING_NAME','MISSING_DOCUMENT_NUMBER','PHYSICAL_DOCUMENT_MISSING']);
 const REJECT_CODES = new Set(['FAKE_ID','FACE_MISMATCH','FACE_LIVENESS_ERR','RECAPTURED_FACE',
   'DOCUMENT_EXPIRED','COUNTRY_NOT_ACCEPTED','TYPE_NOT_ACCEPTED']);
-const QUALITY_POLICY_VERSION = 1;
+// Version 2 applies readability requirements prospectively, when a link is created.
+const QUALITY_POLICY_VERSION = 2;
 const mandatoryDecisions = () => Object.fromEntries([...RETAKE_CODES,...REJECT_CODES]
   .map(code=>[code,{enabled:true,review:-1,reject:0,weight:1}]));
 function values(data,key) {
@@ -13,14 +14,14 @@ function values(data,key) {
   return (Array.isArray(field)?field:[field]).map(item=>typeof item==='string'?item:item?.value)
     .filter(value=>typeof value==='string'&&value.trim()).map(value=>value.trim());
 }
-function assessIdentity(transaction={}) {
+function assessIdentity(transaction={}, {enforceReadability=true}={}) {
   const codes=new Set((Array.isArray(transaction.warning)?transaction.warning:[])
     .map(w=>w?.code).filter(code=>typeof code==='string'&&/^[A-Z][A-Z0-9_]{0,79}$/.test(code)));
   const data=transaction.data;
   if(!values(data,'documentType').length)codes.add('UNRECOGNIZED_DOCUMENT');
   if(!values(data,'fullName').length && !(values(data,'firstName').length&&values(data,'lastName').length))codes.add('MISSING_NAME');
   if(!values(data,'documentNumber').length)codes.add('MISSING_DOCUMENT_NUMBER');
-  const retakeRequired=[...codes].some(code=>RETAKE_CODES.has(code));
+  const retakeRequired=enforceReadability && [...codes].some(code=>RETAKE_CODES.has(code));
   const blocked=retakeRequired || [...codes].some(code=>REJECT_CODES.has(code));
   return {codes:[...codes].sort(),retakeRequired,blocked,policyVersion:QUALITY_POLICY_VERSION};
 }
