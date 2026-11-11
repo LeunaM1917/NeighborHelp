@@ -18,6 +18,7 @@ import '../../../theme/role_theme.dart';
 import '../../../widgets/loading_indicator.dart';
 import '../../../widgets/account_setup_gate.dart';
 import '../../../widgets/stream_snapshot.dart';
+import '../../../widgets/service_proposals_section.dart';
 import '../provider_availability_screen.dart';
 import '../provider_service_form_screen.dart';
 import '../widgets/provider_services_widgets.dart';
@@ -189,6 +190,7 @@ class _ProviderServicesTabState extends State<ProviderServicesTab> {
                         final main = Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
+                            ServiceProposalsSection(appUser: widget.appUser),
                             ProviderServicesStatsRow(
                               total: allServices.length,
                               active: active,

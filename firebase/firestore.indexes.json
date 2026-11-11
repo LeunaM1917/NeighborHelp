@@ -1,5 +1,8 @@
 {
   "indexes": [
+    {"collectionGroup":"notifications","queryScope":"COLLECTION","fields":[{"fieldPath":"userId","order":"ASCENDING"},{"fieldPath":"createdAt","order":"DESCENDING"}]},
+    {"collectionGroup":"serviceProposals","queryScope":"COLLECTION","fields":[{"fieldPath":"providerId","order":"ASCENDING"},{"fieldPath":"updatedAt","order":"DESCENDING"}]},
+    {"collectionGroup":"serviceProposals","queryScope":"COLLECTION","fields":[{"fieldPath":"status","order":"ASCENDING"},{"fieldPath":"createdAt","order":"DESCENDING"}]},
     {
       "collectionGroup": "messages",
       "queryScope": "COLLECTION",

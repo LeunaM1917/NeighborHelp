@@ -160,7 +160,7 @@ class CustomerBrowseServiceItem {
     return CustomerBrowseServiceItem(
       title: listing.serviceTitle,
       category: listing.category,
-      categoryId: MarketingServiceCatalog.categories.where((c) => c.name.toLowerCase() == listing.category.toLowerCase()).firstOrNull?.id ?? listing.category.toLowerCase().replaceAll(' ', '_'),
+      categoryId: [...MarketingServiceCatalog.categories, MarketingServiceCatalog.otherTesdaCategory].where((c) => c.name.toLowerCase() == listing.category.toLowerCase()).firstOrNull?.id ?? listing.category.toLowerCase().replaceAll(' ', '_'),
       imageUrl: imageUrl,
       providerName: providerName,
       price: listing.estimatedPrice,

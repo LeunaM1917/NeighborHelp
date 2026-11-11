@@ -82,7 +82,8 @@ service cloud.firestore {
         && request.resource.data.get('reviewCount', 0) == 0
         && request.resource.data.get('acceptedBookings', 0) == 0
         && request.resource.data.get('completedBookings', 0) == 0
-        && request.resource.data.get('approvedCertificationIds', []).size() == 0;
+        && request.resource.data.get('approvedCertificationIds', []).size() == 0
+        && !request.resource.data.keys().hasAny(['approvedServiceProposals']);
       allow update: if actorValid() && (isAdmin() || (owns(id)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(providerEditable()) && certificateEditsValid()));
       allow delete: if false;
@@ -104,18 +105,27 @@ service cloud.firestore {
         && profile.get('baseBarangayId', '').size() > 0
         && profile.get('serviceBarangayIds', []).size() > 0;
     }
-    function supportedService(s) {
+    function approvedServiceProposal(s, id) {
+      let key = s.get('serviceProposalId', '');
+      let profile = get(/databases/$(database)/documents/serviceProviders/$(s.providerId)).data;
+      let grant = profile.get('approvedServiceProposals', {}).get(key, {});
+      return key is string && key.size() == 64
+        && grant.get('status', '') == 'Approved' && grant.get('serviceId', '') == id
+        && grant.get('category', '') == s.category && grant.get('serviceTitle', '') == s.serviceTitle;
+    }
+    function supportedService(s, id) {
       return s.get('priceType','') in ['fixed','daily','negotiable'] && (
         (s.category == 'Home Repair' && s.serviceTitle in ['Basic Carpentry','Carpentry','Door Repair','Furniture Repair'])
         || (s.category == 'Cleaning' && s.serviceTitle in ['House Cleaning','Apartment Cleaning','Kitchen Cleaning','Bathroom Cleaning','Laundry Assistance','Ironing Service'])
         || (s.category == 'Repair and Technical Services' && s.serviceTitle in ['Computer Repair','Laptop Repair','Internet/Wi-Fi Setup','Aircon Cleaning','Aircon Repair','Refrigerator Repair'])
         || (s.category == 'Handyman' && s.serviceTitle in ['Furniture Assembly','Shelf Installation'])
-        || (s.category == 'Construction' && s.serviceTitle in ['Masonry','Concrete Block Laying','Bricklaying','Wall Plastering','Construction Carpentry','Tile Installation','Tile Repair','Construction Painting']));
+        || (s.category == 'Construction' && s.serviceTitle in ['Masonry','Concrete Block Laying','Bricklaying','Wall Plastering','Construction Carpentry','Tile Installation','Tile Repair','Construction Painting'])
+        || approvedServiceProposal(s, id));
     }
     match /services/{id} {
       allow read: if activeUser();
       allow create: if owns(request.resource.data.providerId)
-        && supportedService(request.resource.data)
+        && supportedService(request.resource.data, id)
         && request.resource.data.approvalStatus in ['Draft', 'Pending']
         && (request.resource.data.approvalStatus == 'Draft' || providerSetupReady(request.auth.uid))
         && request.resource.data.isActive == false;
@@ -123,7 +133,7 @@ service cloud.firestore {
         && ((request.resource.data.approvalStatus == 'Draft' && request.resource.data.isActive == false)
           || providerSetupReady(request.auth.uid)
           || (request.resource.data.isActive == false && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isActive','updatedAt','updatedBy'])))
-        && (supportedService(request.resource.data) || (request.resource.data.isActive == false && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isActive','updatedAt','updatedBy'])) )
+        && (supportedService(request.resource.data, id) || (request.resource.data.isActive == false && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isActive','updatedAt','updatedBy'])) )
         && request.resource.data.providerId == resource.data.providerId
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['serviceTitle', 'category', 'description', 'estimatedPrice',
           'priceType', 'estimatedDuration', 'availability', 'serviceImages', 'requiresCertification', 'approvalStatus', 'isActive', 'rejectionReason', 'updatedAt', 'updatedBy'])
@@ -132,6 +142,10 @@ service cloud.firestore {
             && resource.data.approvalStatus == 'Approved'
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isActive', 'updatedAt', 'updatedBy'])))));
       allow delete: if isAdmin() || owns(resource.data.providerId);
+    }
+    match /serviceProposals/{id} {
+      allow read: if isAdmin() || owns(resource.data.providerId);
+      allow write: if false;
     }
     // Only validated server commands may change booking money, participants or status.
     match /bookings/{id} {

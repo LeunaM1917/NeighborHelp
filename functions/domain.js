@@ -25,9 +25,15 @@ function certificateFamily(category, title) {
 }
 function hasMatchingCertificate(profile, category, title, now = new Date()) {
   const family = certificateFamily(category, title);
-  if (!family || !profile) return false;
+  if (!profile) return false;
   const approved = new Set(profile.approvedCertificationIds || []);
-  return (profile.certificationHistory || []).some(c => require('./marketplace_policy').eligibleCertificate(c, approved, family, now));
+  const policy=require('./marketplace_policy');
+  if(family) return (profile.certificationHistory || []).some(c => policy.eligibleCertificate(c, approved, family, now));
+  return Object.values(profile.approvedServiceProposals || {}).some(grant => grant.status==='Approved'
+    && grant.reviewedBy && grant.reviewedAt && policy.normalize(grant.category)===policy.normalize(category)
+    && policy.normalize(grant.serviceTitle)===policy.normalize(title)
+    && (profile.certificationHistory || []).some(c=>policy.normalize(c.name)===policy.normalize(grant.qualificationName)
+      && policy.eligibleTesdaCertificate(c,approved,now)));
 }
 function distanceKm(a, b) {
   const rad = x => x * Math.PI / 180;

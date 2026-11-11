@@ -808,6 +808,51 @@ abstract final class MarketingServiceCatalog {
     ),
   ];
 
+  static const otherTesdaCategory = MarketingServiceCategory(
+    id: 'other_tesda',
+    name: 'Other TESDA Services',
+    icon: Icons.workspace_premium_outlined,
+    bg: FigmaColors.tintGreen,
+    fg: FigmaColors.green,
+    services: [],
+  );
+
+  /// Adds live approved proposals without inventing sample providers.
+  static MarketingServiceCategory withApprovedProposals(
+    MarketingServiceCategory category,
+    List<ServiceListing> listings,
+  ) {
+    final items = [...category.services];
+    for (final listing in listings) {
+      if (!listing.isMarketplaceVisible ||
+          listing.serviceProposalId.isEmpty ||
+          listing.category != category.name ||
+          items.any(
+            (s) =>
+                s.name.trim().toLowerCase() ==
+                listing.serviceTitle.trim().toLowerCase(),
+          )) {
+        continue;
+      }
+      items.add(
+        MarketingServiceItem(
+          name: listing.serviceTitle,
+          description: listing.description,
+          startingPricePhp: listing.estimatedPrice.round(),
+          providers: const [],
+        ),
+      );
+    }
+    return MarketingServiceCategory(
+      id: category.id,
+      name: category.name,
+      icon: category.icon,
+      bg: category.bg,
+      fg: category.fg,
+      services: items,
+    );
+  }
+
   /// Top 5 on customer Home — Panabo / Davao everyday demand (not Western pet-walking).
   static const List<String> popularHomeCategoryIds = [
     'cleaning',
@@ -826,6 +871,7 @@ abstract final class MarketingServiceCatalog {
   }
 
   static MarketingServiceCategory? categoryById(String id) {
+    if (id == otherTesdaCategory.id) return otherTesdaCategory;
     for (final c in categories) {
       if (c.id == id) return c;
     }
@@ -833,6 +879,7 @@ abstract final class MarketingServiceCatalog {
   }
 
   static MarketingServiceCategory? categoryByName(String name) {
+    if (name == otherTesdaCategory.name) return otherTesdaCategory;
     for (final c in categories) {
       if (c.name == name) return c;
     }
@@ -853,7 +900,8 @@ abstract final class MarketingServiceCatalog {
     if (name.isEmpty) return const [];
 
     return listings
-        .where((s) => s.serviceTitle.trim().toLowerCase() == name)
+        .where((s) => s.serviceTitle.trim().toLowerCase() == name
+          && (marketingCategoryName == null || s.category.trim().toLowerCase() == marketingCategoryName.trim().toLowerCase()))
         .toList(growable: false);
   }
 

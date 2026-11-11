@@ -101,6 +101,7 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
   String _priceType = 'negotiable';
   String? _duration;
   bool _isActive = true;
+  bool get _isProposedService => widget.existing?.serviceProposalId.isNotEmpty == true;
   bool _saving = false;
 
   final List<String> _imageUrls = [];
@@ -129,7 +130,7 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
       _title.text = e.serviceTitle;
       _description.text = e.description;
       _price.text = e.estimatedPrice.toStringAsFixed(0);
-      _category = ServiceCategories.categoryNames.contains(e.category)
+      _category = (_isProposedService || ServiceCategories.categoryNames.contains(e.category))
           ? e.category
           : null;
       _priceType = _priceTypes.contains(e.priceType)
@@ -168,7 +169,7 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
       ? MarketingServiceCatalog.categoryByName(_category!)
       : null;
 
-  List<String> get _templates => _category != null
+  List<String> get _templates => !_isProposedService && _category != null
       ? ServiceCategories.serviceNamesForCategory(_category!)
       : const [];
 
@@ -269,7 +270,7 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
     setState(() => _saving = true);
     final price = double.tryParse(_price.text.trim()) ?? 0;
 
-    if (!isSupportedService(category, _title.text.trim())) {
+    if (!_isProposedService && !isSupportedService(category, _title.text.trim())) {
       if (mounted) {
         setState(() => _saving = false);
         _snack('Choose a supported service from the catalog.');
@@ -413,7 +414,8 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
     String title,
   ) async {
     final family = approvedServiceFamily(category, title);
-    final qualifications = approvedQualifications[family] ?? <String>[];
+    final qualifications = _isProposedService && widget.existing!.requiredQualification.isNotEmpty
+      ? [widget.existing!.requiredQualification] : approvedQualifications[family] ?? <String>[];
     final (heading, guidance) = switch (status) {
       ServiceCertificateStatus.pending => (
         'Certificate awaiting review',
@@ -620,6 +622,10 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
   );
 
   Widget _buildCategoryField() {
+    if (_isProposedService) {
+      return TextFormField(initialValue: _category, readOnly: true,
+        decoration: const InputDecoration(labelText: 'Approved category'));
+    }
     return FormField<String>(
       initialValue: _category,
       validator: (v) => v == null || v.isEmpty ? 'Required' : null,
@@ -670,6 +676,10 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (_isProposedService) ...[
+          Text('This proposal was approved for ${widget.existing!.requiredQualification}. The service name and category stay fixed. Add your price and submit this listing for review.'),
+          const SizedBox(height: 16),
+        ],
         _buildCategoryField(),
         if (templates.isNotEmpty) ...[
           const SizedBox(height: 20),
@@ -744,7 +754,7 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
             hintText: 'Choose a supported catalog service above',
           ),
           readOnly: true,
-          validator: (v) => !isSupportedService(_category ?? '', v ?? '')
+          validator: (v) => !_isProposedService && !isSupportedService(_category ?? '', v ?? '')
               ? 'Choose a supported catalog service'
               : null,
         ),

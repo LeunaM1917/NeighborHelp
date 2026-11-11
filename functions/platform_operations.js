@@ -19,11 +19,10 @@ module.exports = function platformOperations({ db, admin, functions, region, mes
     const services = await db.collection('services').where('providerId', '==', id).get();
     const eligible = services.docs.filter(d => { const s = d.data(); return s.isActive && s.approvalStatus === 'Approved' && hasMatchingCertificate(p, s.category, s.serviceTitle); });
     if (!eligible.length) return null;
-    const {serviceFamily,eligibleCertificate} = require('./marketplace_policy');
     const result = { providerId: id, marketplacePolicyVersion:3, eligibleServiceIds: eligible.map(d => d.id),eligibleServiceExpiries:{},...area };
     for(const doc of eligible) {
-      const s=doc.data(), family=serviceFamily(s.category,s.serviceTitle);
-      const certificates=(p.certificationHistory || []).filter(c => eligibleCertificate(c,new Set(p.approvedCertificationIds || []),family));
+      const s=doc.data();
+      const certificates=(p.certificationHistory || []).filter(c => hasMatchingCertificate({...p,certificationHistory:[c]},s.category,s.serviceTitle));
       result.eligibleServiceExpiries[doc.id]=Math.max(...certificates.map(c => new Date(`${c.expirationDate}T23:59:59.999+08:00`).getTime()));
     }
     for (const field of ['userId', 'bio', 'averageRating', 'reviewCount', 'completedBookings', 'acceptedBookings',
@@ -52,6 +51,7 @@ module.exports = function platformOperations({ db, admin, functions, region, mes
   out.bookingCommand = functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'}).https.onCall(require('./booking_commands')({ db, admin, functions }));
   out.inquiryCommand = functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'}).https.onCall(require('./inquiry_commands')({db, functions}));
   out.certificateCommand = functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'}).https.onCall(require('./certificate_commands')({db, functions}));
+  out.serviceProposalCommand = functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'}).https.onCall(require('./service_proposal_commands')({db, functions}));
   out.contractCommand = functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'}).https.onCall(require('./contract_commands')({db,functions}));
   out.providerAvailability = functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'}).https.onCall(require('./availability_command')({db,functions}));
   out.providerTimeOff=functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK==='true'}).https.onCall(require('./time_off_commands')({db,functions}));
@@ -153,6 +153,14 @@ module.exports = function platformOperations({ db, admin, functions, region, mes
         action: `${collection}.${!change.before.exists ? 'created' : !change.after.exists ? 'deleted' : 'updated'}`, collection,
         referenceId: context.params.id, changedFields: changed, createdAt: stamp() });
       if (change.after.exists) {
+        const activities=require('./admin_activity_notifications')({collection,before,after,created:change.before.exists===false});
+        if(activities.length){
+          const admins=await db.collection('users').where('role','==','Administrator').get();
+          for(const recipient of admins.docs)if(recipient.data().accountStatus==='Active')for(const activity of activities){
+            await db.doc('notifications/'+eventKey(`${context.eventId}:admin:${activity.key}:${recipient.id}`))
+              .create({...activity.data,userId:recipient.id,isRead:false,createdAt:stamp()}).catch(e=>{if(e.code!==6)throw e;});
+          }
+        }
         const notices = reviewStatusNotifications({collection, id: context.params.id, before, after, ownerId: reviewOwnerId});
         for (const notice of notices) {
           if (!notice.data.userId) continue;
@@ -166,6 +174,7 @@ module.exports = function platformOperations({ db, admin, functions, region, mes
   }
   out.deliverPushNotification = functions.region(region).firestore.document('notifications/{id}').onCreate(async (snap) => {
     const n = snap.data();
+    if(n.inAppOnly===true)return null;
     if (n.pushEnabled === false) return null;
     const devices = await db.collection('users').doc(n.userId).collection('devices').get();
     if (devices.empty) return null;

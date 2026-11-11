@@ -8,6 +8,7 @@ import '../../../models/service.dart';
 import '../../../models/service_approval_status.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/firestore_service.dart';
+import '../../../widgets/service_proposals_section.dart';
 import '../widgets/admin_dashboard_widgets.dart';
 import '../widgets/admin_services_widgets.dart';
 import '../widgets/admin_table_details.dart';
@@ -286,6 +287,7 @@ class _AdminServicesPageState extends State<AdminServicesPage> {
                         subtitle: 'Review new listings before they go live; hide approved services when needed.',
                       ),
                       const SizedBox(height: 24),
+                      const ServiceProposalsSection(),
                       AdminMetricGrid(
                         children: [
                           AdminMetricCard(

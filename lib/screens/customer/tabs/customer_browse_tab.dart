@@ -604,7 +604,7 @@ class _BrowseFilterBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rc = context.roleColors;
-    final categories = MarketingServiceCatalog.categories;
+    final categories = [...MarketingServiceCatalog.categories, MarketingServiceCatalog.otherTesdaCategory];
 
     return Wrap(
       spacing: 10,
@@ -764,9 +764,15 @@ class _BrowseCategoriesBlock extends StatelessWidget {
   final VoidCallback onViewAll;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => StreamBuilder<List<ServiceListing>>(
+    stream: FirestoreService().activeServicesStream(),
+    builder: (context, snapshot) => _buildCategories(context, snapshot.data ?? const []),
+  );
+
+  Widget _buildCategories(BuildContext context, List<ServiceListing> listings) {
     final rc = context.roleColors;
-    final categories = MarketingServiceCatalog.categories;
+    final categories = [for (final c in [...MarketingServiceCatalog.categories, MarketingServiceCatalog.otherTesdaCategory])
+      MarketingServiceCatalog.withApprovedProposals(c, listings)];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

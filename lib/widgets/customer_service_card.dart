@@ -17,14 +17,16 @@ class CustomerServiceCard extends StatelessWidget {
     required this.price,
     required this.onTap,
     this.photoUrl,
+    this.compact = false,
   });
   final String title, category, imageUrl, providerName;
   final String? photoUrl;
   final Widget rating;
   final double price;
   final VoidCallback onTap;
-  static double heightFor(TextScaler scaler) =>
-      360 + (scaler.scale(1) - 1).clamp(0, 2) * 180;
+  final bool compact;
+  static double heightFor(TextScaler scaler, {bool compact = false}) =>
+      (compact ? 320 : 360) + (scaler.scale(1) - 1).clamp(0, 2) * 180;
   @override
   Widget build(BuildContext context) {
     final rc = context.roleColors;
@@ -47,7 +49,7 @@ class CustomerServiceCard extends StatelessWidget {
                   top: Radius.circular(11),
                 ),
                 child: SizedBox(
-                  height: 140,
+                  height: compact ? 120 : 140,
                   child: FigmaNetworkImage(url: imageUrl, fit: BoxFit.cover),
                 ),
               ),

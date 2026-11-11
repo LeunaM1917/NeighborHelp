@@ -18,11 +18,16 @@ function serviceFamily(category, title) {
 function credentialFamily(name) {
   return Object.keys(qualifications).find(k => qualifications[k].some(n => normalize(n) === normalize(name))) || null;
 }
-function eligibleCertificate(c, approved, family, now = new Date()) {
+function eligibleTesdaCertificate(c, approved, now = new Date()) {
   const expiry = /^\d{4}-\d{2}-\d{2}$/.test(c.expirationDate || '') ? new Date(`${c.expirationDate}T23:59:59.999+08:00`) : null;
   return approved.has(c.id) && c.status === 'Approved' && c.verificationSource === 'TESDA Registry of Certified Workers'
     && Boolean(c.reviewedBy) && Boolean(c.reviewedAt) && Boolean(c.certificationId) && Boolean(c.url)
-    && normalize(c.provider) === 'tesda' && credentialFamily(c.name) === family
+    && normalize(c.provider) === 'tesda'
     && expiry !== null && Number.isFinite(expiry.getTime()) && expiry >= now;
 }
-module.exports = {catalog, qualifications, normalize, serviceFamily, credentialFamily, eligibleCertificate};
+function eligibleCertificate(c, approved, family, now = new Date()) {
+  return eligibleTesdaCertificate(c, approved, now) && credentialFamily(c.name) === family;
+}
+const validTesdaQualification = name => typeof name === 'string' && name.trim().length <= 140
+  && /^.{3,}\sNC\s+[IVX]{1,6}$/i.test(name.trim());
+module.exports = {catalog, qualifications, normalize, serviceFamily, credentialFamily, eligibleCertificate, eligibleTesdaCertificate, validTesdaQualification};

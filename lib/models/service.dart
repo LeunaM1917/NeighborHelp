@@ -20,6 +20,8 @@ class ServiceListing {
     required this.createdAt,
     required this.updatedAt,
     this.rejectionReason = '',
+    this.serviceProposalId = '',
+    this.requiredQualification = '',
   });
 
   final String serviceId;
@@ -35,6 +37,8 @@ class ServiceListing {
   final bool isActive;
   final ServiceApprovalStatus approvalStatus;
   final String rejectionReason;
+  final String serviceProposalId;
+  final String requiredQualification;
   final Timestamp createdAt;
   final Timestamp updatedAt;
 
@@ -42,7 +46,8 @@ class ServiceListing {
   bool get isMarketplaceVisible =>
       approvalStatus.isApproved &&
       isActive &&
-      isSupportedService(category, serviceTitle);
+      (isSupportedService(category, serviceTitle) ||
+          serviceProposalId.isNotEmpty);
 
   factory ServiceListing.fromFirestore(String id, Map<String, dynamic> data) {
     return ServiceListing(
@@ -67,6 +72,8 @@ class ServiceListing {
         data['approvalStatus'] as String?,
       ),
       rejectionReason: data['rejectionReason'] as String? ?? '',
+      serviceProposalId: data['serviceProposalId'] as String? ?? '',
+      requiredQualification: data['requiredQualification'] as String? ?? '',
       createdAt: data['createdAt'] as Timestamp? ?? Timestamp.now(),
       updatedAt: data['updatedAt'] as Timestamp? ?? Timestamp.now(),
     );
@@ -86,6 +93,9 @@ class ServiceListing {
       'isActive': isActive,
       'approvalStatus': approvalStatus.firestoreValue,
       'rejectionReason': rejectionReason,
+      if (serviceProposalId.isNotEmpty) 'serviceProposalId': serviceProposalId,
+      if (requiredQualification.isNotEmpty)
+        'requiredQualification': requiredQualification,
       'createdAt': createdAt,
       'updatedAt': updatedAt,
     };

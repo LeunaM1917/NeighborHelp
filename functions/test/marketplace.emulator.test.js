@@ -4,6 +4,8 @@ const {before,after,beforeEach,test}=require('node:test');
 const assert=require('node:assert/strict');
 const admin=require('firebase-admin'),functions=require('firebase-functions/v1');
 const {initializeTestEnvironment}=require('@firebase/rules-unit-testing');
+const {assertFails,assertSucceeds}=require('@firebase/rules-unit-testing');
+const {doc,getDoc,setDoc,updateDoc}=require('firebase/firestore');
 const {credentials,certificate,offer,futureWorkStart}=require('./marketplace_fixtures');
 let env,app,db,inquiry,booking,review;
 const auth=uid=>({auth:{uid,token:{email_verified:true}}});
@@ -36,6 +38,101 @@ async function create(data) {
   return (await db.doc(`bookings/${data.bookingId}`).get()).data();
 }
 async function accept(id='offer') {const b=(await db.doc(`bookings/${id}`).get()).data();return booking({action:'accept',bookingId:id,acceptAgreement:true,agreementHash:b.agreement.hash},auth('p'));}
+
+const proposalData=(extra={})=>({action:'submit',serviceTitle:'Deep Upholstery Cleaning',category:'Cleaning',
+  description:'Clean fabric furniture using domestic cleaning methods. No regulated or specialist work.',certificationEntryId:'cert',...extra});
+const proposals=()=>require('../service_proposal_commands')({db,functions});
+const proposalReview=(id,action='approve',extra={})=>({action,proposalId:id,notes:'Scope checked against the authenticated TESDA qualification.',scopeConfirmed:true,...extra});
+test('service proposals require verified providers and current approved certificates; duplicate retries are safe',async()=>{
+  const command=proposals();
+  await assert.rejects(command(proposalData(),auth('c')),{code:'permission-denied'});
+  await assert.rejects(command(proposalData({serviceTitle:'House Cleaning',category:'Construction'}),auth('p')),{code:'failed-precondition'});
+  await assert.rejects(command(proposalData({certificationEntryId:'someone-elses-cert'}),auth('p')),{code:'failed-precondition'});
+  const result=await command(proposalData(),auth('p'));
+  assert.equal((await command(proposalData(),auth('p'))).duplicate,true);
+  assert.equal((await db.collection('serviceProposals').get()).size,1);
+  assert.equal((await db.collection('notifications').get()).size,1);
+  const own=env.authenticatedContext('p').firestore(),other=env.authenticatedContext('p2').firestore();
+  await assertSucceeds(getDoc(doc(own,'serviceProposals',result.proposalId)));
+  await assertFails(getDoc(doc(other,'serviceProposals',result.proposalId)));
+  await assertFails(updateDoc(doc(own,'serviceProposals',result.proposalId),{status:'Approved'}));
+  await assertFails(updateDoc(doc(own,'serviceProviders','p'),{approvedServiceProposals:{forged:{status:'Approved'}}}));
+  await db.doc('users/new-provider').set({role:'Provider',accountStatus:'Active'});
+  const fresh=env.authenticatedContext('new-provider').firestore(),newProfile={userId:'new-provider',isVerified:false,verificationStatus:'Pending'};
+  await assertFails(setDoc(doc(fresh,'serviceProviders','new-provider'),{...newProfile,approvedServiceProposals:{forged:{status:'Approved'}}}));
+  await assertSucceeds(setDoc(doc(fresh,'serviceProviders','new-provider'),newProfile));
+  await command(proposalData({serviceTitle:'Domestic Surface Sanitizing'}),auth('p'));
+  await command(proposalData({serviceTitle:'Domestic Fabric Cleaning'}),auth('p'));
+  await assert.rejects(command(proposalData({serviceTitle:'Fourth Pending Proposal'}),auth('p')),{code:'resource-exhausted'});
+});
+test('proposal approval creates a private bound draft; providers cannot publish, rename or clone its approval',async()=>{
+  const command=proposals(),{proposalId}=await command(proposalData(),auth('p'));
+  await assert.rejects(command(proposalReview(proposalId),auth('p')),{code:'permission-denied'});
+  await assert.rejects(command(proposalReview(proposalId,'approve',{scopeConfirmed:false}),auth('a')),{code:'failed-precondition'});
+  await db.doc('securityPolicy/admin').set({requireMfa:true});
+  await assert.rejects(command(proposalReview(proposalId),auth('a')),{code:'permission-denied'});
+  await db.doc('securityPolicy/admin').delete();
+  await command(proposalReview(proposalId),auth('a'));
+  const id='proposed_'+proposalId,service=(await db.doc('services/'+id).get()).data();
+  assert.equal(service.approvalStatus,'Draft');assert.equal(service.isActive,false);
+  assert.equal(service.estimatedPrice,0);assert.equal(service.requiredQualification,'Domestic Work NC II');
+  await db.doc('serviceProviders/p').update({locationPolicyVersion:1});
+  const client=env.authenticatedContext('p').firestore();
+  await assertSucceeds(updateDoc(doc(client,'services',id),{estimatedPrice:700,approvalStatus:'Pending',isActive:false}));
+  await assertFails(updateDoc(doc(client,'services',id),{approvalStatus:'Approved',isActive:true}));
+  await assertFails(updateDoc(doc(client,'services',id),{serviceTitle:'House Cleaning',category:'Construction'}));
+  await assertFails(setDoc(doc(client,'services','cloned-approval'),{...service,createdAt:service.createdAt.toDate(),updatedAt:service.updatedAt.toDate()}));
+  await assert.rejects(command(proposalReview(proposalId),auth('a')),{code:'failed-precondition'});
+});
+test('reviewed custom services support inquiry, contract and certificate revocation end to end',async()=>{
+  const command=proposals(),{proposalId}=await command(proposalData(),auth('p'));
+  await command(proposalReview(proposalId),auth('a'));
+  const serviceId='proposed_'+proposalId;
+  await assert.rejects(inquiry({action:'open',serviceId},auth('c')),{code:'failed-precondition'});
+  await db.doc('services/'+serviceId).update({approvalStatus:'Approved',isActive:true,estimatedPrice:700});
+  await db.doc('serviceProviders/p').update({locationPolicyVersion:1});
+  const published=(await db.doc('services/'+serviceId).get()).data();
+  const ops=require('../platform_operations')({db,admin,functions,region:'us-central1'});
+  await ops.auditServices.run({before:{exists:true,data:()=>({...published,approvalStatus:'Pending',isActive:false})},
+    after:{exists:true,data:()=>published}},{params:{id:serviceId},eventId:'custom-service-published'});
+  const projection=(await db.doc('publicProviders/p').get()).data();
+  assert.ok(projection.eligibleServiceIds.includes(serviceId));assert.ok(projection.eligibleServiceExpiries[serviceId]>Date.now());
+  const inquiryId=(await inquiry({action:'open',serviceId},auth('c'))).inquiryId;
+  for(const uid of ['c','p'])await inquiry({action:'send',inquiryId,messageId:uid,text:'Discuss the custom cleaning scope, price and schedule.'},auth(uid));
+  const data={bookingId:'custom-offer',serviceId,inquiryId,serviceLocation:'New Visayas, Panabo City complete address',
+    location:{latitude:7.3,longitude:125.6},scheduledDate:futureWorkStart(),...offer()};
+  await create(data);await accept('custom-offer');
+  assert.equal((await db.doc('bookings/custom-offer').get()).data().status,'Accepted');
+  await db.doc('serviceProviders/p').update({approvedCertificationIds:[]});
+  await assert.rejects(inquiry({action:'open',serviceId},auth('c')),{code:'failed-precondition'});
+  await assert.rejects(booking({action:'start',bookingId:'custom-offer'},auth('p')),{code:'failed-precondition'});
+  await db.doc('serviceProviders/p').update({approvedCertificationIds:['cert']});
+  await db.doc('services/'+serviceId).delete();
+  await assert.rejects(command({action:'restoreDraft',proposalId},auth('p2')),{code:'permission-denied'});
+  assert.equal((await command({action:'restoreDraft',proposalId},auth('p'))).status,'Approved');
+  assert.equal((await db.doc('services/'+serviceId).get()).data().isActive,false);
+});
+test('rejected proposals retain feedback and may be revised; an expired credential cannot receive approval',async()=>{
+  const command=proposals(),{proposalId}=await command(proposalData(),auth('p'));
+  await command(proposalReview(proposalId,'reject',{notes:'Clarify the work boundaries and cleaning methods.'}),auth('a'));
+  assert.match((await db.doc('serviceProposals/'+proposalId).get()).data().reviewNotes,/boundaries/);
+  await command(proposalData({description:'Revised: domestic upholstery surface cleaning only, excluding specialist restoration.'}),auth('p'));
+  await db.doc('serviceProviders/p').update({certificationHistory:[{...certificate(),expirationDate:'2020-01-01'}]});
+  await assert.rejects(command(proposalReview(proposalId),auth('a')),{code:'failed-precondition'});
+  await command(proposalReview(proposalId,'reject'),auth('a'));
+  assert.equal((await db.doc('serviceProposals/'+proposalId).get()).data().status,'Rejected');
+});
+test('an additional TESDA NC qualification can be registry-reviewed but unlocks no service without scope approval',async()=>{
+  const c={...certificate('Shielded Metal Arc Welding NC II'),status:'Pending',url:'gs://test/certificates/p/cert/file.pdf'};
+  await db.doc('serviceProviders/p').update({certificationHistory:[c],approvedCertificationIds:[]});
+  await review({providerId:'p',certificationEntryId:'cert',decision:'Approved',registryChecked:true,notes:'Holder, qualification, number and validity checked in the TESDA registry.'},auth('a'));
+  const {hasMatchingCertificate}=require('../domain');
+  assert.equal(hasMatchingCertificate((await db.doc('serviceProviders/p').get()).data(),'Cleaning','House Cleaning'),false);
+  const command=proposals(),{proposalId}=await command(proposalData({serviceTitle:'Household Metal Furniture Welding',category:'Construction'}),auth('p'));
+  assert.equal(hasMatchingCertificate((await db.doc('serviceProviders/p').get()).data(),'Construction','Household Metal Furniture Welding'),false);
+  await command(proposalReview(proposalId),auth('a'));
+  assert.equal(hasMatchingCertificate((await db.doc('serviceProviders/p').get()).data(),'Construction','Household Metal Furniture Welding'),true);
+});
 
 test('inquiries require no booking and support separate comparison conversations',async()=>{
   const first=await open(),second=await open('p2');assert.notEqual(first,second);assert.equal(await open(),first);

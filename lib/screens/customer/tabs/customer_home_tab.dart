@@ -760,10 +760,10 @@ class _AvailableServicesCarouselState extends State<_AvailableServicesCarousel> 
                       builder: (context, constraints) {
                         const gap = 16.0;
                         const minCardWidth = 200.0;
-                        const maxCardWidth = 400.0;
+                        const maxCardWidth = 360.0;
                         const minFillCardWidth = 180.0;
                         const nextReserve = 52.0;
-                        final listHeight = CustomerServiceCard.heightFor(MediaQuery.textScalerOf(context));
+                        final listHeight = CustomerServiceCard.heightFor(MediaQuery.textScalerOf(context), compact: true);
                         final count = items.length;
 
                         if (count == 0) {
@@ -796,7 +796,8 @@ class _AvailableServicesCarouselState extends State<_AvailableServicesCarousel> 
                               children: [
                                 for (var i = 0; i < count; i++) ...[
                                   if (i > 0) const SizedBox(width: gap),
-                                  Expanded(
+                                  SizedBox(
+                                    width: cardWidth,
                                     child: _HomeServiceCarouselCard(
                                       item: items[i],
                                       onTap: () => onCardTap(items[i]),
@@ -869,6 +870,7 @@ class _HomeServiceCarouselCard extends StatelessWidget {
   final VoidCallback onTap;
   @override
   Widget build(BuildContext context) => CustomerServiceCard(title:item.title,category:item.category,
+    compact:true,
     imageUrl:item.imageUrl,providerName:item.providerName,photoUrl:item.providerPhotoUrl,
     price:item.price,onTap:onTap,rating:_CarouselRatingLabel(item:item));
 }

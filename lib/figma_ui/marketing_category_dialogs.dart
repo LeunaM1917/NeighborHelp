@@ -55,10 +55,9 @@ void showMarketingCategoryServices(
   final ctx = browseContext ?? const MarketingBrowseContext();
   showDialog<void>(
     context: context,
-    builder: (dialogContext) => _CategoryServicesDialog(
-      category: category,
-      browseContext: ctx,
-    ),
+    builder: (dialogContext) => !ctx.isAuthenticated ? _CategoryServicesDialog(category: category, browseContext: ctx)
+      : StreamBuilder<List<ServiceListing>>(stream: FirestoreService().activeServicesStream(), builder: (_, snapshot) => _CategoryServicesDialog(
+        category: MarketingServiceCatalog.withApprovedProposals(category, snapshot.data ?? const []), browseContext: ctx)),
   );
 }
 

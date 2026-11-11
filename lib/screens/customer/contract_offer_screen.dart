@@ -12,6 +12,16 @@ import '../../widgets/service_location_picker.dart';
 import '../../widgets/service_agreement_card.dart';
 import '../../widgets/account_setup_gate.dart';
 
+const contractFieldGuidance = <String, (String, String)>{
+  'scope': ('Say what work will be done and where.', 'Example: Complete the agreed cleaning tasks in the kitchen and living room.'),
+  'deliverables': ('Describe the finished result the provider must deliver.', 'Example: Clean floors and surfaces, with the work area left tidy.'),
+  'exclusions': ('List tasks or costs outside this agreement. Write None agreed if there are no exclusions.', 'Example: Extra rooms, replacement parts and additional days are excluded unless both parties agree.'),
+  'materials': ('Say who supplies tools and materials and who pays for purchases.', 'Example: Customer supplies the agreed materials; provider brings tools. Extra purchases require prior approval.'),
+  'paymentTerms': ('Specify how and when payment is made, including any agreed deposit.', 'Example: Pay the agreed amount in cash after inspecting the work. No deposit agreed.'),
+  'completionCriteria': ('Explain what you will inspect before confirming that the job is done.', 'Example: Inspect each agreed task together and check that nothing is unfinished.'),
+  'responsibilities': ('Explain each party’s duties, access arrangements and known safety concerns.', 'Example: Customer provides access and clears the work area. Provider brings tools and follows the agreed safety precautions.'),
+};
+
 class ContractOfferScreen extends StatefulWidget {
   const ContractOfferScreen({
     super.key,
@@ -169,6 +179,10 @@ class _ContractOfferScreenState extends State<ContractOfferScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
+      toolbarHeight: 64,
+      leadingWidth: MediaQuery.sizeOf(context).width >= 600 ? 80 : 64,
+      leading: Padding(padding: EdgeInsets.only(left: MediaQuery.sizeOf(context).width >= 600 ? 24 : 12), child: const BackButton()),
+      titleSpacing: 12,
       title: Text(context.tr('Prepare contract offer')),
     ),
     body: Form(
@@ -354,6 +368,8 @@ class _ContractOfferScreenState extends State<ContractOfferScreen> {
             title: 'Work and responsibilities',
             icon: Icons.description_outlined,
             children: [
+              const Text('Use the examples as a guide and write what you and the provider agreed in messages.'),
+              const SizedBox(height: 16),
               for (final f in _fields.entries)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 16),
@@ -378,6 +394,10 @@ class _ContractOfferScreenState extends State<ContractOfferScreen> {
                         }[f.key]!,
                       ),
                       alignLabelWithHint: true,
+                      hintText: contractFieldGuidance[f.key]!.$2,
+                      hintMaxLines: 3,
+                      helperText: contractFieldGuidance[f.key]!.$1,
+                      helperMaxLines: 3,
                     ),
                     validator: (v) => (v?.trim().length ?? 0) < 5
                         ? 'Provide at least 5 characters'

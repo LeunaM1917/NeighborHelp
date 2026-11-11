@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../figma_ui/figma_colors.dart';
 import '../../../models/app_user.dart';
+import 'admin_inbox_button.dart';
 
 class AdminAccountActions extends StatelessWidget {
   const AdminAccountActions({
@@ -11,12 +12,14 @@ class AdminAccountActions extends StatelessWidget {
     required this.onNotificationsTap,
     required this.onSignOut,
     this.vertical = false,
+    this.onAdminNotificationSelected,
   });
 
   final AppUser appUser;
   final VoidCallback onNotificationsTap;
   final VoidCallback onSignOut;
   final bool vertical;
+  final ValueChanged<int>? onAdminNotificationSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -31,7 +34,7 @@ class AdminAccountActions extends StatelessWidget {
         ? parts.first[0].toUpperCase()
         : '${parts.first[0]}${parts.last[0]}'.toUpperCase();
     final children = <Widget>[
-      IconButton(
+      if (onAdminNotificationSelected != null) AdminInboxButton(appUser: appUser, onNavigate: onAdminNotificationSelected!) else IconButton(
         tooltip: 'Notifications',
         onPressed: onNotificationsTap,
         icon: const Icon(Icons.notifications_outlined, size: 22),

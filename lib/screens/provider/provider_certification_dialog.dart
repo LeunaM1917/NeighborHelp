@@ -112,6 +112,7 @@ class _ProviderCertificationDialogState
   String? _issueDate;
   String? _expirationDate;
   bool _saving = false;
+  bool _otherQualification = false;
 
   @override
   void initState() {
@@ -120,6 +121,7 @@ class _ProviderCertificationDialogState
     _name = TextEditingController(
       text: e?.name ?? widget.initialQualification ?? '',
     );
+    _otherQualification = _name.text.isNotEmpty && !approvedQualifications.values.expand((v) => v).contains(_name.text);
     _provider = TextEditingController(text: 'TESDA');
     _description = TextEditingController(text: e?.description ?? '');
     _certId = TextEditingController(text: e?.certificationId ?? '');
@@ -343,7 +345,7 @@ class _ProviderCertificationDialogState
           _labeledField(
             label: 'Certification name',
             field: DropdownButtonFormField<String>(
-              initialValue:
+              initialValue: _otherQualification ? '__other__' :
                   approvedQualifications.values
                       .expand((v) => v)
                       .contains(_name.text)
@@ -358,14 +360,27 @@ class _ProviderCertificationDialogState
                     value: name,
                     child: Text(name, overflow: TextOverflow.ellipsis),
                   ),
+                const DropdownMenuItem(value: '__other__', child: Text('Other TESDA NC qualification')),
               ],
-              onChanged: (v) => setState(() => _name.text = v ?? ''),
+              onChanged: (v) => setState(() {
+                _otherQualification = v == '__other__';
+                _name.text = _otherQualification ? '' : (v ?? '');
+              }),
               validator: (v) => v == null
                   ? 'Choose the qualification shown on your certificate'
                   : null,
               decoration: _inputDecoration(),
             ),
           ),
+          if (_otherQualification) ...[
+            const SizedBox(height: 12),
+            _labeledField(label: 'Exact TESDA qualification', field: TextFormField(
+              controller: _name, maxLength: 140,
+              decoration: _inputDecoration(hint: 'Qualification name and NC level as printed'),
+              validator: (v) => RegExp(r'^.{3,}\sNC\s+[IVX]{1,6}$', caseSensitive: false).hasMatch((v ?? '').trim())
+                ? null : 'Enter the exact TESDA qualification and NC level',
+            )),
+          ],
           const SizedBox(height: 18),
           _labeledField(
             label: 'Issuing authority',

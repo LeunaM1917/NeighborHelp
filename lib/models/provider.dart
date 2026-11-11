@@ -29,6 +29,7 @@ class ServiceProviderProfile {
     this.verificationProvider = '',
     this.verificationRetakeRequired = false,
     this.verificationIssueCodes = const [],
+    this.approvedServiceProposals = const {},
     this.governmentIdTypeCode = '',
     this.governmentIdTypeLabel = '',
     this.education = '',
@@ -109,6 +110,7 @@ class ServiceProviderProfile {
   final String verificationProvider;
   final bool verificationRetakeRequired;
   final List<String> verificationIssueCodes;
+  final Map<String, dynamic> approvedServiceProposals;
 
   /// Didit document type code (P, ID, DL, RP, HIC, TC) for the selected PH government ID.
   final String governmentIdTypeCode;
@@ -276,6 +278,11 @@ class ServiceProviderProfile {
       verificationRetakeRequired: data['verificationRetakeRequired'] == true,
       verificationIssueCodes: IdentityVerification.readIssueCodes(
         data['verificationIssueCodes'],
+      ),
+      approvedServiceProposals: Map<String, dynamic>.from(
+        data['approvedServiceProposals'] is Map
+            ? data['approvedServiceProposals'] as Map
+            : const {},
       ),
       governmentIdTypeCode: data['governmentIdTypeCode'] as String? ?? '',
       governmentIdTypeLabel: data['governmentIdTypeLabel'] as String? ?? '',

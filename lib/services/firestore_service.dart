@@ -569,6 +569,13 @@ class FirestoreService {
   Future<ServiceListing?> getService(String serviceId) =>
       _read('service:$serviceId', () => serviceStream(serviceId).first);
 
+  /// Listing review and draft recovery must see current server state.
+  Future<ServiceListing?> getServiceForListing(String serviceId) async {
+    final snap = await _db.collection(FirestoreCollections.services).doc(serviceId)
+      .get(const GetOptions(source: Source.server));
+    return snap.exists ? ServiceListing.fromFirestore(snap.id, snap.data()!) : null;
+  }
+
   /// Service titles keyed by listing id (for review job labels on profiles).
   Future<Map<String, String>> serviceTitlesByIds(Iterable<String> serviceIds) {
     final unique =
@@ -677,9 +684,12 @@ class FirestoreService {
     String? rejectionReason,
   }) async {
     if (status.isApproved) {
-      final listing = await getService(serviceId);
+      final listing = await getServiceForListing(serviceId);
       if (listing == null) throw StateError('Service not found.');
-      final profile = await getProviderProfile(listing.providerId);
+      if (listing.serviceProposalId.isNotEmpty && !listing.approvalStatus.isPending) {
+        throw StateError('The provider must finish and submit this proposed service draft before listing approval.');
+      }
+      final profile = await getProviderProfileForListing(listing.providerId);
       final owner = await getUser(listing.providerId);
       if (profile == null ||
           !profile.isVerifiedProvider ||
@@ -1108,6 +1118,11 @@ class FirestoreService {
           });
     });
   }
+
+  Stream<List<n.AppNotification>> adminNotificationsForUser(String userId) => _cache('admin-notifications:$userId', () =>
+    _db.collection(FirestoreCollections.notifications).where('userId', isEqualTo: userId)
+      .orderBy('createdAt', descending: true).limit(50).snapshots()
+      .map((s) => s.docs.map((d) => n.AppNotification.fromFirestore(d.id, d.data())).toList()));
 
   Stream<List<ChatMessage>> messagesForBooking(String bookingId) {
     return _cache('messages:$bookingId', () {

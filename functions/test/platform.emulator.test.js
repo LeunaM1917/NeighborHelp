@@ -23,6 +23,27 @@ beforeEach(async () => {
   await env.clearFirestore(); sent.length=0;
   for (const [uid,role] of [['admin','Administrator'],['customer','Customer'],['provider','Provider']]) await db.doc(`users/${uid}`).set({role,accountStatus:'Active',email:'private@example.test',contactNumber:'private',fullName:uid,diditSessionId:'private-session'});
 });
+
+test('admin inbox receives registration and certificate activity once and never sends those as campaign pushes',async()=>{
+  const registered={role:'Customer',accountStatus:'Active',fullName:'New synthetic member'};
+  await db.doc('users/new-member').set(registered);
+  const event={params:{id:'new-member'},eventId:'registration-inbox'};
+  const change={before:{exists:false,data:()=>undefined},after:{exists:true,data:()=>registered}};
+  await ops.auditUsers.run(change,event);await ops.auditUsers.run(change,event);
+  let inbox=await db.collection('notifications').where('userId','==','admin').get();
+  assert.equal(inbox.size,1);assert.equal(inbox.docs[0].data().adminTab,1);
+  await inbox.docs[0].ref.update({isRead:true});await ops.auditUsers.run(change,event);
+  assert.equal((await inbox.docs[0].ref.get()).data().isRead,true);
+  const before={userId:'provider',certificationHistory:[]},after={...before,certificationHistory:[{id:'test-cert',name:'Masonry NC II',status:'Pending'}]};
+  await db.doc('serviceProviders/provider').set(after);
+  await ops.auditServiceProviders.run({before:{exists:true,data:()=>before},after:{exists:true,data:()=>after}},
+    {params:{id:'provider'},eventId:'submitted-certificate-inbox'});
+  inbox=await db.collection('notifications').where('userId','==','admin').get();
+  assert.equal(inbox.size,2);assert.ok(inbox.docs.some(d=>d.data().adminTab===5));
+  await db.doc('users/admin/devices/test').set({token:'valid-admin-push-token'});
+  await ops.deliverPushNotification.run({data:()=>({...inbox.docs[0].data(),inAppOnly:true})});
+  assert.equal(sent.length,0);
+});
 test('booking notifications are idempotent and preserve read receipts on event retries', async () => {
   const before={status:'In Progress',customerId:'customer',providerId:'provider',scheduledDate:Timestamp.now()};
   const after={...before,status:'Milestone Complete',updatedBy:'provider'};
@@ -72,7 +93,7 @@ test('service notifications resolve the profile owner and ignore drafts, unrelat
   }
   await ops.auditServices.run(reviewChange(before, {...before, description: 'Updated description'}), {params: {id: 'listing'}, eventId: 'edit-service'});
   await ops.auditServices.run(reviewChange(before, null), {params: {id: 'listing'}, eventId: 'delete-service'});
-  const alerts = await db.collection('notifications').get();
+  const alerts = await db.collection('notifications').where('userId','==','provider').get();
   assert.equal(alerts.size, 4);
   assert.ok(alerts.docs.every(d => d.data().userId === 'provider' && d.data().relatedServiceId === 'listing'));
 });
@@ -97,7 +118,7 @@ test('certificate notifications cover new submissions, pending review notes, rej
   }
   await ops.auditServiceProviders.run(reviewChange(before, {...before, certificationHistory: [...before.certificationHistory].reverse()}),
     {params: {id: 'provider'}, eventId: 'reorder-certificates'});
-  const alerts = await db.collection('notifications').get();
+  const alerts = await db.collection('notifications').where('userId','==','provider').get();
   assert.equal(alerts.size, 5);
   assert.ok(alerts.docs.every(d => d.data().userId === 'provider' && d.data().notificationType === 'Certificate Review'));
   assert.equal(alerts.docs.filter(d => d.data().relatedCertificationId === 'second').length, 1);

@@ -102,6 +102,7 @@ class _AdminShellState extends State<AdminShell> {
           scrollController: _tabScroll.controllerFor(_tab),
           rail: AdminNavigation(currentIndex: _tab, onSelect: _selectTab,
             bottomActions: AdminAccountActions(appUser: widget.appUser, vertical: true,
+              onAdminNotificationSelected: auth.isLocalAdminOnly ? null : _selectTab,
               onNotificationsTap: () => _selectTab(10), onSignOut: () => auth.signOut()),
           ),
           header: _AdminTopBar(
@@ -109,6 +110,7 @@ class _AdminShellState extends State<AdminShell> {
             appUser: widget.appUser,
             firestoreConnected: !auth.isLocalAdminOnly,
             showAccountActions: !wide,
+            onAdminNotificationSelected: auth.isLocalAdminOnly ? null : _selectTab,
             onSignOut: () => auth.signOut(),
             onNotificationsTap: () => _selectTab(10),
           ),
@@ -202,6 +204,7 @@ class _AdminTopBar extends StatelessWidget {
     required this.onSignOut,
     required this.onNotificationsTap,
     required this.showAccountActions,
+    this.onAdminNotificationSelected,
   });
 
   final String title;
@@ -210,6 +213,7 @@ class _AdminTopBar extends StatelessWidget {
   final VoidCallback onSignOut;
   final VoidCallback onNotificationsTap;
   final bool showAccountActions;
+  final ValueChanged<int>? onAdminNotificationSelected;
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -249,7 +253,8 @@ class _AdminTopBar extends StatelessWidget {
               ),
             ),
           if (showAccountActions)
-            AdminAccountActions(appUser: appUser, onNotificationsTap: onNotificationsTap, onSignOut: onSignOut),
+            AdminAccountActions(appUser: appUser, onNotificationsTap: onNotificationsTap, onSignOut: onSignOut,
+              onAdminNotificationSelected: onAdminNotificationSelected),
         ],
       ),
     ),
