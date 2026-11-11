@@ -8,6 +8,7 @@ import '../../../models/identity_verification.dart';
 import '../../../models/provider.dart';
 import 'admin_dashboard_widgets.dart';
 import 'admin_providers_widgets.dart';
+import 'admin_verification_details_dialog.dart';
 
 class AdminVerificationPageHeader extends StatelessWidget {
   const AdminVerificationPageHeader({
@@ -373,6 +374,14 @@ class AdminVerificationApplicationCard extends StatelessWidget {
       spacing: 8,
       runSpacing: 8,
       children: [
+        if (v.hasStarted || v.isDeclined || v.verificationIssueCodes.isNotEmpty)
+          OutlinedButton.icon(
+            onPressed: () => showDialog<void>(context: context, builder: (_) => AdminVerificationDetailsDialog(
+              name: name, verification: v, onRefresh: onRefreshDidit,
+            )),
+            icon: const Icon(Icons.info_outline_rounded, size: 16),
+            label: const Text('View details'),
+          ),
         if (isPending && canReview) ...[
           OutlinedButton(
             onPressed: onReject,
@@ -394,8 +403,6 @@ class AdminVerificationApplicationCard extends StatelessWidget {
             ),
             child: Text('Approve', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
           ),
-          if (!v.canAdminApprove)
-            const Text('A readable, completed ID check is required before approval.'),
         ] else if (isPending) ...[
           Text(
             _pendingDiditHint(v),
@@ -435,6 +442,12 @@ class AdminVerificationApplicationCard extends StatelessWidget {
         children: [
           info,
           const SizedBox(height: 16),
+          if (isPending && canReview && !v.canAdminApprove) ...[
+            Text('A readable, completed ID check is required before approval.',
+              textAlign: TextAlign.end,
+              style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray500)),
+            const SizedBox(height: 8),
+          ],
           actions,
         ],
       ),
@@ -547,6 +560,7 @@ class AdminVerificationApplication {
               diditStatus: profile!.diditStatus,
               verificationProvider: profile!.verificationProvider,
               verificationRetakeRequired: profile!.verificationRetakeRequired,
+              verificationIssueCodes: profile!.verificationIssueCodes,
               governmentIdTypeCode: profile!.governmentIdTypeCode,
               governmentIdTypeLabel: profile!.governmentIdTypeLabel,
             );

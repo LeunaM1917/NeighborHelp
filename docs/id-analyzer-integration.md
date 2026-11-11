@@ -144,3 +144,10 @@ failure. The camera and immediate photo-capture warnings are hosted by DocuPass;
 backend decision overrides cannot insert a popup inside that third-party page.
 An actual blurry-photo capture must be checked there to validate its inline retry
 behavior; emulator tests validate NeighborHelp's returned-result handling only.
+
+Administrator application cards place the approval prerequisite above the review
+buttons. View details opens a text-only dialog using saved verification issue
+codes, with readable explanations and a status-refresh action for both customer
+and provider applications. Missing details are identified explicitly; the client
+does not infer that an ID is blurry from a rejection or expiration alone. This
+does not retrieve or copy government ID photos into NeighborHelp.

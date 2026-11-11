@@ -6,6 +6,7 @@ class IdentityVerification {
     this.diditStatus = '',
     this.verificationProvider = '',
     this.verificationRetakeRequired = false,
+    this.verificationIssueCodes = const [],
     this.governmentIdTypeCode = '',
     this.governmentIdTypeLabel = '',
   });
@@ -15,6 +16,7 @@ class IdentityVerification {
   final String diditStatus;
   final String verificationProvider;
   final bool verificationRetakeRequired;
+  final List<String> verificationIssueCodes;
   final String governmentIdTypeCode;
   final String governmentIdTypeLabel;
 
@@ -25,6 +27,7 @@ class IdentityVerification {
       diditStatus: data['diditStatus'] as String? ?? '',
       verificationProvider: data['verificationProvider'] as String? ?? '',
       verificationRetakeRequired: data['verificationRetakeRequired'] == true,
+      verificationIssueCodes: readIssueCodes(data['verificationIssueCodes']),
       governmentIdTypeCode: data['governmentIdTypeCode'] as String? ?? '',
       governmentIdTypeLabel: data['governmentIdTypeLabel'] as String? ?? '',
     );
@@ -39,6 +42,15 @@ class IdentityVerification {
     'governmentIdTypeCode': '',
     'governmentIdTypeLabel': '',
   };
+
+  static List<String> readIssueCodes(Object? value) => value is List
+      ? value
+            .whereType<String>()
+            .where((code) => RegExp(r'^[A-Z][A-Z0-9_]{0,79}$').hasMatch(code))
+            .toSet()
+            .take(50)
+            .toList(growable: false)
+      : const [];
 
   /// Platform badge — admin approval or legacy Approved status.
   bool get isVerifiedOnPlatform =>

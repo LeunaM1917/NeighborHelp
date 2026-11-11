@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'provider_education.dart';
+import 'identity_verification.dart';
 import 'provider_employment.dart';
 import 'provider_certification.dart';
 import 'provider_portfolio_project.dart';
@@ -27,6 +28,7 @@ class ServiceProviderProfile {
     this.diditStatus = '',
     this.verificationProvider = '',
     this.verificationRetakeRequired = false,
+    this.verificationIssueCodes = const [],
     this.governmentIdTypeCode = '',
     this.governmentIdTypeLabel = '',
     this.education = '',
@@ -106,6 +108,7 @@ class ServiceProviderProfile {
   /// Which KYC vendor drives verification, e.g. "didit". Empty if none yet.
   final String verificationProvider;
   final bool verificationRetakeRequired;
+  final List<String> verificationIssueCodes;
 
   /// Didit document type code (P, ID, DL, RP, HIC, TC) for the selected PH government ID.
   final String governmentIdTypeCode;
@@ -271,6 +274,9 @@ class ServiceProviderProfile {
       diditStatus: data['diditStatus'] as String? ?? '',
       verificationProvider: data['verificationProvider'] as String? ?? '',
       verificationRetakeRequired: data['verificationRetakeRequired'] == true,
+      verificationIssueCodes: IdentityVerification.readIssueCodes(
+        data['verificationIssueCodes'],
+      ),
       governmentIdTypeCode: data['governmentIdTypeCode'] as String? ?? '',
       governmentIdTypeLabel: data['governmentIdTypeLabel'] as String? ?? '',
       education: data['education'] as String? ?? '',
@@ -350,6 +356,7 @@ class ServiceProviderProfile {
       'diditStatus': diditStatus,
       'verificationProvider': verificationProvider,
       'verificationRetakeRequired': verificationRetakeRequired,
+      'verificationIssueCodes': verificationIssueCodes,
       'governmentIdTypeCode': governmentIdTypeCode,
       'governmentIdTypeLabel': governmentIdTypeLabel,
       'education': education,
