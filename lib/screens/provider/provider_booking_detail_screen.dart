@@ -1,6 +1,7 @@
 import '../../l10n/app_strings.dart';
 import '../../widgets/service_agreement_card.dart';
 import '../../widgets/booking_reschedule_card.dart';
+import '../../widgets/booking_work_location_card.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -214,6 +215,8 @@ class _ProviderBookingDetailScreenState
                                       completedAt: b.completedAt?.toDate(),
                                     ),
 
+                                    const SizedBox(height: 20),
+                                    BookingWorkLocationCard(booking: b, viewerId: widget.appUser.userId),
                                     const SizedBox(height: 20),
                                     AppSection(
                                       title: 'Service details',

@@ -1,4 +1,5 @@
 import '../../widgets/service_agreement_card.dart';
+import '../../widgets/booking_work_location_card.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -211,6 +212,8 @@ class _ProviderBookingRequestReviewBodyState
                               _headerBlock(context, b, service, customerName),
                               const SizedBox(height: 16),
                               _summaryCard(b, service, customerName),
+                              const SizedBox(height: 16),
+                              BookingWorkLocationCard(booking: b, viewerId: widget.appUser.userId),
                               if (b.notes != null &&
                                   b.notes!.trim().isNotEmpty) ...[
                                 const SizedBox(height: 16),
