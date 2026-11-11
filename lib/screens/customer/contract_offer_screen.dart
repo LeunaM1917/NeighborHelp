@@ -161,7 +161,6 @@ class _ContractOfferScreenState extends State<ContractOfferScreen> {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
       title: Text(context.tr('Prepare contract offer')),
-      actions: const [LanguageMenuButton()],
     ),
     body: Form(
       key: _form,

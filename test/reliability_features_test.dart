@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:neighbor_help/l10n/app_strings.dart';
 import 'package:neighbor_help/l10n/messages.dart';
 import 'package:neighbor_help/models/booking.dart';
@@ -33,37 +32,20 @@ void main() {
       expect(calls, containsAll(['save', 'disable', 'delete']));
     },
   );
-  test(
-    'workflow translations cover the same nonempty strings in all three languages',
-    () {
-      for (final row in messages.entries) {
-        expect(row.value, hasLength(3), reason: row.key);
-        for (final value in row.value) {
-          expect(value.trim(), isNotEmpty, reason: row.key);
-        }
-      }
-      for (final code in ['en', 'fil', 'ceb']) {
-        final strings = AppStrings(code);
-        expect(strings.text('Confirm work complete'), isNotEmpty);
-        expect(
-          strings.text('Payment record notice'),
-          isNot('Payment record notice'),
-        );
-      }
-    },
-  );
-  test(
-    'language preference survives reload and unsupported choices do not replace it',
-    () async {
-      SharedPreferences.setMockInitialValues({});
-      await AppPreferences.instance.setLanguage('ceb');
-      await AppPreferences.instance.load();
-      expect(AppPreferences.instance.locale.languageCode, 'ceb');
-      await AppPreferences.instance.setLanguage('unsupported');
-      expect(AppPreferences.instance.locale.languageCode, 'ceb');
-      await AppPreferences.instance.setLanguage('en');
-    },
-  );
+  test('workflow English copy retains its labels and important notices', () {
+    for (final row in messages.entries) {
+      expect(row.value.trim(), isNotEmpty, reason: row.key);
+    }
+    const strings = AppStrings();
+    expect(strings.text('Confirm work complete'), isNotEmpty);
+    expect(
+      strings.text('Payment record notice'),
+      isNot('Payment record notice'),
+    );
+  });
+  test('unknown English copy keys retain their original text', () {
+    expect(const AppStrings().text('New workflow label'), 'New workflow label');
+  });
   test(
     'bundled service thumbnails are local, small and exclude removed categories',
     () {
@@ -97,11 +79,11 @@ void main() {
     expect(safe, isNot(contains('payment reference')));
     expect(CrashReporting.consent.value, isFalse);
   });
-  for (final language in ['fil', 'ceb']) {
+  for (final width in [360.0, 1024.0]) {
     testWidgets(
-      'completion confirmation remains explicit in $language at a narrow width',
+      'English completion confirmation remains explicit at width $width',
       (tester) async {
-        tester.view.physicalSize = const Size(360, 900);
+        tester.view.physicalSize = Size(width, 900);
         tester.view.devicePixelRatio = 1;
         addTearDown(tester.view.resetPhysicalSize);
         addTearDown(tester.view.resetDevicePixelRatio);
@@ -111,21 +93,10 @@ void main() {
           'status': 'Awaiting Confirmation',
           'scheduledDate': Timestamp.now(),
         });
-        final strings = AppStrings(language);
+        const strings = AppStrings();
         await tester.pumpWidget(
           MaterialApp(
-            locale: Locale(language),
-            supportedLocales: const [
-              Locale('en'),
-              Locale('fil'),
-              Locale('ceb'),
-            ],
-            localizationsDelegates: const [
-              AppStrings.delegate,
-              MarketplaceMaterialDelegate(),
-              MarketplaceWidgetsDelegate(),
-              MarketplaceCupertinoDelegate(),
-            ],
+            locale: const Locale('en'),
             home: Scaffold(
               body: SingleChildScrollView(
                 child: WorkCompletionCard(booking: booking, asCustomer: true),

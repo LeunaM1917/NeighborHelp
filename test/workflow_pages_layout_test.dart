@@ -44,6 +44,7 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(find.byType(TextFormField), findsNWidgets(4));
+        expect(find.byIcon(Icons.translate), findsNothing);
         expect(tester.takeException(), isNull);
         final preview = find.text('Preview settlement');
         await tester.ensureVisible(preview);

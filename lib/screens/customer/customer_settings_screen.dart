@@ -196,7 +196,7 @@ class _CustomerSettingsScreenState extends State<CustomerSettingsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-              const AppPreferencesPanel(showLanguage: false),
+              const AppPreferencesPanel(),
           if (!widget.inDialog)
             AppPageHeader(
               title: 'Profile settings',

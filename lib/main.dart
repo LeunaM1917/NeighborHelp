@@ -12,11 +12,9 @@ import 'app.dart';
 import 'firebase_options.dart';
 import 'services/push_notification_service.dart';
 import 'services/crash_reporting.dart';
-import 'l10n/app_strings.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await AppPreferences.instance.load();
 
   const useEmulators = bool.fromEnvironment('USE_FIREBASE_EMULATORS');
   if (!useEmulators) FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);

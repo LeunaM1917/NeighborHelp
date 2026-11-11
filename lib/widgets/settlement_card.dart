@@ -81,7 +81,7 @@ class _SettlementCardState extends State<SettlementCard> {
               context.tr('Final work settlement'),
               style: WorkflowStyles.sectionTitle,
             ),
-            Text(context.tr('Contract language notice')),
+            Text(context.tr('Agreement review notice')),
             OutlinedButton(
               onPressed: _busy || b['pendingSettlementId'] != null
                   ? null
@@ -284,7 +284,6 @@ class _SettlementProposalScreenState extends State<SettlementProposalScreen> {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
       title: Text(context.tr('Final work settlement')),
-      actions: const [LanguageMenuButton()],
     ),
     body: Form(
       key: _form,
@@ -297,7 +296,7 @@ class _SettlementProposalScreenState extends State<SettlementProposalScreen> {
             child: WorkflowFields(
               spacing: 8,
               children: [
-                Text(context.tr('Contract language notice')),
+                Text(context.tr('Agreement review notice')),
                 Text(context.tr('Payment record notice')),
               ],
             ),

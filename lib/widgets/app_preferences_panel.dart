@@ -3,8 +3,7 @@ import '../l10n/app_strings.dart';
 import '../services/crash_reporting.dart';
 
 class AppPreferencesPanel extends StatefulWidget {
-  const AppPreferencesPanel({super.key, this.showLanguage = true});
-  final bool showLanguage;
+  const AppPreferencesPanel({super.key});
   @override
   State<AppPreferencesPanel> createState() => _AppPreferencesPanelState();
 }
@@ -12,8 +11,7 @@ class AppPreferencesPanel extends StatefulWidget {
 class _AppPreferencesPanelState extends State<AppPreferencesPanel> {
   bool _busy = false;
   @override
-  Widget build(BuildContext context) =>
-      !widget.showLanguage && !CrashReporting.available
+  Widget build(BuildContext context) => !CrashReporting.available
       ? const SizedBox.shrink()
       : Card(
           child: Padding(
@@ -21,13 +19,6 @@ class _AppPreferencesPanelState extends State<AppPreferencesPanel> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (widget.showLanguage)
-                  Row(
-                    children: [
-                      Expanded(child: Text(context.tr('Language'))),
-                      const LanguageMenuButton(),
-                    ],
-                  ),
                 if (CrashReporting.available)
                   ValueListenableBuilder<bool>(
                     valueListenable: CrashReporting.consent,

@@ -163,7 +163,6 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Align(alignment:Alignment.centerRight,child:LanguageMenuButton()),
               const BrandLockup(
                 subtitle: 'Hire local service providers for home, errands, and personal services — simple, trusted, and neighborhood-first.',
               ),

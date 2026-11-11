@@ -30,9 +30,9 @@ Providers report refunds actually sent; customers acknowledge actual receipt or 
 
 ## Languages
 
-The language button is available at sign-in and key workflows, and in customer/provider/admin account preferences. The device preference persists. Critical offer fields, contract controls, completion/correction choices, payment/refund labels, settlement controls and reporting actions have English, Tagalog and Cebuano/Bisaya translations. Native-speaker pilot review is still required; these are not certified legal translations or evidence of Cebuano sentiment-model accuracy.
+The interface uses English throughout. Language menus, saved language selection and the multilingual interface dictionaries have been removed from sign-in, contract offers, settlements and account preferences. A previous device language preference cannot change the interface. Shared English workflow labels and important notices remain in the copy lookup.
 
-Accepted contract, amendment and settlement text remains the exact original document both parties accepted, with its hash and acceptance records. Translated controls never rewrite it, and users are told to read the full document. Some explanatory text, notifications and server error details remain English. Built-in Flutter controls use English fallback when a target locale is unavailable, including Cebuano. Do not describe the whole application or signed documents as fully translated. Use the [pilot protocol](pilot/README.md) for comprehension testing and native corrections.
+Accepted contract, amendment and settlement text remains the exact original document both parties accepted, with its hash and acceptance records. Removing interface language selection does not rewrite these records. Users are still asked to read the complete agreement before accepting. This interface change does not alter user-written reviews or the sentiment model's language capabilities. Use the [pilot protocol](pilot/README.md) for comprehension testing.
 
 ## Diagnostics and automated checks
 
