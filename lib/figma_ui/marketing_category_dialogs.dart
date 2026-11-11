@@ -236,7 +236,7 @@ class _CategoryServicesDialog extends StatelessWidget {
                       style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600, color: FigmaColors.gray900),
                     ),
                     subtitle: Text(
-                      'From ₱${service.startingPricePhp}',
+                      service.startingPricePhp > 0 ? 'From ₱${service.startingPricePhp}' : 'Discuss pricing',
                       style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray500),
                     ),
                     trailing: const Icon(Icons.chevron_right, color: FigmaColors.gray400, size: 22),
@@ -456,7 +456,7 @@ class _ServiceDetailDialogState extends State<_ServiceDetailDialog> {
                           const Icon(Icons.payments_outlined, size: 20, color: FigmaColors.navy),
                           const SizedBox(width: 10),
                           Text(
-                            'Starting at ₱${widget.service.startingPricePhp}',
+                            widget.service.startingPricePhp > 0 ? 'Starting at ₱${widget.service.startingPricePhp}' : 'Discuss pricing',
                             style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600, color: FigmaColors.gray900),
                           ),
                         ],

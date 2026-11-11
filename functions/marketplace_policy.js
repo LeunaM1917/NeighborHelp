@@ -5,6 +5,9 @@ const qualifications = {
   domestic: ['Domestic Work NC II'],
   computer: ['Computer Systems Servicing NC II'],
   rac: ['RAC Servicing (DomRAC) NC II', 'RAC Servicing (Domestic) NC II'],
+  masonry: ['Masonry NC II'],
+  tiling: ['Tile Setting NC II'],
+  painting: ['Construction Painting NC II'],
 };
 const normalize = value => String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
 function serviceFamily(category, title) {

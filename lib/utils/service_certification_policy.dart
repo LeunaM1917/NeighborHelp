@@ -30,7 +30,9 @@ bool hasMatchingServiceCertificate(
   final accepted = approvedQualifications[family]!
       .map(normalizeCredential)
       .toSet();
-  return profile.effectiveCertificationHistory.any((c) {
+  // Match the backend: both the approved ID and the stored review decision
+  // must agree. Presentation fallbacks must not grant publishing permission.
+  return profile.certificationHistory.any((c) {
     final expires = DateTime.tryParse('${c.expirationDate}T23:59:59.999+08:00');
     return profile.approvedCertificationIds.contains(c.id) &&
         c.isApproved &&

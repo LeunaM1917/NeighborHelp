@@ -77,7 +77,7 @@ class _ProviderServicesTabState extends State<ProviderServicesTab> {
     );
     if (saved == true && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(existing == null ? 'Service published' : 'Service updated')),
+        SnackBar(content: Text(existing == null ? 'Service saved' : 'Service updated')),
       );
     }
   }
@@ -220,7 +220,7 @@ class _ProviderServicesTabState extends State<ProviderServicesTab> {
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                   ),
                                   icon: const Icon(Icons.add),
-                                  label: const Text('Add service'),
+                                  label: const Text('Add your service'),
                                 ),
                               )
                             else

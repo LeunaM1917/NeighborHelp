@@ -358,7 +358,7 @@ class ProviderServicesFilterBar extends StatelessWidget {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                   icon: const Icon(Icons.add, size: 20),
-                  label: const Text('Add service'),
+                  label: const Text('Add your service'),
                 ),
               ),
             ],
@@ -384,7 +384,7 @@ class ProviderServicesFilterBar extends StatelessWidget {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
               icon: const Icon(Icons.add, size: 20),
-              label: const Text('Add service'),
+              label: const Text('Add your service'),
             ),
           ],
         );

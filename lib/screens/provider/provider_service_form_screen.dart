@@ -172,7 +172,7 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
         setState(() {
           _title.text = s.name;
           _description.text = s.description;
-          if (_price.text.trim().isEmpty) {
+          if (_price.text.trim().isEmpty && s.startingPricePhp > 0) {
             _price.text = s.startingPricePhp.toString();
           }
         });
@@ -457,7 +457,7 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
             child: Column(
               children: [
                 Text(
-                  widget.isEditing ? 'Edit service' : 'Add service',
+                  widget.isEditing ? 'Edit service' : 'Add your service',
                   style: GoogleFonts.inter(
                     fontSize: 22,
                     fontWeight: FontWeight.w700,
@@ -538,7 +538,10 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
               ],
               onSelected: (value) {
                 field.didChange(value);
-                setState(() => _category = value);
+                setState(() {
+                  _category = value;
+                  _title.clear();
+                });
               },
               menuStyle: MenuStyle(
                 alignment: Alignment.bottomLeft,
@@ -563,7 +566,7 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
         if (templates.isNotEmpty) ...[
           const SizedBox(height: 20),
           Text(
-            'Quick fill from catalog (optional)',
+            'Choose a TESDA-aligned service',
             style: GoogleFonts.inter(
               fontSize: 14,
               fontWeight: FontWeight.w600,
@@ -572,7 +575,7 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
           ),
           const SizedBox(height: 6),
           Text(
-            'Choose a supported service. A matching TESDA certificate is required.',
+            'Choose the work you offer. A matching TESDA certificate approved by the System Administrator is required before submitting your listing.',
             style: GoogleFonts.inter(
               fontSize: 12,
               color: FigmaColors.gray500,
@@ -637,6 +640,13 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
               ? 'Choose a supported catalog service'
               : null,
         ),
+        if (isSupportedService(_category ?? '', _title.text.trim())) ...[
+          const SizedBox(height: 8),
+          Text(
+            certificationRequirementMessage(category: _category!, serviceTitle: _title.text.trim()),
+            style: GoogleFonts.inter(fontSize: 12, color: FigmaColors.gray600, height: 1.35),
+          ),
+        ],
         const SizedBox(height: 16),
         TextFormField(
           controller: _description,
@@ -682,6 +692,7 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
             const SizedBox(width: 12),
             Expanded(
               child: DropdownButtonFormField<String>(
+                isExpanded: true,
                 // ignore: deprecated_member_use
                 value: _priceType,
                 decoration: const InputDecoration(
@@ -700,6 +711,7 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
         ),
         const SizedBox(height: 16),
         DropdownButtonFormField<String>(
+          isExpanded: true,
           // ignore: deprecated_member_use
           value: _durations.contains(_duration) ? _duration : null,
           decoration: const InputDecoration(
@@ -911,11 +923,13 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
                     size: 22,
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    'Tips for a great listing',
+                  Expanded(
+                    child: Text(
+                      'Tips for a great listing',
                     style: GoogleFonts.inter(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
+                    ),
                     ),
                   ),
                 ],
@@ -1180,6 +1194,8 @@ class _AddPhotoSlot extends StatelessWidget {
                 const SizedBox(height: 6),
                 Text(
                   'Add photos',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.inter(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
@@ -1189,6 +1205,8 @@ class _AddPhotoSlot extends StatelessWidget {
                 ),
                 Text(
                   'PNG, JPG up to 10MB',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.inter(
                     fontSize: 9,
                     color: FigmaColors.gray500,

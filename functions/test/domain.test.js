@@ -21,6 +21,26 @@ test('exports escape embedded quotes, commas and spreadsheet formulas', () => {
   assert.equal(csvCell('hello,"world"'), '"hello,""world"""');
   assert.equal(csvCell('=IMPORTXML("x")'), '"\'=IMPORTXML(""x"")"');
 });
+
+test('construction services require the correct current administrator-reviewed TESDA qualification', () => {
+  const {credentials} = require('./marketplace_fixtures');
+  const rows = [['Masonry','Masonry NC II'], ['Concrete Block Laying','Masonry NC II'],
+    ['Bricklaying','Masonry NC II'], ['Wall Plastering','Masonry NC II'], ['Construction Carpentry','Carpentry NC II'],
+    ['Tile Installation','Tile Setting NC II'], ['Tile Repair','Tile Setting NC II'], ['Construction Painting','Construction Painting NC II']];
+  for (const [title, qualification] of rows) {
+    assert.equal(hasMatchingCertificate(credentials(qualification), 'Construction', title), true, title);
+    assert.equal(hasMatchingCertificate(credentials('Domestic Work NC II'), 'Construction', title), false, title);
+    const pending = credentials(qualification); pending.certificationHistory[0].status = 'Pending';
+    assert.equal(hasMatchingCertificate(pending, 'Construction', title), false, title);
+    const revoked = credentials(qualification); revoked.approvedCertificationIds = [];
+    assert.equal(hasMatchingCertificate(revoked, 'Construction', title), false, title);
+    const expired = credentials(qualification); expired.certificationHistory[0].expirationDate = '2000-01-01';
+    assert.equal(hasMatchingCertificate(expired, 'Construction', title), false, title);
+  }
+  assert.equal(hasMatchingCertificate(credentials('Masonry NC II'), 'Construction', 'General Construction'), false);
+  assert.equal(hasMatchingCertificate(credentials('Masonry NC II'), 'Construction', 'Structural Engineering'), false);
+  assert.equal(hasMatchingCertificate(credentials('Masonry NC II'), 'Construction', 'Construction Painting'), false);
+});
 test('coverage distance uses kilometers', () => {
   assert.equal(distanceKm({latitude: 7,longitude:125}, {latitude:7,longitude:125}), 0);
   assert.ok(distanceKm({latitude:7,longitude:125}, {latitude:8,longitude:125}) > 110);

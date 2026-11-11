@@ -789,6 +789,23 @@ abstract final class MarketingServiceCatalog {
               .where((s) => isSupportedService(c.name, s.name))
               .toList(growable: false),
         ),
+    MarketingServiceCategory(
+      id: 'construction',
+      name: 'Construction',
+      icon: Icons.construction_outlined,
+      bg: FigmaColors.tintBlue,
+      fg: FigmaColors.navy,
+      services: const [
+        MarketingServiceItem(name: 'Masonry', description: 'Masonry tasks within the agreed scope, performed by a provider with an approved Masonry NC II certificate.', startingPricePhp: 0, providers: []),
+        MarketingServiceItem(name: 'Concrete Block Laying', description: 'Lay concrete blocks for the agreed masonry work.', startingPricePhp: 0, providers: []),
+        MarketingServiceItem(name: 'Bricklaying', description: 'Lay bricks for the agreed masonry work.', startingPricePhp: 0, providers: []),
+        MarketingServiceItem(name: 'Wall Plastering', description: 'Prepare and plaster concrete or masonry wall surfaces.', startingPricePhp: 0, providers: []),
+        MarketingServiceItem(name: 'Construction Carpentry', description: 'Fabricate and install wooden formwork or framing within the agreed carpentry scope.', startingPricePhp: 0, providers: []),
+        MarketingServiceItem(name: 'Tile Installation', description: 'Prepare and lay tiles on agreed wall or floor surfaces.', startingPricePhp: 0, providers: []),
+        MarketingServiceItem(name: 'Tile Repair', description: 'Repair or replace damaged tiles on agreed wall or floor surfaces.', startingPricePhp: 0, providers: []),
+        MarketingServiceItem(name: 'Construction Painting', description: 'Prepare surfaces, apply paint and perform agreed paint touch-ups.', startingPricePhp: 0, providers: []),
+      ],
+    ),
   ];
 
   /// Top 5 on customer Home — Panabo / Davao everyday demand (not Western pet-walking).

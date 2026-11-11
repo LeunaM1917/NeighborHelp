@@ -176,6 +176,17 @@ test('providers cannot publish custom services or reintroduce hourly listings',a
   await assertFails(setDoc(doc(db,'services','electric'),{...data,category:'Repair and Technical Services',serviceTitle:'Electrical Repair'}));
 });
 
+test('construction catalog submissions stay pending and cannot become self-approved listings',async()=>{
+  const db=env.authenticatedContext('provider').firestore();
+  const base={providerId:'provider',category:'Construction',priceType:'daily',approvalStatus:'Pending',isActive:false};
+  for (const title of Object.keys(require('../service_policy.json').Construction)) {
+    await assertSucceeds(setDoc(doc(db,'services',title),{...base,serviceTitle:title}));
+    await assertFails(updateDoc(doc(db,'services',title),{approvalStatus:'Approved',isActive:true}));
+  }
+  await assertFails(setDoc(doc(db,'services','general'),{...base,serviceTitle:'General Construction'}));
+  await assertFails(setDoc(doc(db,'services','unapproved-live'),{...base,serviceTitle:'Masonry',isActive:true}));
+});
+
 test('active admins do not need email verification; role, account status and MFA still protect admin data',async()=>{
   const unverified=env.authenticatedContext('admin',{email_verified:false});
   await assertSucceeds(getDoc(doc(unverified.firestore(),'users','customer')));
