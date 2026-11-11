@@ -32,6 +32,7 @@ beforeEach(async()=>{
   await env.clearFirestore(); calls=[]; hosted=new Map(); nextReference=0; failFetch=false; time=Date.now();
   await db.doc('users/customer').set({role:'Customer',accountStatus:'Active',verificationStatus:'Pending'});
   await db.doc('users/provider').set({role:'Provider',accountStatus:'Active'});
+  await db.doc('users/admin').set({role:'Administrator',accountStatus:'Active'});
   await db.doc('serviceProviders/provider').set({userId:'provider',isVerified:false,verificationStatus:'Pending'});
 });
 const create = (uid='customer', extra={}) => identity.createSession(uid,{documentType:'ID',subject:uid,...extra});
@@ -39,7 +40,8 @@ async function finish(uid='customer', decision='accept') {
   const target = db.doc(`${uid === 'customer' ? 'users' : 'serviceProviders'}/${uid}`);
   const current=(await target.get()).data();
   const session=hosted.get(current.diditSessionId);
-  Object.assign(session,{completedAt:time/1000,transactionId:'final-transaction',decision,finalTransaction:{decision}});
+  Object.assign(session,{completedAt:time/1000,transactionId:'final-transaction',decision,finalTransaction:{decision,
+    data:{documentType:[{value:'D'}],fullName:[{value:'SYNTHETIC TEST PERSON'}],documentNumber:[{value:'TEST-NOT-REAL'}]},warning:[]}});
   return {target,current,event:{event:'docupass_conclusive',transactionId:'final-transaction',profileId:'synthetic-profile'}};
 }
 async function webhook(key, event, valid=true) {
@@ -59,6 +61,7 @@ test('authenticated session uses bound owner, ID type, signed webhook destinatio
   assert.match(body.profileOverride.webhook,/idAnalyzerWebhook\?session=/);
   assert.equal(body.profileOverride.docupass.allowFileUpload,false);
   assert.equal(body.profileOverride.decisions.FACE_LIVENESS_ERR.reject,0);
+  for(const code of ['UNRECOGNIZED_DOCUMENT','UNRECOGNIZED_BACK_DOCUMENT','LOW_TEXT_CONFIDENCE','IMAGE_TOO_BLURRY'])assert.equal(body.profileOverride.decisions[code].reject,0);
   assert.equal(profile.verificationProvider,'idanalyzer');assert.equal(profile.diditStatus,'In Progress');assert.equal(profile.isVerified,false);
   assert.equal(result.sessionId,profile.diditSessionId);
 });
@@ -140,6 +143,68 @@ test('clients cannot read/write session bindings or forge server session fields'
   await assertFails(getDoc(doc(client,'identitySessions','private')));
   await assertFails(updateDoc(doc(client,'users','customer'),{identitySessionKey:crypto.randomUUID()}));
   await assertFails(updateDoc(doc(client,'users','customer'),{verificationDecision:'accept'}));
+  await assertFails(updateDoc(doc(client,'users','customer'),{verificationRetakeRequired:false,verificationIssueCodes:[]}));
   const signup=env.authenticatedContext('new-user').firestore();
   await assertFails(setDoc(doc(signup,'users','new-user'),{role:'Customer',accountStatus:'Active',identitySessionKey:'forged'}));
+});
+
+for(const code of ['UNRECOGNIZED_DOCUMENT','UNRECOGNIZED_BACK_DOCUMENT','LOW_TEXT_CONFIDENCE','IMAGE_TOO_BLURRY']) {
+  test(`${code} requires a retake even when hosted verification says accept`,async()=>{
+    await create();const {target,current,event}=await finish();
+    hosted.get(current.diditSessionId).finalTransaction.warning=[{code,decision:'accept'}];
+    await webhook(current.identitySessionKey,event);
+    const result=(await target.get()).data();
+    assert.equal(result.isVerified,false);assert.equal(result.verificationRetakeRequired,true);
+    assert.equal(result.verificationStatus,'Rejected');assert.ok(result.verificationIssueCodes.includes(code));
+  });
+}
+
+const review=(data,uid='admin',token={})=>require('../identity_review_commands')({db,functions,refreshIdentity:identity.refresh})(data,{auth:{uid,token}});
+const action=(name,subject='customer')=>({action:name,subject,userId:subject});
+test('administrator can reject a submitted check without vendor availability and cannot impersonate a reviewer',async()=>{
+  await create();failFetch=true;
+  await review({...action('reject'),reviewedByUserId:'forged',reviewedByRole:'Customer'});
+  const result=(await db.doc('users/customer').get()).data();
+  assert.equal(result.verificationStatus,'Rejected');assert.equal(result.verificationReviewedBy,'admin');
+  assert.equal(result.verificationReviewedByRole,'Administrator');assert.equal(result.isVerified,false);
+  assert.equal((await db.collection('auditLogs').get()).size,1);
+});
+test('only an active administrator with required MFA can review identities',async()=>{
+  await create();
+  await assert.rejects(review(action('reject'),'customer'),{code:'permission-denied'});
+  await db.doc('users/admin').update({accountStatus:'Suspended'});
+  await assert.rejects(review(action('reject')),{code:'permission-denied'});
+  await db.doc('users/admin').update({accountStatus:'Active'});
+  await db.doc('securityPolicy/admin').set({requireMfa:true});
+  await assert.rejects(review(action('reject')),{code:'permission-denied'});
+  await review(action('reject'),'admin',{firebase:{sign_in_second_factor:'phone'}});
+});
+test('incomplete, unreadable and failed submissions cannot receive manual approval',async()=>{
+  await create();await assert.rejects(review(action('approve')),e=>e.code==='failed-precondition'&&/readable/.test(e.message));
+  const {current}=await finish();hosted.get(current.diditSessionId).finalTransaction.warning=[{code:'UNRECOGNIZED_BACK_DOCUMENT'}];
+  await assert.rejects(review(action('approve')),e=>e.code==='failed-precondition'&&/retake/.test(e.message));
+  assert.equal((await db.doc('users/customer').get()).data().isVerified,false);
+});
+for(const subject of ['customer','provider']) {
+  test(`readable ${subject} review can be approved and survives duplicate vendor updates`,async()=>{
+    await create(subject);await finish(subject,'review');
+    await review(action('approve',subject));
+    const target=db.doc(`${subject==='customer'?'users':'serviceProviders'}/${subject}`);
+    assert.equal((await target.get()).data().isVerified,true);
+    await identity.refresh(subject,subject);
+    assert.equal((await target.get()).data().verificationStatus,'Approved');
+    assert.equal((await review(action('approve',subject))).duplicate,true);
+    assert.equal((await db.collection('auditLogs').get()).size,1);
+  });
+}
+test('quality failures revoke a prior manual approval on the next authoritative refresh',async()=>{
+  await create();const {current}=await finish('customer','review');await review(action('approve'));
+  hosted.get(current.diditSessionId).finalTransaction.warning=[{code:'LOW_TEXT_CONFIDENCE',decision:'accept'}];
+  await identity.refresh('customer','customer');
+  const result=(await db.doc('users/customer').get()).data();
+  assert.equal(result.isVerified,false);assert.equal(result.verificationStatus,'Rejected');assert.equal(result.verificationRetakeRequired,true);
+});
+test('legacy stray provider records report a role mismatch instead of a permissions error',async()=>{
+  await db.doc('serviceProviders/customer').set({userId:'customer',diditStatus:'In Progress',verificationProvider:'idanalyzer'});
+  await assert.rejects(review({action:'reject',subject:'provider',userId:'customer'}),e=>e.code==='failed-precondition'&&/account role/.test(e.message));
 });

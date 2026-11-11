@@ -102,6 +102,7 @@ module.exports = function idAnalyzer({db, functions, region = 'us-central1',
       if (!current || subject === 'provider' && current.userId !== uid) fail('failed-precondition', 'Your provider profile is not ready.');
       if (current.isVerified === true || current.verificationStatus === 'Approved') fail('failed-precondition', 'Your identity is already verified.');
       if (current.verificationProvider === 'idanalyzer' && current.verificationStatus === 'Pending'
+        && current.identityQualityPolicyVersion === QUALITY_POLICY_VERSION
         && current.governmentIdTypeCode === documentType && current.identitySessionCallback === callback
         && current.identitySessionUrl && millis(current.identitySessionExpiresAt) > time) {
         return {reuse: {url: current.identitySessionUrl, sessionId: current.diditSessionId}};
@@ -138,6 +139,7 @@ module.exports = function idAnalyzer({db, functions, region = 'us-central1',
         tx.create(db.doc(`identitySessions/${key}`), {uid, subject, documentType, reference: json.reference,
           profileId: c.profileId, qualityPolicyVersion:QUALITY_POLICY_VERSION, createdAt: stamp(), expiresAt, syncToken: null});
         tx.update(ref, {verificationProvider: 'idanalyzer', diditSessionId: json.reference, diditStatus: 'In Progress',
+          identityQualityPolicyVersion:QUALITY_POLICY_VERSION,
           identitySessionKey: key, identitySessionUrl: url.toString(), identitySessionCallback: callback,
           identitySessionExpiresAt: expiresAt, identitySessionRequestId: FieldValue.delete(),
           verificationDecision: FieldValue.delete(), verificationManualDecision: FieldValue.delete(),

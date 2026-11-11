@@ -34,6 +34,8 @@ class CustomerVerificationTrustCard extends StatelessWidget {
       idSubtitle = 'Verification incomplete. Choose your government ID again.';
     } else if (inReview) {
       idSubtitle = idLabel.isNotEmpty ? '$idLabel — awaiting identity review' : 'Your identity verification is awaiting review';
+    } else if (v.verificationRetakeRequired) {
+      idSubtitle = 'Your ID or selfie could not be read clearly. Retake the photo with the whole card visible, in good light and without glare.';
     } else if (declined) {
       idSubtitle = idLabel.isNotEmpty ? '$idLabel — verification failed' : 'Verification failed — try again';
     } else {

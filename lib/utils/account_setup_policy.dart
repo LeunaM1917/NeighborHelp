@@ -21,6 +21,8 @@ class AccountSetupStatus {
           verificationStatus: profile?.verificationStatus ?? 'Pending',
           diditStatus: profile?.diditStatus ?? '',
           verificationProvider: profile?.verificationProvider ?? '',
+          verificationRetakeRequired:
+              profile?.verificationRetakeRequired ?? false,
           governmentIdTypeCode: profile?.governmentIdTypeCode ?? '',
           governmentIdTypeLabel: profile?.governmentIdTypeLabel ?? '',
         )

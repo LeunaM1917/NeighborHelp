@@ -3,6 +3,21 @@ const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const {verifySignature, resultFor, returnUrl} = require('../id_analyzer');
+const {assessIdentity,mandatoryDecisions,RETAKE_CODES}=require('../identity_quality');
+
+test('identity quality fails closed on missing OCR and ignored readability warnings',()=>{
+  const valid={data:{documentType:[{value:'D'}],fullName:[{value:'SYNTHETIC TEST PERSON'}],documentNumber:[{value:'TEST-NOT-REAL'}]},warning:[]};
+  assert.equal(assessIdentity(valid).blocked,false);
+  assert.equal(assessIdentity({}).retakeRequired,true);
+  for(const code of RETAKE_CODES) {
+    assert.equal(assessIdentity({...valid,warning:[{code,decision:'accept'}]}).retakeRequired,true);
+    assert.equal(mandatoryDecisions()[code].reject,0);
+  }
+  assert.equal(assessIdentity({...valid,warning:[{code:'IMAGE_EDITED',decision:'review'}]}).blocked,false);
+  assert.equal(assessIdentity({...valid,warning:[{code:'FAKE_ID',decision:'review'}]}).blocked,true);
+  assert.equal(resultFor('review',{verificationManualDecision:'Approved'}).isVerified,true);
+  assert.equal(resultFor('reject',{verificationManualDecision:'Approved'}).isVerified,false);
+});
 
 test('ID Analyzer signatures authenticate exact bytes and expire after five minutes', () => {
   const now = 1800000000000, secret = 'test-secret', timestamp = String(now / 1000);

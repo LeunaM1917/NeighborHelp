@@ -50,11 +50,6 @@ module.exports=({db,functions,refreshIdentity})=>async(data,context)=>{
       verificationUpdatedAt:stamp(),updatedAt:stamp(),updatedBy:uid,updatedByRole:'Administrator'});
     tx.create(db.collection('auditLogs').doc(),{actorId:uid,actorRole:'Administrator',action:'identity.'+action,
       collection:subject==='customer'?'users':'serviceProviders',referenceId:targetId,createdAt:stamp()});
-    tx.create(db.collection('notifications').doc(),{userId:targetId,title:'Identity verification '+decision.toLowerCase(),
-      message:action==='approve'?'Your identity verification was approved.':current.verificationRetakeRequired
-        ?'Your ID or selfie needs a clearer photo. Restart verification with the complete document visible.'
-        :'Your identity verification was rejected. Review the result and submit a new verification attempt.',
-      notificationType:'Identity verification',isRead:false,createdAt:stamp()});
     return {decision};
   });
 };

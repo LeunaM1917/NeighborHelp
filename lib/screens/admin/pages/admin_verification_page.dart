@@ -161,14 +161,12 @@ class _AdminVerificationPageState extends State<AdminVerificationPage> {
             SnackBar(content: Text(approve ? 'Customer verified' : 'Customer verification rejected')),
           );
         }
-      } catch (_) {
+      } catch (e) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                widget.forAgency
-                    ? 'Action failed. Check System Administrator permissions.'
-                    : 'Action failed. Check admin permissions.',
+                e is StateError ? e.message.toString() : 'Could not record this review. Check your connection and retry.',
               ),
             ),
           );
@@ -200,14 +198,12 @@ class _AdminVerificationPageState extends State<AdminVerificationPage> {
           SnackBar(content: Text(approve ? 'Provider approved' : 'Provider rejected')),
         );
       }
-    } catch (_) {
+    } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              widget.forAgency
-                  ? 'Action failed. Check System Administrator permissions.'
-                  : 'Action failed. Check admin permissions.',
+              e is StateError ? e.message.toString() : 'Could not record this review. Check your connection and retry.',
             ),
           ),
         );

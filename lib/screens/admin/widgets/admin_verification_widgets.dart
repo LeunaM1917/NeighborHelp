@@ -385,7 +385,7 @@ class AdminVerificationApplicationCard extends StatelessWidget {
             child: Text('Reject', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
           ),
           FilledButton(
-            onPressed: onApprove,
+            onPressed: v.canAdminApprove ? onApprove : null,
             style: FilledButton.styleFrom(
               backgroundColor: FigmaColors.green,
               foregroundColor: FigmaColors.white,
@@ -394,6 +394,8 @@ class AdminVerificationApplicationCard extends StatelessWidget {
             ),
             child: Text('Approve', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
           ),
+          if (!v.canAdminApprove)
+            const Text('A readable, completed ID check is required before approval.'),
         ] else if (isPending) ...[
           Text(
             _pendingDiditHint(v),
@@ -544,6 +546,7 @@ class AdminVerificationApplication {
               verificationStatus: profile!.verificationStatus,
               diditStatus: profile!.diditStatus,
               verificationProvider: profile!.verificationProvider,
+              verificationRetakeRequired: profile!.verificationRetakeRequired,
               governmentIdTypeCode: profile!.governmentIdTypeCode,
               governmentIdTypeLabel: profile!.governmentIdTypeLabel,
             );

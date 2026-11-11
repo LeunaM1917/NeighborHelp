@@ -289,6 +289,8 @@ class ProviderVerificationTrustCard extends StatelessWidget {
           : 'ID Analyzer check complete — awaiting admin approval';
     } else if (inReview) {
       idSubtitle = idLabel.isNotEmpty ? '$idLabel — finish on ID Analyzer' : 'Complete verification on ID Analyzer';
+    } else if (profile?.verificationRetakeRequired == true) {
+      idSubtitle = 'Your ID or selfie could not be read clearly. Retake the photo with the whole card visible, in good light and without glare.';
     } else if (declined) {
       idSubtitle = idLabel.isNotEmpty ? '$idLabel — verification failed' : 'Verification failed — try again';
     } else {
@@ -321,10 +323,10 @@ class ProviderVerificationTrustCard extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
+                Flexible(child: Text(
                   'View verification details',
                   style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: FigmaColors.navy),
-                ),
+                )),
                 const Icon(Icons.chevron_right, size: 18, color: FigmaColors.navy),
               ],
             ),

@@ -1722,38 +1722,11 @@ class FirestoreService {
     String? reviewedByUserId,
     String reviewedByRole = 'Administrator',
   }) async {
-    final ref = userDoc(userId);
-    final snap = await ref.get();
-    if (!snap.exists) {
-      throw StateError('Customer profile not found.');
-    }
-    final user = AppUser.fromFirestore(snap.id, snap.data() ?? {});
-    if (!user.canAdminReviewVerification) {
-      throw StateError('Customer has not completed ID Analyzer verification.');
-    }
-    if (approve &&
-        ![
-          'approved',
-          'active',
-        ].contains(user.identityVerification.diditStatus.toLowerCase())) {
-      throw StateError(
-        'ID Analyzer must approve the identity before it can be verified.',
-      );
-    }
-    await updateUserProfile(
-      userId: userId,
-      data: {
-        'isVerified': approve,
-        'verificationStatus': approve ? 'Approved' : 'Rejected',
-        'verificationManualDecision': approve ? 'Approved' : 'Rejected',
-        'updatedBy': FirebaseAuth.instance.currentUser?.uid,
-        'updatedByRole': 'Administrator',
-        if (reviewedByUserId != null)
-          'verificationReviewedBy': reviewedByUserId,
-        'verificationReviewedByRole': reviewedByRole,
-        'verificationReviewedAt': FieldValue.serverTimestamp(),
-      },
-    );
+    await MarketplaceService.command('identityReviewCommand', {
+      'userId': userId,
+      'subject': 'customer',
+      'action': approve ? 'approve' : 'reject',
+    });
   }
 
   Future<void> adminVerifyProvider({
@@ -1762,40 +1735,11 @@ class FirestoreService {
     String? reviewedByUserId,
     String reviewedByRole = 'Administrator',
   }) async {
-    final ref = _db
-        .collection(FirestoreCollections.serviceProviders)
-        .doc(providerId);
-    final snap = await ref.get();
-    if (!snap.exists) {
-      throw StateError('Provider profile not found.');
-    }
-    final profile = ServiceProviderProfile.fromFirestore(
-      snap.id,
-      snap.data() ?? {},
-    );
-    if (!profile.canAdminReviewVerification) {
-      throw StateError('No identity verification is available for review.');
-    }
-    if (approve &&
-        !['approved', 'active'].contains(profile.diditStatus.toLowerCase())) {
-      throw StateError(
-        'ID Analyzer must approve the identity before it can be verified.',
-      );
-    }
-    await updateServiceProvider(
-      providerId: providerId,
-      data: {
-        'isVerified': approve,
-        'verificationStatus': approve ? 'Approved' : 'Rejected',
-        'verificationManualDecision': approve ? 'Approved' : 'Rejected',
-        'updatedBy': FirebaseAuth.instance.currentUser?.uid,
-        'updatedByRole': 'Administrator',
-        if (reviewedByUserId != null)
-          'verificationReviewedBy': reviewedByUserId,
-        'verificationReviewedByRole': reviewedByRole,
-        'verificationReviewedAt': FieldValue.serverTimestamp(),
-      },
-    );
+    await MarketplaceService.command('identityReviewCommand', {
+      'userId': providerId,
+      'subject': 'provider',
+      'action': approve ? 'approve' : 'reject',
+    });
   }
 
   Future<void> adminSetUserAccountStatus({

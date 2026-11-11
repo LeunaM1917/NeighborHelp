@@ -26,6 +26,7 @@ class ServiceProviderProfile {
     required this.updatedAt,
     this.diditStatus = '',
     this.verificationProvider = '',
+    this.verificationRetakeRequired = false,
     this.governmentIdTypeCode = '',
     this.governmentIdTypeLabel = '',
     this.education = '',
@@ -104,6 +105,7 @@ class ServiceProviderProfile {
 
   /// Which KYC vendor drives verification, e.g. "didit". Empty if none yet.
   final String verificationProvider;
+  final bool verificationRetakeRequired;
 
   /// Didit document type code (P, ID, DL, RP, HIC, TC) for the selected PH government ID.
   final String governmentIdTypeCode;
@@ -155,7 +157,7 @@ class ServiceProviderProfile {
       (_diditNormalized == 'approved' || _diditNormalized == 'active') &&
       _verificationNormalized != 'rejected';
 
-  /// Admin Approve/Reject actions are allowed only after Didit reports Approved.
+  /// Started applications may be rejected; approvals require a readable final result.
   bool get canAdminReviewVerification => diditStatus.trim().isNotEmpty;
 
   /// User is in the hosted Didit flow or Didit is reviewing.
@@ -268,6 +270,7 @@ class ServiceProviderProfile {
       updatedAt: data['updatedAt'] as Timestamp? ?? Timestamp.now(),
       diditStatus: data['diditStatus'] as String? ?? '',
       verificationProvider: data['verificationProvider'] as String? ?? '',
+      verificationRetakeRequired: data['verificationRetakeRequired'] == true,
       governmentIdTypeCode: data['governmentIdTypeCode'] as String? ?? '',
       governmentIdTypeLabel: data['governmentIdTypeLabel'] as String? ?? '',
       education: data['education'] as String? ?? '',
@@ -346,6 +349,7 @@ class ServiceProviderProfile {
       'updatedAt': updatedAt,
       'diditStatus': diditStatus,
       'verificationProvider': verificationProvider,
+      'verificationRetakeRequired': verificationRetakeRequired,
       'governmentIdTypeCode': governmentIdTypeCode,
       'governmentIdTypeLabel': governmentIdTypeLabel,
       'education': education,

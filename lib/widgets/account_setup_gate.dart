@@ -174,6 +174,9 @@ class _AccountSetupDialogState extends State<AccountSetupDialog> {
     } else if (v.isAwaitingAdminApproval) {
       verificationMessage =
           'ID check complete. Awaiting System Administrator approval.';
+    } else if (v.verificationRetakeRequired) {
+      verificationMessage =
+          'Your ID or selfie could not be read clearly. Retake the complete card in good lighting, without blur or glare.';
     } else if (v.isDeclined) {
       verificationMessage =
           'Verification was rejected. Retry with your own valid government ID.';

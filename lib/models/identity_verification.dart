@@ -5,6 +5,7 @@ class IdentityVerification {
     this.verificationStatus = 'Pending',
     this.diditStatus = '',
     this.verificationProvider = '',
+    this.verificationRetakeRequired = false,
     this.governmentIdTypeCode = '',
     this.governmentIdTypeLabel = '',
   });
@@ -13,6 +14,7 @@ class IdentityVerification {
   final String verificationStatus;
   final String diditStatus;
   final String verificationProvider;
+  final bool verificationRetakeRequired;
   final String governmentIdTypeCode;
   final String governmentIdTypeLabel;
 
@@ -22,6 +24,7 @@ class IdentityVerification {
       verificationStatus: data['verificationStatus'] as String? ?? 'Pending',
       diditStatus: data['diditStatus'] as String? ?? '',
       verificationProvider: data['verificationProvider'] as String? ?? '',
+      verificationRetakeRequired: data['verificationRetakeRequired'] == true,
       governmentIdTypeCode: data['governmentIdTypeCode'] as String? ?? '',
       governmentIdTypeLabel: data['governmentIdTypeLabel'] as String? ?? '',
     );
@@ -51,13 +54,21 @@ class IdentityVerification {
       _verificationNormalized != 'rejected';
 
   bool get canAdminReview => hasStarted;
+  bool get canAdminApprove =>
+      hasStarted &&
+      !verificationRetakeRequired &&
+      const ['approved', 'active', 'in review'].contains(_diditNormalized);
 
   /// Capture has not finished; the customer can choose their document again.
   bool get isIncomplete =>
       !isVerifiedOnPlatform &&
       !isDeclined &&
-      const ['not started', 'in progress', 'awaiting user', 'resubmitted']
-          .contains(_diditNormalized);
+      const [
+        'not started',
+        'in progress',
+        'awaiting user',
+        'resubmitted',
+      ].contains(_diditNormalized);
 
   bool get isInReview =>
       !isVerifiedOnPlatform &&
@@ -71,5 +82,6 @@ class IdentityVerification {
   bool get isDeclined =>
       _verificationNormalized == 'rejected' || _diditNormalized == 'declined';
 
-  bool get hasStarted => verificationProvider.isNotEmpty || diditStatus.isNotEmpty;
+  bool get hasStarted =>
+      verificationProvider.isNotEmpty || diditStatus.isNotEmpty;
 }
