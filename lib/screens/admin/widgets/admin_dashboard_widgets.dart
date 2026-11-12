@@ -22,6 +22,7 @@ class AdminDashboardHeader extends StatelessWidget {
     this.dateRange,
     this.onDateRangeChanged,
     this.onExport,
+    this.dateRangeOptions = dateRanges,
   });
 
   final String title;
@@ -29,6 +30,7 @@ class AdminDashboardHeader extends StatelessWidget {
   final String? dateRange;
   final ValueChanged<String>? onDateRangeChanged;
   final VoidCallback? onExport;
+  final List<String> dateRangeOptions;
 
   static const dateRanges = ['This week', 'This month', 'Last 3 months', 'This year'];
 
@@ -73,7 +75,7 @@ class AdminDashboardHeader extends StatelessWidget {
                 isExpanded: true,
                 style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500, color: FigmaColors.gray800),
                 items: [
-                  for (final r in dateRanges)
+                  for (final r in dateRangeOptions)
                     DropdownMenuItem(value: r, child: Text(r)),
                 ],
                 onChanged: (v) {

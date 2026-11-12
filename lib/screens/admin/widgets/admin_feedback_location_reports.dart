@@ -1,11 +1,8 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../../models/booking.dart';
 import '../../../models/review.dart';
-import '../../../utils/report_analytics.dart';
-import '../../../figma_ui/figma_colors.dart';
+import 'admin_report_count_chart.dart';
 import 'admin_dashboard_widgets.dart';
 
 class AdminFeedbackLocationReports extends StatelessWidget {
@@ -13,67 +10,66 @@ class AdminFeedbackLocationReports extends StatelessWidget {
     super.key,
     required this.bookings,
     required this.range,
+    required this.reviews,
+    required this.periodLabel,
   });
   final List<Booking> bookings;
-  final String range;
+  final String range, periodLabel;
+  final List<Review> reviews;
   @override
-  Widget build(
-    BuildContext context,
-  ) => StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-    stream: FirebaseFirestore.instance.collection('reviews').snapshots(),
-    builder: (context, snap) {
-      if (snap.hasError) {
-        return const Text(
-          'Feedback reports could not load. Check access and connection.',
+  Widget build(BuildContext context) {
+    final docs = {
+      for (final r in reviews)
+        if (r.isCustomerReview) r.reviewId: r,
+    }.values;
+    final counts = {
+      'positive': 0,
+      'neutral': 0,
+      'negative': 0,
+      'Unanalyzed': 0,
+    };
+    var lstm = 0, linear = 0, fallback = 0, pending = 0;
+    final providers = <String, Map<String, int>>{};
+    for (final doc in docs) {
+      final label = doc.normalizedSentimentLabel;
+      if (const ['positive', 'neutral', 'negative'].contains(label)) {
+        counts[label] = counts[label]! + 1;
+        final perProvider = providers.putIfAbsent(
+          doc.providerId,
+          () => {'positive': 0, 'neutral': 0, 'negative': 0},
         );
-      }
-      if (!snap.hasData) return const LinearProgressIndicator();
-      final docs = snap.data!.docs.where((d) {
-        final r = Review.fromFirestore(d.id, d.data());
-        return r.isCustomerReview && inReportRange(r.createdAt.toDate(), range);
-      }).toList();
-      final counts = {'positive': 0, 'neutral': 0, 'negative': 0};
-      var lstm = 0, linear = 0, fallback = 0, pending = 0;
-      final providers = <String, Map<String, int>>{};
-      for (final doc in docs) {
-        final row = doc.data();
-        final sentiment = row['sentiment'] as Map?;
-        final label = sentiment?['label']?.toString();
-        if (counts.containsKey(label)) {
-          counts[label!] = counts[label]! + 1;
-          final perProvider = providers.putIfAbsent(
-            '${row['providerId']}',
-            () => {'positive': 0, 'neutral': 0, 'negative': 0},
-          );
-          perProvider[label] = perProvider[label]! + 1;
-          if (sentiment?['source'] == 'lstm') {
-            lstm++;
-          } else if (sentiment?['source'] == 'tfidf_logistic') {
-            linear++;
-          } else {
-            fallback++;
-          }
+        perProvider[label] = perProvider[label]! + 1;
+        if (doc.sentimentSource == 'lstm') {
+          lstm++;
+        } else if (doc.sentimentSource == 'tfidf_logistic') {
+          linear++;
         } else {
-          pending++;
+          fallback++;
         }
+      } else {
+        pending++;
+        counts['Unanalyzed'] = counts['Unanalyzed']! + 1;
       }
-      final cells = <String, List<Booking>>{};
-      for (final b in bookings) {
-        if (b.location.latitude == 0 && b.location.longitude == 0) continue;
-        final key =
-            '${b.location.latitude.toStringAsFixed(2)},${b.location.longitude.toStringAsFixed(2)}';
-        cells.putIfAbsent(key, () => []).add(b);
-      }
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          AdminPanelCard(
-            title: 'Customer feedback sentiment',
+    }
+    final cells = <String, List<Booking>>{};
+    for (final b in bookings) {
+      if (b.location.latitude == 0 && b.location.longitude == 0) continue;
+      final key =
+          '${b.location.latitude.toStringAsFixed(2)},${b.location.longitude.toStringAsFixed(2)}';
+      cells.putIfAbsent(key, () => []).add(b);
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AdminPanelCard(
+          title: 'Customer feedback sentiment',
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Reviews submitted in $range. $lstm LSTM results, $linear linear-model results, $fallback fallback results, $pending without an analyzed comment.',
+                  'Reviews submitted in $periodLabel. $lstm LSTM results, $linear linear-model results, $fallback fallback/other results, $pending without an analyzed comment.',
                 ),
                 const SizedBox(height: 12),
                 Wrap(
@@ -82,65 +78,19 @@ class AdminFeedbackLocationReports extends StatelessWidget {
                   children: [
                     for (final entry in counts.entries)
                       Text(
-                        '${entry.key}: ${entry.value}',
+                        '${entry.key}: ${entry.value} (${docs.isEmpty ? '0.0' : (entry.value * 100 / docs.length).toStringAsFixed(1)}%)',
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                   ],
                 ),
-                if (counts.values.any((n) => n > 0))
-                  SizedBox(
-                    height: 180,
-                    child: BarChart(
-                      BarChartData(
-                        maxY:
-                            counts.values
-                                .reduce((a, b) => a > b ? a : b)
-                                .toDouble() +
-                            1,
-                        titlesData: FlTitlesData(
-                          topTitles: const AxisTitles(
-                            sideTitles: SideTitles(showTitles: false),
-                          ),
-                          rightTitles: const AxisTitles(
-                            sideTitles: SideTitles(showTitles: false),
-                          ),
-                          leftTitles: const AxisTitles(
-                            axisNameWidget: Text('Review count'),
-                            sideTitles: SideTitles(
-                              showTitles: true,
-                              reservedSize: 32,
-                            ),
-                          ),
-                          bottomTitles: AxisTitles(
-                            sideTitles: SideTitles(
-                              showTitles: true,
-                              getTitlesWidget: (value, _) => Text(
-                                counts.keys.elementAt(
-                                  value.toInt().clamp(0, 2),
-                                ),
-                                style: const TextStyle(fontSize: 11),
-                              ),
-                            ),
-                          ),
-                        ),
-                        barGroups: [
-                          for (var i = 0; i < 3; i++)
-                            BarChartGroupData(
-                              x: i,
-                              barRods: [
-                                BarChartRodData(
-                                  toY: counts.values.elementAt(i).toDouble(),
-                                  color: FigmaColors.green,
-                                  width: 24,
-                                ),
-                              ],
-                            ),
-                        ],
-                        borderData: FlBorderData(show: false),
-                        gridData: const FlGridData(show: false),
-                      ),
-                    ),
-                  ),
+                AdminReportCountChart(
+                  labels: counts.keys.toList(),
+                  series: const ['Reviews'],
+                  values: [
+                    for (final value in counts.values) [value],
+                  ],
+                  periodLabel: periodLabel,
+                ),
                 const SizedBox(height: 12),
                 for (final provider in providers.entries.take(20))
                   Padding(
@@ -156,14 +106,21 @@ class AdminFeedbackLocationReports extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 16),
-          AdminPanelCard(
-            title: 'Service demand by location',
+        ),
+        const SizedBox(height: 16),
+        AdminPanelCard(
+          title: 'Service demand by location',
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Bookings requested in $range, grouped into approximately 1 km map cells. Marker values show booking counts.',
+                  'Bookings requested in $periodLabel, grouped into approximately 1 km map cells. Tap a marker for booking counts.',
+                ),
+                Text(
+                  '${cells.values.fold<int>(0, (n, cell) => n + cell.length)} of ${bookings.length} bookings have map locations. Percentages use all filtered bookings.',
+                  style: const TextStyle(fontSize: 12),
                 ),
                 if (cells.isEmpty)
                   const Padding(
@@ -174,13 +131,17 @@ class AdminFeedbackLocationReports extends StatelessWidget {
                   )
                 else ...[
                   const SizedBox(height: 12),
+                  Text(
+                    'Top ${cells.length.clamp(0, 10)} of ${cells.length} demand areas',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
                   SizedBox(
                     height: 320,
                     child: GoogleMap(
                       initialCameraPosition: CameraPosition(
                         target: LatLng(
-                          bookings.first.location.latitude,
-                          bookings.first.location.longitude,
+                          cells.values.first.first.location.latitude,
+                          cells.values.first.first.location.longitude,
                         ),
                         zoom: 12,
                       ),
@@ -193,7 +154,8 @@ class AdminFeedbackLocationReports extends StatelessWidget {
                               double.parse(cell.key.split(',').last),
                             ),
                             infoWindow: InfoWindow(
-                              title: '${cell.value.length} bookings',
+                              title:
+                                  '${cell.value.length} bookings (${(cell.value.length * 100 / bookings.length).toStringAsFixed(1)}%)',
                               snippet: cell.value.first.serviceLocation,
                             ),
                           ),
@@ -209,15 +171,15 @@ class AdminFeedbackLocationReports extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 4),
                       child: Text(
-                        '${cell.value.length} bookings near ${cell.value.first.serviceLocation}',
+                        '${cell.value.length} bookings (${(cell.value.length * 100 / bookings.length).toStringAsFixed(1)}%) near ${cell.value.first.serviceLocation}',
                       ),
                     ),
                 ],
               ],
             ),
           ),
-        ],
-      );
-    },
-  );
+        ),
+      ],
+    );
+  }
 }

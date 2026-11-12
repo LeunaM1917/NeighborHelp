@@ -24,6 +24,29 @@ beforeEach(async () => {
   for (const [uid,role] of [['admin','Administrator'],['customer','Customer'],['provider','Provider']]) await db.doc(`users/${uid}`).set({role,accountStatus:'Active',email:'private@example.test',contactNumber:'private',fullName:uid,diditSessionId:'private-session'});
 });
 
+test('report exports require active administrators and MFA, and audit only safe metadata', async () => {
+  const request = collection => ({action:'recordExport', collection, count:14});
+  for (const collection of ['bookings','serviceProviders','users','reviews']) {
+    await assert.rejects(ops.adminDataOperation.run(request(collection),auth('customer')), /administrator/);
+    await assert.rejects(ops.adminDataOperation.run(request(collection),auth('provider')), /administrator/);
+    await ops.adminDataOperation.run(request(collection),auth('admin'));
+  }
+  let logs = await db.collection('auditLogs').where('action','==','data.export').get();
+  assert.equal(logs.size,4);
+  for (const log of logs.docs) {
+    assert.equal(log.data().recordCount,14);
+    assert.deepEqual(Object.keys(log.data()).sort(), ['action','actorId','actorRole','collection','createdAt','recordCount']);
+  }
+  await db.doc('users/admin').update({accountStatus:'Suspended'});
+  await assert.rejects(ops.adminDataOperation.run(request('users'),auth('admin')), /administrator/);
+  await db.doc('users/admin').update({accountStatus:'Active'});
+  await db.doc('securityPolicy/admin').set({requireMfa:true});
+  await assert.rejects(ops.adminDataOperation.run(request('users'),auth('admin')), /Two-step/);
+  await ops.adminDataOperation.run(request('users'), {auth:{uid:'admin',token:{firebase:{sign_in_second_factor:'totp'}}}});
+  logs = await db.collection('auditLogs').where('action','==','data.export').get();
+  assert.equal(logs.size,5);
+});
+
 test('admin inbox receives registration and certificate activity once and never sends those as campaign pushes',async()=>{
   const registered={role:'Customer',accountStatus:'Active',fullName:'New synthetic member'};
   await db.doc('users/new-member').set(registered);

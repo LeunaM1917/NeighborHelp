@@ -54,6 +54,7 @@ dependencies:
   url_launcher: ^6.3.2
   file_picker: 10.3.0
   web: 1.1.1
+  pdf: ^3.12.0
 
 dev_dependencies:
   flutter_test:
@@ -91,6 +92,8 @@ flutter:
     - branding/nav_logo.png
     - branding/footer_logo.jpg
     - assets/optimized_services/
+    - assets/fonts/NotoSans-Regular.ttf
+    - assets/fonts/OFL.txt
 
   # To add assets to your application, add an assets section, like this:
   # assets:

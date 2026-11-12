@@ -19,6 +19,7 @@ class Review {
     this.sentimentLabel,
     this.sentimentConfidence,
     this.sentimentProbabilities,
+    this.sentimentSource,
   });
 
   final String reviewId;
@@ -31,6 +32,7 @@ class Review {
   final Timestamp createdAt;
   final String? reviewerId;
   final String? revieweeId;
+
   /// `customer` or `provider`
   final String? reviewerRole;
   final String? contractId;
@@ -38,18 +40,23 @@ class Review {
   final String? sentimentLabel;
   final double? sentimentConfidence;
   final Map<String, double>? sentimentProbabilities;
+  final String? sentimentSource;
 
-  bool get isCustomerReview => (reviewerRole ?? 'customer').toLowerCase() == 'customer';
+  bool get isCustomerReview =>
+      (reviewerRole ?? 'customer').toLowerCase() == 'customer';
   bool get isProviderReview => (reviewerRole ?? '').toLowerCase() == 'provider';
   bool get hasSentiment => (sentimentLabel ?? '').trim().isNotEmpty;
 
-  String get normalizedSentimentLabel => (sentimentLabel ?? '').trim().toLowerCase();
+  String get normalizedSentimentLabel =>
+      (sentimentLabel ?? '').trim().toLowerCase();
 
   factory Review.fromFirestore(String id, Map<String, dynamic> data) {
     final customerId = data['customerId'] as String? ?? '';
     final providerId = data['providerId'] as String? ?? '';
     final sentiment = data['sentiment'];
-    final sentimentMap = sentiment is Map ? Map<String, dynamic>.from(sentiment) : const <String, dynamic>{};
+    final sentimentMap = sentiment is Map
+        ? Map<String, dynamic>.from(sentiment)
+        : const <String, dynamic>{};
     final probabilitiesRaw = sentimentMap['probabilities'];
     final probabilitiesMap = probabilitiesRaw is Map
         ? Map<String, dynamic>.from(probabilitiesRaw)
@@ -69,11 +76,16 @@ class Review {
       reviewerRole: data['reviewerRole'] as String? ?? 'customer',
       contractId: data['contractId'] as String?,
       milestoneNumber: (data['milestoneNumber'] as num?)?.toInt(),
-      sentimentLabel: sentimentMap['label'] as String? ?? sentimentMap['sentiment'] as String?,
+      sentimentLabel:
+          sentimentMap['label'] as String? ??
+          sentimentMap['sentiment'] as String?,
+      sentimentSource: sentimentMap['source'] as String?,
       sentimentConfidence: (sentimentMap['confidence'] as num?)?.toDouble(),
       sentimentProbabilities: probabilitiesMap.isEmpty
           ? null
-          : probabilitiesMap.map((k, v) => MapEntry(k, (v as num?)?.toDouble() ?? 0)),
+          : probabilitiesMap.map(
+              (k, v) => MapEntry(k, (v as num?)?.toDouble() ?? 0),
+            ),
     );
   }
 
@@ -94,8 +106,10 @@ class Review {
       if (hasSentiment)
         'sentiment': {
           'label': sentimentLabel,
+          if (sentimentSource != null) 'source': sentimentSource,
           if (sentimentConfidence != null) 'confidence': sentimentConfidence,
-          if (sentimentProbabilities != null) 'probabilities': sentimentProbabilities,
+          if (sentimentProbabilities != null)
+            'probabilities': sentimentProbabilities,
         },
     };
   }

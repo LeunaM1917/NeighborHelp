@@ -9,6 +9,14 @@ class AppNotification {
     required this.notificationType,
     this.relatedBookingId,
     this.relatedInquiryId,
+    this.relatedServiceId,
+    this.relatedCertificationId,
+    this.relatedProviderId,
+    this.relatedUserId,
+    this.relatedReportId,
+    this.relatedReviewId,
+    this.relatedProposalId,
+    this.sourceCollection,
     this.adminTab,
     required this.isRead,
     required this.createdAt,
@@ -21,6 +29,8 @@ class AppNotification {
   final String notificationType;
   final String? relatedBookingId;
   final String? relatedInquiryId;
+  final String? relatedServiceId, relatedCertificationId, relatedProviderId,
+      relatedUserId, relatedReportId, relatedReviewId, relatedProposalId, sourceCollection;
   final int? adminTab;
   final bool isRead;
   final Timestamp createdAt;
@@ -34,9 +44,17 @@ class AppNotification {
       notificationType: data['notificationType'] as String? ?? '',
       relatedBookingId: data['relatedBookingId'] as String?,
       relatedInquiryId: data['relatedInquiryId'] as String?,
+      relatedServiceId: data['relatedServiceId'] as String?,
+      relatedCertificationId: data['relatedCertificationId'] as String? ?? data['relatedCertificateId'] as String?,
+      relatedProviderId: data['relatedProviderId'] as String?,
+      relatedUserId: data['relatedUserId'] as String?,
+      relatedReportId: data['relatedReportId'] as String?,
+      relatedReviewId: data['relatedReviewId'] as String?,
+      relatedProposalId: data['relatedProposalId'] as String?,
+      sourceCollection: data['sourceCollection'] as String?,
       adminTab: data['adminTab'] is int ? data['adminTab'] as int : null,
       isRead: data['isRead'] as bool? ?? false,
-      createdAt: data['createdAt'] as Timestamp? ?? Timestamp.now(),
+      createdAt: data['createdAt'] as Timestamp? ?? Timestamp.fromMillisecondsSinceEpoch(0),
     );
   }
 
@@ -48,6 +66,15 @@ class AppNotification {
       'notificationType': notificationType,
       'relatedBookingId': relatedBookingId,
       'relatedInquiryId': relatedInquiryId,
+      if (relatedServiceId != null) 'relatedServiceId': relatedServiceId,
+      if (relatedCertificationId != null) 'relatedCertificationId': relatedCertificationId,
+      if (relatedProviderId != null) 'relatedProviderId': relatedProviderId,
+      if (relatedUserId != null) 'relatedUserId': relatedUserId,
+      if (relatedReportId != null) 'relatedReportId': relatedReportId,
+      if (relatedReviewId != null) 'relatedReviewId': relatedReviewId,
+      if (relatedProposalId != null) 'relatedProposalId': relatedProposalId,
+      if (sourceCollection != null) 'sourceCollection': sourceCollection,
+      if (adminTab != null) 'adminTab': adminTab,
       'isRead': isRead,
       'createdAt': createdAt,
     };
