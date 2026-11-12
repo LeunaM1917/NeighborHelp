@@ -6,6 +6,8 @@ Hourly fees use the saved listing rate and requested duration on the server. Fix
 
 Existing contract records remain readable, and older contract clients retain their protocol during rollout. No existing bookings, agreements, messages, ratings or verification records are deleted.
 
+Booking detail pages and the provider request review show booking information without a contract panel, contract summary row or milestone labels, including for older records. Customer completion confirmation, cancellation and reviews remain available independently of contract display. The direct hourly/fixed form was compared with `origin/main` at `f30ae4b`; the surrounding current UI and functional fixes were retained.
+
 ## Functional requirements 1–5
 
 For a real account walkthrough:

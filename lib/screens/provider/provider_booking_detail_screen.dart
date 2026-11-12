@@ -23,7 +23,7 @@ import '../../widgets/stream_snapshot.dart';
 import '../admin/widgets/admin_services_widgets.dart' show serviceCategoryIcon;
 import '../../widgets/customer_reputation_dialog.dart';
 import '../shared/messages_hub.dart';
-import '../../widgets/contract_panel.dart';
+import '../../widgets/work_completion_card.dart';
 import '../../widgets/booking_cancellation_card.dart';
 import '../../widgets/booking_user_report_card.dart';
 import '../../widgets/milestone_feedback_details.dart';
@@ -204,6 +204,7 @@ class _ProviderBookingDetailScreenState
                                     const SizedBox(height: 20),
                                     BookingStatusTracker(
                                       status: b.status,
+                                      completionLabel: 'Completed',
                                       pendingAt: b.createdAt.toDate(),
                                       acceptedAt:
                                           b.acceptedAt?.toDate() ??
@@ -259,7 +260,7 @@ class _ProviderBookingDetailScreenState
                                                 ),
                                               ),
                                               Text(
-                                                'Milestone feedback',
+                                                'Booking feedback',
                                                 style: GoogleFonts.inter(
                                                   fontSize: 13,
                                                   fontWeight: FontWeight.w700,
@@ -343,10 +344,9 @@ class _ProviderBookingDetailScreenState
                                     ],
                                   ];
 
-                                  final contractPanel = ContractPanel(
-                                    appUser: widget.appUser,
+                                  final bookingCompletion = WorkCompletionCard(
                                     booking: b,
-                                    viewerRole: 'provider',
+                                    asCustomer: false,
                                   );
 
                                   return LayoutBuilder(
@@ -379,7 +379,7 @@ class _ProviderBookingDetailScreenState
                                               ],
                                             ),
                                             const SizedBox(height: 20),
-                                            contractPanel,
+                                            bookingCompletion,
                                           ],
                                         );
                                       }
@@ -391,7 +391,7 @@ class _ProviderBookingDetailScreenState
                                           const SizedBox(height: 20),
                                           ...sideChildren,
                                           const SizedBox(height: 20),
-                                          contractPanel,
+                                          bookingCompletion,
                                         ],
                                       );
                                     },
@@ -469,7 +469,7 @@ class _ProviderBookingDetailScreenState
                 ),
               ),
               const SizedBox(width: 12),
-              FigmaStatusChip(status: b.status),
+              FigmaStatusChip(status: b.isCompleted ? 'Completed' : b.status),
             ],
           ),
           const SizedBox(height: 16),
@@ -553,7 +553,7 @@ class _ProviderBookingDetailScreenState
                     ),
                   ),
                   const Spacer(),
-                  FigmaStatusChip(status: b.status),
+                  FigmaStatusChip(status: b.isCompleted ? 'Completed' : b.status),
                 ],
               ),
             ),
@@ -764,7 +764,7 @@ class _ProviderBookingDetailScreenState
         children: [
           Text(
             b.agreement != null
-                ? 'Start when you arrive. Follow the working days and hours in your accepted agreement.'
+                ? 'Start when you arrive. Follow the scheduled working days and hours for this booking.'
                 : 'Start when you arrive — the ${b.effectiveDurationHours == b.effectiveDurationHours.roundToDouble() ? '${b.effectiveDurationHours.toInt()}' : b.effectiveDurationHours.toStringAsFixed(1)}-hour window runs from your start time.',
             style: GoogleFonts.inter(
               fontSize: 13,

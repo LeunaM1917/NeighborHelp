@@ -271,6 +271,7 @@ class BookingStatusTracker extends StatelessWidget {
     this.acceptedAt,
     this.inProgressAt,
     this.completedAt,
+    this.completionLabel = 'Milestone complete',
     @Deprecated('Use pendingAt') this.createdAt,
     @Deprecated('Use milestone timestamps') this.updatedAt,
   });
@@ -280,6 +281,7 @@ class BookingStatusTracker extends StatelessWidget {
   final DateTime? acceptedAt;
   final DateTime? inProgressAt;
   final DateTime? completedAt;
+  final String completionLabel;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -356,7 +358,7 @@ class BookingStatusTracker extends StatelessWidget {
                 for (var i = 0; i < _steps.length; i++)
                   Expanded(
                     child: _TimelineStep(
-                      label: _steps[i],
+                      label: i == 3 ? completionLabel : _steps[i],
                       time: _timeFor(i),
                       reached: i <= active,
                       isCurrent: i == active,

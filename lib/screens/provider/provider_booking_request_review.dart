@@ -13,7 +13,6 @@ import '../../services/firestore_service.dart';
 import '../../theme/mobile_layout.dart';
 import '../../theme/role_theme.dart';
 import '../../ui/app_ui_kit.dart';
-import '../../widgets/contract_panel.dart';
 import '../../widgets/loading_indicator.dart';
 import '../admin/widgets/admin_services_widgets.dart' show serviceCategoryIcon;
 
@@ -232,12 +231,6 @@ class _ProviderBookingRequestReviewBodyState
                                   ),
                                 ),
                               ],
-                              const SizedBox(height: 16),
-                              ContractPanel(
-                                appUser: widget.appUser,
-                                booking: b,
-                                viewerRole: 'provider',
-                              ),
                             ],
                           ),
                         ),
@@ -363,7 +356,7 @@ class _ProviderBookingRequestReviewBodyState
               ],
             ),
           ),
-          FigmaStatusChip(status: b.status),
+          FigmaStatusChip(status: b.isCompleted ? 'Completed' : b.status),
         ],
       ),
     );

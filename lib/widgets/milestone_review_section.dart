@@ -50,7 +50,7 @@ class _MilestoneReviewSectionState extends State<MilestoneReviewSection> {
   Future<void> _submit() async {
     if (!widget.booking.isMilestoneComplete) {
       ScaffoldMessenger.of(context).showSnackBar(
-         SnackBar(content: Text('Reviews unlock after the milestone is marked complete.')),
+         SnackBar(content: Text('Reviews unlock after the booking is marked complete.')),
       );
       return;
     }
@@ -220,8 +220,8 @@ class _MilestoneReviewSectionState extends State<MilestoneReviewSection> {
         ? 'Rate your provider'
         : 'Rate your customer';
     final defaultSubtitle = widget.reviewerRole == 'customer'
-        ? 'Feedback for ${widget.booking.milestoneLabel}'
-        : 'Share how this milestone went with ${widget.booking.milestoneLabel}';
+        ? 'Feedback for this booking'
+        : 'Share how this booking went';
     final title = widget.title ?? defaultTitle;
     final subtitle = widget.subtitle ?? defaultSubtitle;
 
@@ -249,7 +249,7 @@ class _MilestoneReviewSectionState extends State<MilestoneReviewSection> {
               child: ReviewTile(
                 review: existing,
                 fromLabel: widget.reviewerRole == 'customer' ? 'Your review' : 'Your feedback',
-                jobLabel: widget.booking.milestoneLabel,
+                jobLabel: 'Booking',
               ),
             ),
           );

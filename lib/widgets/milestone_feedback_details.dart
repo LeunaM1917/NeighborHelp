@@ -52,7 +52,7 @@ class MilestoneFeedbackDetails extends StatelessWidget {
 
         if (customerReview == null && providerReview == null) {
           return Text(
-            'No reviews yet for this milestone.',
+            'No reviews yet for this booking.',
             style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray600, height: 1.4),
           );
         }
@@ -73,7 +73,7 @@ class MilestoneFeedbackDetails extends StatelessWidget {
             )
           else
             _missingReview(
-              isCustomer ? 'You have not reviewed this milestone yet.' : 'No review from the customer yet.',
+              isCustomer ? 'You have not reviewed this booking yet.' : 'No review from the customer yet.',
             ),
           if (providerReview != null) ...[
             const SizedBox(height: 14),
@@ -83,7 +83,7 @@ class MilestoneFeedbackDetails extends StatelessWidget {
             ),
           ] else if (!isCustomer) ...[
             const SizedBox(height: 14),
-            _missingReview('You have not left feedback for this milestone yet.'),
+            _missingReview('You have not left feedback for this booking yet.'),
           ] else ...[
             const SizedBox(height: 14),
             _missingReview('No feedback from the provider yet.'),

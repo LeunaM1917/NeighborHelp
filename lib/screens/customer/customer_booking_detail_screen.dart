@@ -22,7 +22,7 @@ import '../../utils/review_sentiment.dart';
 import '../../widgets/customer_provider_profile_dialog.dart';
 import '../../widgets/booking_cancellation_card.dart';
 import '../../widgets/booking_user_report_card.dart';
-import '../../widgets/contract_panel.dart';
+import '../../widgets/work_completion_card.dart';
 import '../../widgets/milestone_feedback_details.dart';
 import 'widgets/booking_review_section.dart';
 
@@ -84,6 +84,7 @@ class CustomerBookingDetailScreen extends StatelessWidget {
                                     const SizedBox(height: 20),
                                     BookingStatusTracker(
                                       status: b.status,
+                                      completionLabel: 'Completed',
                                       pendingAt: b.createdAt.toDate(),
                                       acceptedAt: b.acceptedAt?.toDate(),
                                       inProgressAt: b.startedAt?.toDate(),
@@ -113,7 +114,7 @@ class CustomerBookingDetailScreen extends StatelessWidget {
                                                 child: Divider(height: 1, color: FigmaColors.gray200),
                                               ),
                                               Text(
-                                                'Milestone feedback',
+                                                'Booking feedback',
                                                 style: GoogleFonts.inter(
                                                   fontSize: 13,
                                                   fontWeight: FontWeight.w700,
@@ -165,10 +166,9 @@ class CustomerBookingDetailScreen extends StatelessWidget {
                                     ],
                                   ];
 
-                                  final contractPanel = ContractPanel(
-                                    appUser: appUser,
+                                  final bookingCompletion = WorkCompletionCard(
                                     booking: b,
-                                    viewerRole: 'customer',
+                                    asCustomer: true,
                                   );
 
                                   return LayoutBuilder(
@@ -198,7 +198,7 @@ class CustomerBookingDetailScreen extends StatelessWidget {
                                               ],
                                             ),
                                             const SizedBox(height: 20),
-                                            contractPanel,
+                                            bookingCompletion,
                                           ],
                                         );
                                       }
@@ -209,7 +209,7 @@ class CustomerBookingDetailScreen extends StatelessWidget {
                                           const SizedBox(height: 20),
                                           ...sideChildren,
                                           const SizedBox(height: 20),
-                                          contractPanel,
+                                          bookingCompletion,
                                         ],
                                       );
                                     },
@@ -267,18 +267,11 @@ class CustomerBookingDetailScreen extends StatelessWidget {
                       b.scheduledWindowLabel,
                       style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray600),
                     ),
-                    if (b.milestoneNumber != null) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        b.milestoneLabel,
-                        style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: FigmaColors.gray500),
-                      ),
-                    ],
                   ],
                 ),
               ),
               const SizedBox(width: 12),
-              FigmaStatusChip(status: b.status),
+              FigmaStatusChip(status: b.isCompleted ? 'Completed' : b.status),
             ],
           ),
           const SizedBox(height: 16),
@@ -327,10 +320,6 @@ class CustomerBookingDetailScreen extends StatelessWidget {
             _summaryRow('Date & time', b.scheduledWindowLabel),
             const Divider(height: 1, color: FigmaColors.gray100),
             _summaryRow('Location', b.serviceLocation),
-            if (b.milestoneNumber != null) ...[
-              const Divider(height: 1, color: FigmaColors.gray100),
-              _summaryRow('Contract', b.milestoneLabel),
-            ],
             if (b.totalFee != null) ...[
               const Divider(height: 1, color: FigmaColors.gray100),
               _summaryRow('Estimated fee', '₱${b.totalFee!.toStringAsFixed(0)}'),
@@ -342,7 +331,7 @@ class CustomerBookingDetailScreen extends StatelessWidget {
                 children: [
                   Text('Status', style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray500)),
                   const Spacer(),
-                  FigmaStatusChip(status: b.status),
+                  FigmaStatusChip(status: b.isCompleted ? 'Completed' : b.status),
                 ],
               ),
             ),
