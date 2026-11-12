@@ -16,7 +16,7 @@ import 'support/ui_test_support.dart';
 ServiceProviderProfile profile({
   String? status,
   String expiry = '2099-01-01',
-  String qualification = 'Masonry NC II',
+  String qualification = 'Plumbing NC II',
   bool approved = true,
   bool verified = true,
 }) => ServiceProviderProfile.fromFirestore('provider', {
@@ -90,9 +90,9 @@ Future<void> openForm(
   addTearDown(tester.view.resetDevicePixelRatio);
   final listing = ServiceListing.fromFirestore('listing', {
     'providerId': 'provider',
-    'category': 'Construction',
-    'serviceTitle': 'Masonry',
-    'description': 'Masonry service description',
+    'category': 'Repair and Technical Services',
+    'serviceTitle': 'Plumbing Repair',
+    'description': 'Plumbing repair service description',
     'estimatedPrice': 500,
     'priceType': 'fixed',
     'estimatedDuration': '1–2 hours',
@@ -139,7 +139,7 @@ void main() {
               providerId: 'provider',
               initial: const ProviderCertificationEntry(
                 id: 'cert',
-                name: 'Masonry NC II',
+                name: 'Plumbing NC II',
                 issueDate: '2025-01-02',
                 expirationDate: '2030-03-04',
               ),
@@ -180,12 +180,12 @@ void main() {
       ServiceCertificateStatus check(ServiceProviderProfile p) =>
           serviceCertificateStatus(
             p,
-            category: 'Construction',
-            serviceTitle: 'Masonry',
+            category: 'Repair and Technical Services',
+            serviceTitle: 'Plumbing Repair',
           );
       expect(check(profile()), ServiceCertificateStatus.missing);
       expect(
-        check(profile(status: 'Approved', qualification: 'Tile Setting NC II')),
+        check(profile(status: 'Approved', qualification: 'Electrical Installation and Maintenance NC II')),
         ServiceCertificateStatus.missing,
       );
       expect(
@@ -228,7 +228,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(popup, findsNothing);
         expect(tester.getSize(find.byType(ProviderServiceFormScreen)), before);
-        expect(find.text('Masonry service description'), findsWidgets);
+        expect(find.text('Plumbing repair service description'), findsWidgets);
         expect(store.writes, isEmpty);
         expect(tester.takeException(), isNull);
       },
@@ -242,21 +242,21 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text('Matching certificate required'), findsOneWidget);
         expect(
-          find.textContaining('Masonry requires Masonry NC II'),
+          find.textContaining('Plumbing Repair requires Plumbing NC II'),
           findsOneWidget,
         );
         expect(store.writes, isEmpty);
         await tester.tap(find.text('Upload certificate'));
         await tester.pumpAndSettle();
         expect(find.byType(ProviderCertificationDialog), findsOneWidget);
-        expect(find.text('Masonry NC II'), findsWidgets);
+        expect(find.text('Plumbing NC II'), findsWidgets);
         expect(tester.takeException(), isNull);
         Navigator.of(
           tester.element(find.byType(ProviderCertificationDialog)),
         ).pop();
         await tester.pumpAndSettle();
         expect(find.byType(ProviderServiceFormScreen), findsOneWidget);
-        expect(find.text('Masonry service description'), findsWidgets);
+        expect(find.text('Plumbing repair service description'), findsWidgets);
         expect(tester.takeException(), isNull);
       },
     );

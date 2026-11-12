@@ -974,11 +974,13 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
                           color: cat?.fg ?? FigmaColors.gray600,
                         ),
                         const SizedBox(width: 6),
-                        Text(
-                          category,
-                          style: GoogleFonts.inter(
-                            fontSize: 13,
-                            color: FigmaColors.gray600,
+                        Flexible(
+                          child: Text(
+                            category,
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              color: FigmaColors.gray600,
+                            ),
                           ),
                         ),
                       ],

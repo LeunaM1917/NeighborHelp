@@ -1,5 +1,5 @@
-/// Supported household tasks only. Professional design, regulated electrical
-/// work and master plumbing remain excluded until licence checks are supported.
+/// Services offered in the customer catalog and provider listing form.
+/// Each service requires a matching administrator-reviewed TESDA certificate.
 const approvedServiceCatalog = <String, Map<String, String>>{
   'Home Repair': {
     'Basic Carpentry': 'carpentry',
@@ -16,6 +16,8 @@ const approvedServiceCatalog = <String, Map<String, String>>{
     'Ironing Service': 'domestic',
   },
   'Repair and Technical Services': {
+    'Electrical Repair': 'electrical',
+    'Plumbing Repair': 'plumbing',
     'Computer Repair': 'computer',
     'Laptop Repair': 'computer',
     'Internet/Wi-Fi Setup': 'computer',
@@ -27,18 +29,10 @@ const approvedServiceCatalog = <String, Map<String, String>>{
     'Furniture Assembly': 'carpentry',
     'Shelf Installation': 'carpentry',
   },
-  'Construction': {
-    'Masonry': 'masonry',
-    'Concrete Block Laying': 'masonry',
-    'Bricklaying': 'masonry',
-    'Wall Plastering': 'masonry',
-    'Construction Carpentry': 'carpentry',
-    'Tile Installation': 'tiling',
-    'Tile Repair': 'tiling',
-    'Construction Painting': 'painting',
-  },
 };
 const approvedQualifications = <String, List<String>>{
+  'electrical': ['Electrical Installation and Maintenance NC II'],
+  'plumbing': ['Plumbing NC II'],
   'carpentry': ['Carpentry NC II', 'Carpentry NC III'],
   'domestic': ['Domestic Work NC II'],
   'computer': ['Computer Systems Servicing NC II'],

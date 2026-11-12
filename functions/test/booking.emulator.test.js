@@ -172,3 +172,22 @@ test('an eligible citywide provider can accept a booking at the former city-cent
   await command({action: 'accept', bookingId: 'city-center'}, auth('provider'));
   assert.equal((await db.doc('bookings/city-center').get()).data().status, 'Accepted');
 });
+
+test('plumbing and electrical repair can be booked only with the matching approved certificate', async () => {
+  let day = 0;
+  for (const [title, qualification] of [['Plumbing Repair','Plumbing NC II'],['Electrical Repair','Electrical Installation and Maintenance NC II']]) {
+    await db.doc('services/cleaning').update({category:'Repair and Technical Services',serviceTitle:title});
+    await db.doc('serviceProviders/provider').update(credentials('Carpentry NC II'));
+    const at = start() + day++ * 86400000;
+    const request = {scheduledDate:at,scheduledEndDate:at+3600000};
+    await assert.rejects(direct('wrong-'+day,request),/certificate/);
+    await db.doc('serviceProviders/provider').update(credentials(qualification));
+    const id = 'repair-'+day;
+    await direct(id,request);
+    await command({action:'accept',bookingId:id},auth('provider'));
+    const record=(await db.doc('bookings/'+id).get()).data();
+    assert.equal(record.status,'Accepted');
+    assert.equal(record.contractId,undefined);
+    assert.equal((await db.collection('contracts').get()).size,0);
+  }
+});

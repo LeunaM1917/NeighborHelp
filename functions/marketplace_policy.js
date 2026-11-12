@@ -1,6 +1,8 @@
 'use strict';
 const catalog = require('./service_policy.json');
 const qualifications = {
+  electrical: ['Electrical Installation and Maintenance NC II'],
+  plumbing: ['Plumbing NC II'],
   carpentry: ['Carpentry NC II', 'Carpentry NC III'],
   domestic: ['Domestic Work NC II'],
   computer: ['Computer Systems Servicing NC II'],

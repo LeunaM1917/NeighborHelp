@@ -193,7 +193,7 @@ test('hourly listings require review and providers cannot publish unsupported se
   await assertSucceeds(setDoc(doc(db,'services','hourly'),{...data,priceType:'hourly'}));
   await assertFails(updateDoc(doc(db,'services','hourly'),{approvalStatus:'Approved',isActive:true}));
   await assertFails(setDoc(doc(db,'services','custom'),{...data,category:'Custom Services',serviceTitle:'Anything'}));
-  await assertFails(setDoc(doc(db,'services','electric'),{...data,category:'Repair and Technical Services',serviceTitle:'Electrical Repair'}));
+  await assertFails(setDoc(doc(db,'services','unsupported'),{...data,category:'Repair and Technical Services',serviceTitle:'Industrial Electrical Design'}));
 });
 
 test('providers need profile completion and KYC for submissions but can keep private drafts',async()=>{
@@ -212,15 +212,16 @@ test('providers need profile completion and KYC for submissions but can keep pri
   await assertSucceeds(updateDoc(doc(db,'services','draft'),{approvalStatus:'Pending'}));
 });
 
-test('construction catalog submissions stay pending and cannot become self-approved listings',async()=>{
+test('plumbing and electrical submissions remain pending; retired construction services cannot be submitted',async()=>{
   const db=env.authenticatedContext('provider').firestore();
-  const base={providerId:'provider',category:'Construction',priceType:'daily',approvalStatus:'Pending',isActive:false};
-  for (const title of Object.keys(require('../service_policy.json').Construction)) {
+  const base={providerId:'provider',category:'Repair and Technical Services',priceType:'daily',approvalStatus:'Pending',isActive:false};
+  for (const title of ['Plumbing Repair','Electrical Repair']) {
     await assertSucceeds(setDoc(doc(db,'services',title),{...base,serviceTitle:title}));
     await assertFails(updateDoc(doc(db,'services',title),{approvalStatus:'Approved',isActive:true}));
   }
-  await assertFails(setDoc(doc(db,'services','general'),{...base,serviceTitle:'General Construction'}));
-  await assertFails(setDoc(doc(db,'services','unapproved-live'),{...base,serviceTitle:'Masonry',isActive:true}));
+  for (const title of ['Masonry','Concrete Block Laying','Bricklaying','Wall Plastering','Construction Carpentry','Tile Installation','Tile Repair','Construction Painting']) {
+    await assertFails(setDoc(doc(db,'services',title),{...base,category:'Construction',serviceTitle:title}));
+  }
 });
 
 test('active admins do not need email verification; role, account status and MFA still protect admin data',async()=>{

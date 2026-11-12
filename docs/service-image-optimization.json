@@ -1,7 +1,7 @@
 {
   "original_catalog_bytes": 548658277,
-  "selected_source_bytes": 61672183,
-  "bundled_service_image_bytes": 1004130,
+  "selected_source_bytes": 66020359,
+  "bundled_service_image_bytes": 1109738,
   "images": [
     {
       "key": "home_repair|basic carpentry",
@@ -112,6 +112,26 @@
       "bundled_bytes": 39660,
       "width": 1200,
       "height": 800
+    },
+    {
+      "key": "repair_technical|electrical repair",
+      "source": "assets/service_picture/3. Repair and Technical Services/Electrical Repair.jpg",
+      "source_bytes": 1383197,
+      "source_sha256": "8b3ec68412eca9ba93170ae3d8f9180b6cb01c733593172d493674175928bd11",
+      "bundled_path": "assets/optimized_services/repair_technical-electrical-repair.webp",
+      "bundled_bytes": 69696,
+      "width": 1200,
+      "height": 675
+    },
+    {
+      "key": "repair_technical|plumbing repair",
+      "source": "assets/service_picture/3. Repair and Technical Services/Plumbing Repair.jpg",
+      "source_bytes": 2964979,
+      "source_sha256": "c9e73be47453eb43627f294952c5e4874668af84a48ff4bdc645a256f972cba6",
+      "bundled_path": "assets/optimized_services/repair_technical-plumbing-repair.webp",
+      "bundled_bytes": 35912,
+      "width": 1200,
+      "height": 900
     },
     {
       "key": "repair_technical|computer repair",

@@ -12,6 +12,8 @@ abstract final class MarketingServiceAssetPaths {
     'cleaning|kitchen cleaning': 'assets/optimized_services/cleaning-kitchen-cleaning.webp',
     'cleaning|laundry assistance': 'assets/optimized_services/cleaning-laundry-assistance.webp',
     'repair_technical|aircon cleaning': 'assets/optimized_services/repair_technical-aircon-cleaning.webp',
+    'repair_technical|electrical repair': 'assets/optimized_services/repair_technical-electrical-repair.webp',
+    'repair_technical|plumbing repair': 'assets/optimized_services/repair_technical-plumbing-repair.webp',
     'repair_technical|computer repair': 'assets/optimized_services/repair_technical-computer-repair.webp',
     'repair_technical|internetwi fi setup': 'assets/optimized_services/repair_technical-internetwi-fi-setup.webp',
     'repair_technical|laptop repair': 'assets/optimized_services/repair_technical-laptop-repair.webp',

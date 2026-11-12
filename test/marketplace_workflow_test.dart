@@ -20,7 +20,7 @@ void main() {
     expect(isSupportedService('Custom Services', 'Carpentry'), isFalse);
     expect(
       isSupportedService('Repair and Technical Services', 'Electrical Repair'),
-      isFalse,
+      isTrue,
     );
     expect(isSupportedService('Cleaning', 'House Cleaning'), isTrue);
     for (final service in MarketingFeaturedServices.all) {

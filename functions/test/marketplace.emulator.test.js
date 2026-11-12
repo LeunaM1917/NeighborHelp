@@ -46,7 +46,7 @@ const proposalReview=(id,action='approve',extra={})=>({action,proposalId:id,note
 test('service proposals require verified providers and current approved certificates; duplicate retries are safe',async()=>{
   const command=proposals();
   await assert.rejects(command(proposalData(),auth('c')),{code:'permission-denied'});
-  await assert.rejects(command(proposalData({serviceTitle:'House Cleaning',category:'Construction'}),auth('p')),{code:'failed-precondition'});
+  await assert.rejects(command(proposalData({serviceTitle:'House Cleaning',category:'Home Repair'}),auth('p')),{code:'failed-precondition'});
   await assert.rejects(command(proposalData({certificationEntryId:'someone-elses-cert'}),auth('p')),{code:'failed-precondition'});
   const result=await command(proposalData(),auth('p'));
   assert.equal((await command(proposalData(),auth('p'))).duplicate,true);
@@ -128,10 +128,10 @@ test('an additional TESDA NC qualification can be registry-reviewed but unlocks 
   await review({providerId:'p',certificationEntryId:'cert',decision:'Approved',registryChecked:true,notes:'Holder, qualification, number and validity checked in the TESDA registry.'},auth('a'));
   const {hasMatchingCertificate}=require('../domain');
   assert.equal(hasMatchingCertificate((await db.doc('serviceProviders/p').get()).data(),'Cleaning','House Cleaning'),false);
-  const command=proposals(),{proposalId}=await command(proposalData({serviceTitle:'Household Metal Furniture Welding',category:'Construction'}),auth('p'));
-  assert.equal(hasMatchingCertificate((await db.doc('serviceProviders/p').get()).data(),'Construction','Household Metal Furniture Welding'),false);
+  const command=proposals(),{proposalId}=await command(proposalData({serviceTitle:'Household Metal Furniture Welding',category:'Other TESDA Services'}),auth('p'));
+  assert.equal(hasMatchingCertificate((await db.doc('serviceProviders/p').get()).data(),'Other TESDA Services','Household Metal Furniture Welding'),false);
   await command(proposalReview(proposalId),auth('a'));
-  assert.equal(hasMatchingCertificate((await db.doc('serviceProviders/p').get()).data(),'Construction','Household Metal Furniture Welding'),true);
+  assert.equal(hasMatchingCertificate((await db.doc('serviceProviders/p').get()).data(),'Other TESDA Services','Household Metal Furniture Welding'),true);
 });
 
 test('inquiries require no booking and support separate comparison conversations',async()=>{
@@ -215,7 +215,7 @@ test('only the System Administrator can review; opening TESDA alone never approv
   await review({...data,decision:'Rejected',notes:'Certificate details do not match the submitted holder.'},auth('a'));
   await assert.rejects(open(),/certificate/);
 });
-test('unsupported custom work, PRC-only work and unrelated or expired certificates cannot be offered',async()=>{
+test('unsupported custom work and unrelated or expired certificates cannot be offered',async()=>{
   for(const patch of [{category:'Custom Services',serviceTitle:'Anything'},{category:'Repair and Technical Services',serviceTitle:'Electrical Repair'}]) {
     await db.doc('services/p').update(patch);await assert.rejects(open(),/certificate/);
   }

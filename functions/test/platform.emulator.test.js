@@ -193,25 +193,25 @@ test('policy maintenance hides unsupported listings and refreshes expiry-bound p
   await ops.enforceMarketplacePolicy.run({});
   assert.equal((await db.doc('services/valid').get()).data().isActive,false);assert.equal((await db.doc('publicProviders/provider').get()).exists,false);
 });
-test('construction eligibility appears only after matching TESDA registry review and disappears on withdrawal',async()=>{
-  const pending={...credentials('Masonry NC II'),userId:'provider',isVerified:true,verificationStatus:'Approved',approvedCertificationIds:[]};
+test('plumbing eligibility appears only after matching TESDA registry review and disappears on withdrawal',async()=>{
+  const pending={...credentials('Plumbing NC II'),userId:'provider',isVerified:true,verificationStatus:'Approved',approvedCertificationIds:[]};
   pending.certificationHistory[0]={...pending.certificationHistory[0],status:'Pending',url:'gs://demo-bucket/certificates/provider/cert/proof.pdf'};
   await db.doc('serviceProviders/provider').set(pending);
-  const masonry={providerId:'provider',category:'Construction',serviceTitle:'Masonry',isActive:true,approvalStatus:'Approved'};
-  await db.doc('services/masonry').set(masonry);
-  await db.doc('services/tiles').set({...masonry,serviceTitle:'Tile Installation'});
-  await ops.auditServices.run(reviewChange(null,masonry),{eventId:'pending-construction',params:{id:'masonry'}});
+  const plumbing={providerId:'provider',category:'Repair and Technical Services',serviceTitle:'Plumbing Repair',isActive:true,approvalStatus:'Approved'};
+  await db.doc('services/plumbing').set(plumbing);
+  await db.doc('services/electrical').set({...plumbing,serviceTitle:'Electrical Repair'});
+  await ops.auditServices.run(reviewChange(null,plumbing),{eventId:'pending-plumbing',params:{id:'plumbing'}});
   assert.equal((await db.doc('publicProviders/provider').get()).exists,false);
   const args={providerId:'provider',certificationEntryId:'cert',decision:'Approved',registryChecked:true,notes:'Checked the holder, qualification and validity in the TESDA registry.'};
   await ops.certificateCommand.run(args,auth('admin'));
   const approved=(await db.doc('serviceProviders/provider').get()).data();
-  await ops.auditServiceProviders.run(reviewChange(pending,approved),{eventId:'approved-construction',params:{id:'provider'}});
-  assert.deepEqual((await db.doc('publicProviders/provider').get()).data().eligibleServiceIds,['masonry']);
+  await ops.auditServiceProviders.run(reviewChange(pending,approved),{eventId:'approved-plumbing',params:{id:'provider'}});
+  assert.deepEqual((await db.doc('publicProviders/provider').get()).data().eligibleServiceIds,['plumbing']);
   await ops.certificateCommand.run({...args,decision:'Pending',notes:'Registry approval withdrawn pending another identity check.'},auth('admin'));
   const withdrawn=(await db.doc('serviceProviders/provider').get()).data();
-  await ops.auditServiceProviders.run(reviewChange(approved,withdrawn),{eventId:'withdrawn-construction',params:{id:'provider'}});
+  await ops.auditServiceProviders.run(reviewChange(approved,withdrawn),{eventId:'withdrawn-plumbing',params:{id:'provider'}});
   assert.equal((await db.doc('publicProviders/provider').get()).exists,false);
-  assert.equal((await db.doc('services/masonry').get()).exists,true);
+  assert.equal((await db.doc('services/plumbing').get()).exists,true);
 });
 
 test('scheduled announcements are limited to the chosen active audience and sent once', async () => {

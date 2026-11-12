@@ -40,7 +40,7 @@ Map<String, dynamic> profileData({
       'proposal': {
         'status': 'Approved',
         'serviceTitle': 'Garden Block Wall Repair',
-        'category': 'Construction',
+        'category': 'Other TESDA Services',
         'qualificationName': 'Masonry NC II',
         'certificationEntryId': 'old-cert',
         'reviewedBy': 'admin',
@@ -52,7 +52,7 @@ ServiceListing customListing({String status = 'Approved'}) =>
     ServiceListing.fromFirestore('custom', {
       'providerId': 'provider',
       'serviceTitle': 'Garden Block Wall Repair',
-      'category': 'Construction',
+      'category': 'Other TESDA Services',
       'serviceProposalId': 'approved-proposal',
       'requiredQualification': 'Masonry NC II',
       'approvalStatus': status,
@@ -98,14 +98,14 @@ void main() {
     () {
       bool matches(Map<String, dynamic> row) => hasMatchingServiceCertificate(
         ServiceProviderProfile.fromFirestore('provider', row),
-        category: 'Construction',
+        category: 'Other TESDA Services',
         serviceTitle: 'Garden Block Wall Repair',
       );
       expect(matches(profileData()), true);
       expect(matches(profileData(grant: false)), false);
       expect(matches(profileData(approved: false)), false);
       expect(matches(profileData(qualification: 'Domestic Work NC II')), false);
-      final category = MarketingServiceCatalog.categoryByName('Construction')!;
+      final category = MarketingServiceCatalog.categoryByName('Other TESDA Services')!;
       expect(
         MarketingServiceCatalog.withApprovedProposals(category, [
           customListing(status: 'Draft'),
@@ -189,7 +189,7 @@ void main() {
         resize(tester, width);
         final proposal = ServiceProposal('test', {
           'serviceTitle': 'Garden Block Wall Repair',
-          'category': 'Construction',
+          'category': 'Other TESDA Services',
           'qualificationName': 'Masonry NC II',
           'providerName': 'Test Provider',
           'description': 'Repair agreed garden masonry blocks.',

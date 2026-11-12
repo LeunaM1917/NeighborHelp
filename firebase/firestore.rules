@@ -117,9 +117,8 @@ service cloud.firestore {
       return s.get('priceType','') in ['hourly','fixed','daily','negotiable'] && (
         (s.category == 'Home Repair' && s.serviceTitle in ['Basic Carpentry','Carpentry','Door Repair','Furniture Repair'])
         || (s.category == 'Cleaning' && s.serviceTitle in ['House Cleaning','Apartment Cleaning','Kitchen Cleaning','Bathroom Cleaning','Laundry Assistance','Ironing Service'])
-        || (s.category == 'Repair and Technical Services' && s.serviceTitle in ['Computer Repair','Laptop Repair','Internet/Wi-Fi Setup','Aircon Cleaning','Aircon Repair','Refrigerator Repair'])
+        || (s.category == 'Repair and Technical Services' && s.serviceTitle in ['Electrical Repair','Plumbing Repair','Computer Repair','Laptop Repair','Internet/Wi-Fi Setup','Aircon Cleaning','Aircon Repair','Refrigerator Repair'])
         || (s.category == 'Handyman' && s.serviceTitle in ['Furniture Assembly','Shelf Installation'])
-        || (s.category == 'Construction' && s.serviceTitle in ['Masonry','Concrete Block Laying','Bricklaying','Wall Plastering','Construction Carpentry','Tile Installation','Tile Repair','Construction Painting'])
         || approvedServiceProposal(s, id));
     }
     match /services/{id} {

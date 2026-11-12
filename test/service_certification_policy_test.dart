@@ -5,7 +5,7 @@ import 'package:neighbor_help/utils/service_certification_policy.dart';
 
 void main() {
   test(
-    'construction work needs a current matching administrator-approved certificate',
+    'plumbing and electrical repair need a current matching administrator-approved certificate',
     () {
       ServiceProviderProfile profile(
         String qualification, {
@@ -33,18 +33,12 @@ void main() {
         ],
       });
       for (final row in [
-        ('Masonry', 'Masonry NC II'),
-        ('Concrete Block Laying', 'Masonry NC II'),
-        ('Bricklaying', 'Masonry NC II'),
-        ('Wall Plastering', 'Masonry NC II'),
-        ('Construction Carpentry', 'Carpentry NC II'),
-        ('Tile Installation', 'Tile Setting NC II'),
-        ('Tile Repair', 'Tile Setting NC II'),
-        ('Construction Painting', 'Construction Painting NC II'),
+        ('Plumbing Repair', 'Plumbing NC II'),
+        ('Electrical Repair', 'Electrical Installation and Maintenance NC II'),
       ]) {
         bool matches(ServiceProviderProfile p) => hasMatchingServiceCertificate(
           p,
-          category: 'Construction',
+          category: 'Repair and Technical Services',
           serviceTitle: row.$1,
         );
         expect(matches(profile(row.$2)), isTrue, reason: row.$1);
