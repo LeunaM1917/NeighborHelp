@@ -177,6 +177,26 @@ void main() {
     expect(camera.last, lessThanOrEqualTo(17));
   });
   test(
+    'an eligible citywide provider remains a map pin and recommendation at the Panabo center',
+    () {
+      final p = provider(
+        'citywide',
+        point: const GeoPoint(7.311986, 125.669128),
+        barangays: panaboBarangays.map((b) => b['id'] as String).toList(),
+      );
+      final ranked = CustomerProviderDiscovery(
+        providers: [p],
+        origin: origin,
+      ).nearby;
+      expect(ranked.single.profile.providerId, 'citywide');
+      expect(ranked.single.distanceKm, lessThan(15));
+      expect(
+        buildNearbyMapPins(providers: [p], users: {}, origin: origin).single.id,
+        'citywide',
+      );
+    },
+  );
+  test(
     'a map center is not used as a customer address when no location is saved',
     () {
       final area = panaboBarangays.firstWhere(

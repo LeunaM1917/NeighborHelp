@@ -167,3 +167,8 @@ test('direct bookings respect conversation blocks without requiring a chat', asy
   await assert.rejects(command({action: 'accept', bookingId: 'pending'}, auth('provider')), /blocked/);
   assert.equal((await db.doc('bookings/pending').get()).data().status, 'Pending');
 });
+test('an eligible citywide provider can accept a booking at the former city-center coverage gap', async () => {
+  await direct('city-center', {location: {latitude: 7.3081, longitude: 125.6842}});
+  await command({action: 'accept', bookingId: 'city-center'}, auth('provider'));
+  assert.equal((await db.doc('bookings/city-center').get()).data().status, 'Accepted');
+});

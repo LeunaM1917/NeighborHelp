@@ -2,6 +2,18 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const area=require('../provider_area'),catalog=require('../panabo_barangays.json').barangays;
 const expiry=require('../offer_expiry'),{coversSchedule}=require('../scheduling');
+for (const fixture of require('./fixtures/coverage_cases.json')) {
+  test(`coverage: ${fixture.name}`, () => {
+    const ids = fixture.selected === 'all' ? catalog.map(b => b.id) : fixture.selected;
+    assert.equal(area.covers({serviceBarangayIds: ids}, fixture), fixture.expected);
+  });
+}
+test('invalid points do not make provider coverage checks throw or match', () => {
+  const profile = {serviceBarangayIds: catalog.map(b => b.id)};
+  for (const point of [null, {}, {latitude: NaN, longitude: 125.6}, {latitude: 91, longitude: 125.6}]) {
+    assert.equal(area.covers(profile, point), false);
+  }
+});
 test('forty unique Panabo barangays have valid approximate centers and coverage geometries',()=>{
   assert.equal(catalog.length,40);assert.equal(new Set(catalog.map(b=>b.id)).size,40);
   for(const b of catalog){assert.match(b.id,/^1102315\d{3}$/);assert.ok(b.latitude>7&&b.latitude<8);assert.ok(b.longitude>125&&b.longitude<126);assert.ok(b.polygons.length);}

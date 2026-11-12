@@ -1,0 +1,13 @@
+[
+  {"name":"Panabo map center in a simplification gap","selected":"all","latitude":7.3081,"longitude":125.6842,"expected":true},
+  {"name":"gap resolves to its nearest indicative barangay","selected":["1102315034"],"latitude":7.3081,"longitude":125.6842,"expected":true},
+  {"name":"gap does not expand an unrelated selected barangay","selected":["1102315026"],"latitude":7.3081,"longitude":125.6842,"expected":false},
+  {"name":"known selected area remains covered","selected":["1102315029"],"latitude":7.312893,"longitude":125.681084,"expected":true},
+  {"name":"known unselected area cannot be claimed across a nearby edge","selected":["1102315034"],"latitude":7.312893,"longitude":125.681084,"expected":false},
+  {"name":"outside Panabo remains excluded","selected":"all","latitude":7.4475,"longitude":125.8094,"expected":false},
+  {"name":"a distant city remains excluded","selected":"all","latitude":14.6,"longitude":121,"expected":false},
+  {"name":"no selected coverage remains excluded","selected":[],"latitude":7.3081,"longitude":125.6842,"expected":false},
+  {"name":"unknown IDs fail closed even with a valid selection","selected":["1102315034","unknown"],"latitude":7.3081,"longitude":125.6842,"expected":false},
+  {"name":"a point just outside the city is excluded despite being near a barangay edge","selected":"all","latitude":7.454914049,"longitude":125.621458175,"expected":false},
+  {"name":"a selected polygon boundary vertex is included","selected":["1102315001"],"latitude":7.455721803000074,"longitude":125.59099367500005,"expected":true}
+]

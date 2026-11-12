@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:neighbor_help/data/panabo_barangays.dart';
+import 'package:neighbor_help/data/panabo_city.dart';
 import 'package:neighbor_help/models/booking.dart';
 import 'package:neighbor_help/models/provider.dart';
 import 'package:neighbor_help/models/requested_work_schedule.dart';
@@ -19,6 +20,36 @@ import 'package:neighbor_help/widgets/conversation_message.dart';
 import 'package:neighbor_help/widgets/service_agreement_card.dart';
 
 void main() {
+  for (final fixture
+      in jsonDecode(
+            File(
+              'functions/test/fixtures/coverage_cases.json',
+            ).readAsStringSync(),
+          )
+          as List) {
+    test('coverage: ${fixture['name']}', () {
+      final ids = fixture['selected'] == 'all'
+          ? panaboBarangays.map((b) => b['id'] as String).toList()
+          : List<String>.from(fixture['selected'] as List);
+      expect(
+        barangaysCover(
+          ids,
+          GeoPoint(
+            (fixture['latitude'] as num).toDouble(),
+            (fixture['longitude'] as num).toDouble(),
+          ),
+        ),
+        fixture['expected'],
+      );
+    });
+  }
+  test('client and server share the city envelope and source precision', () {
+    final city =
+        jsonDecode(File('functions/panabo_city.json').readAsStringSync())
+            as Map;
+    expect(panaboCityPolygons, city['polygons']);
+    expect(panaboCoverageGapToleranceDegrees, city['gapToleranceDegrees']);
+  });
   test(
     'client and server use identical Panabo IDs, centers and indicative areas',
     () {

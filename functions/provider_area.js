@@ -4,15 +4,7 @@ const catalog=require('./panabo_barangays.json');
 const byId=new Map(catalog.barangays.map(b=>[b.id,b]));
 const base=p=>byId.get(p?.baseBarangayId);
 function selected(p) {return Array.isArray(p?.serviceBarangayIds) && p.serviceBarangayIds.length>0 && p.serviceBarangayIds.every(id=>byId.has(id));}
-function inRing(point,ring) {
-  let inside=false;const x=point.longitude,y=point.latitude;
-  for(let i=0,j=ring.length-1;i<ring.length;j=i++) {
-    const [xi,yi]=ring[i],[xj,yj]=ring[j];
-    if((yi>y)!==(yj>y) && x<(xj-xi)*(y-yi)/(yj-yi)+xi) inside=!inside;
-  }
-  return inside;
-}
-function covers(p,point) {return selected(p) && p.serviceBarangayIds.some(id=>byId.get(id).polygons.some(rings=>inRing(point,rings[0])&&!rings.slice(1).some(r=>inRing(point,r))));}
+function covers(p,point) {return selected(p) && require('./barangay_coverage')(p.serviceBarangayIds, point);}
 const publicArea=p=>{
   const b=base(p);if(!b || !selected(p))return null;
   return {baseBarangayId:b.id,serviceBarangayIds:[...new Set(p.serviceBarangayIds)].sort(),locationPolicyVersion:1,
