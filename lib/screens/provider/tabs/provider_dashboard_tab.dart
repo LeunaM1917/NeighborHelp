@@ -202,6 +202,7 @@ class _ProviderDashboardTabState extends State<ProviderDashboardTab> {
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
+                                ProviderOnboardingPrompt(data: ProviderProfileCompletionData(appUser: widget.appUser, profile: profile, services: services, reviewCount: reviewCount)),
                                 ProviderDashboardStatsRow(
                                   rating: rating,
                                   reviewCount: reviewCount,
@@ -235,13 +236,6 @@ class _ProviderDashboardTabState extends State<ProviderDashboardTab> {
                                           profile: profile,
                                           services: services,
                                           reviewCount: reviewCount,
-                                          onRequirementTap: (id) => navigateToProviderProfileRequirement(
-                                            context,
-                                            id: id,
-                                            appUser: widget.appUser,
-                                            profile: profile,
-                                            onNavigateToTab: widget.onNavigateToTab,
-                                          ),
                                         ),
                                         if (!MobileLayout.isNativeApp(context)) ...[
                                           const SizedBox(height: 20),

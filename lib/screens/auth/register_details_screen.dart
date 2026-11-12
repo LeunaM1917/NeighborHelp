@@ -742,57 +742,44 @@ class _RegisterDetailsScreenState extends State<RegisterDetailsScreen> {
     );
   }
 
-  Widget _socialRow(BuildContext context, {required Future<void> Function() onGoogle}) {
+  Widget _socialRow(
+    BuildContext context, {
+    required Future<void> Function() onGoogle,
+  }) {
     return LayoutBuilder(
       builder: (context, c) {
         final narrow = c.maxWidth < 420;
-        final apple = OutlinedButton.icon(
-          onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Apple sign-in coming soon')),
-          ),
-          icon: const Icon(Icons.apple, size: 22, color: ProviderTokens.ink),
-          label: Text('Continue with Apple', style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 14)),
-          style: OutlinedButton.styleFrom(
-            minimumSize: Size(0, narrow ? 48 : 52),
-            backgroundColor: Colors.white,
-            foregroundColor: ProviderTokens.ink,
-            side: const BorderSide(color: ProviderTokens.ink),
-          ),
-        );
         final google = FilledButton.icon(
           onPressed: _busy ? null : () => onGoogle(),
           icon: Container(
             width: 24,
             height: 24,
-            decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+            ),
             child: Center(
-              child: Text('G', style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: Colors.blue.shade700, fontSize: 14)),
+              child: Text(
+                'G',
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w800,
+                  color: Colors.blue.shade700,
+                  fontSize: 14,
+                ),
+              ),
             ),
           ),
-          label: Text('Continue with Google', style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 14)),
+          label: Text(
+            'Continue with Google',
+            style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 14),
+          ),
           style: FilledButton.styleFrom(
             minimumSize: Size(0, narrow ? 48 : 52),
             backgroundColor: const Color(0xFF4285F4),
             foregroundColor: Colors.white,
           ),
         );
-        if (narrow) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              apple,
-              const SizedBox(height: 12),
-              google,
-            ],
-          );
-        }
-        return Row(
-          children: [
-            Expanded(child: apple),
-            const SizedBox(width: 12),
-            Expanded(child: google),
-          ],
-        );
+        return SizedBox(width: double.infinity, child: google);
       },
     );
   }

@@ -11,10 +11,15 @@ void setUpOfflineFonts() {
     // Supply font assets in memory so layout tests never need network access.
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMessageHandler('flutter/assets', (message) async {
-          final key = utf8.decode(message!.buffer.asUint8List());
+          final key = utf8.decode(
+            message!.buffer.asUint8List(
+              message.offsetInBytes,
+              message.lengthInBytes,
+            ),
+          );
           if (key == 'AssetManifest.bin' || key == 'AssetManifest.bin.json') {
             final manifest = const StandardMessageCodec().encodeMessage({
-              for (final weight in ['Regular', 'Medium', 'SemiBold', 'Bold'])
+              for (final weight in ['Regular', 'Medium', 'SemiBold', 'Bold', 'ExtraBold'])
                 'test-fonts/Inter-$weight.ttf': [
                   {'asset': 'test-fonts/Inter-$weight.ttf'},
                 ],
@@ -22,7 +27,14 @@ void setUpOfflineFonts() {
             return key.endsWith('.json')
                 ? ByteData.sublistView(
                     utf8.encode(
-                      jsonEncode(base64Encode(manifest.buffer.asUint8List())),
+                      jsonEncode(
+                        base64Encode(
+                          manifest.buffer.asUint8List(
+                            manifest.offsetInBytes,
+                            manifest.lengthInBytes,
+                          ),
+                        ),
+                      ),
                     ),
                   )
                 : manifest;
@@ -36,6 +48,7 @@ void setUpOfflineFonts() {
                     'Medium',
                     'SemiBold',
                     'Bold',
+                    'ExtraBold',
                   ])
                     'test-fonts/Inter-$weight.ttf': [
                       'test-fonts/Inter-$weight.ttf',

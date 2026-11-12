@@ -1,3 +1,4 @@
+import 'provider_profile_editor_dialog.dart';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -35,12 +36,14 @@ class ProviderPortfolioFlow extends StatefulWidget {
     this.initial,
     this.editIndex,
     this.inDialog = true,
+    this.showHeader = true,
   });
 
   final String providerId;
   final ProviderPortfolioProject? initial;
   final int? editIndex;
   final bool inDialog;
+  final bool showHeader;
 
   bool get isEditing => initial != null && !initial!.isEmpty;
 
@@ -54,43 +57,15 @@ class ProviderPortfolioFlow extends StatefulWidget {
       providerId: providerId,
       initial: initial,
       editIndex: editIndex,
-      inDialog: !MobileLayout.useMobileChrome(context),
+      inDialog: true,
+      showHeader: false,
     );
-
-    if (MobileLayout.useMobileChrome(context)) {
-      return Navigator.of(context).push<bool>(
-        MaterialPageRoute(
-          fullscreenDialog: true,
-          builder: (_) => providerThemed(
-            Scaffold(
-              backgroundColor: FigmaColors.white,
-              body: SafeArea(
-                minimum: EdgeInsets.only(
-                  top: MobileLayout.isNativeApp(context) ? 8 : 0,
-                  bottom: MobileLayout.isNativeApp(context) ? 8 : 0,
-                ),
-                child: body,
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    return showDialog<bool>(
-      context: context,
-      barrierColor: Colors.black54,
-      builder: (ctx) => providerThemed(
-        Dialog(
-          backgroundColor: FigmaColors.white,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 960, maxHeight: 820),
-            child: body,
-          ),
-        ),
-      ),
+    return ProviderProfileEditorDialog.open(
+      context,
+      title: initial != null && !initial.isEmpty
+          ? 'Edit portfolio project'
+          : 'Add a new portfolio project',
+      child: body,
     );
   }
 
@@ -194,7 +169,7 @@ class _ProviderPortfolioFlowState extends State<ProviderPortfolioFlow> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _flowHeader(context, title, onClose: () => Navigator.pop(context)),
+          if (widget.showHeader) _flowHeader(context, title, onClose: () => Navigator.pop(context)),
           Expanded(child: AppScrollChrome(child: content)),
           footer,
         ],
@@ -205,7 +180,7 @@ class _ProviderPortfolioFlowState extends State<ProviderPortfolioFlow> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _flowHeader(context, title, onClose: () => Navigator.pop(context)),
+        if (widget.showHeader) _flowHeader(context, title, onClose: () => Navigator.pop(context)),
         Flexible(child: content),
         footer,
       ],
@@ -240,7 +215,7 @@ class _ProviderPortfolioFlowState extends State<ProviderPortfolioFlow> {
       mainAxisSize: widget.inDialog ? MainAxisSize.min : MainAxisSize.max,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _flowHeader(context, title, onClose: () => Navigator.pop(context)),
+        if (widget.showHeader) _flowHeader(context, title, onClose: () => Navigator.pop(context)),
         if (widget.inDialog) Flexible(child: body) else Expanded(child: AppScrollChrome(child: body)),
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
@@ -506,14 +481,15 @@ class _ProviderPortfolioFlowState extends State<ProviderPortfolioFlow> {
   Widget _editFooter(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
+      child: Wrap(
+        alignment: WrapAlignment.end,
+        spacing: 12,
+        runSpacing: 8,
         children: [
           TextButton(
             onPressed: _saving ? null : () => _save(isDraft: true),
             child: Text('Save as draft', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: FigmaColors.gray800)),
           ),
-          const SizedBox(width: 12),
           FilledButton(
             onPressed: _saving || !_canPreview ? null : _goPreview,
             style: FilledButton.styleFrom(

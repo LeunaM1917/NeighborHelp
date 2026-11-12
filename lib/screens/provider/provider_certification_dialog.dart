@@ -1,13 +1,14 @@
+import 'provider_profile_editor_dialog.dart';
 import '../../utils/approved_service_catalog.dart';
-import 'package:file_picker/file_picker.dart';
+import '../../services/certificate_document.dart';
+import '../../services/certificate_document_picker.dart';
+import '../../services/auth_service.dart';
 import '../../services/storage_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../figma_ui/figma_colors.dart';
 import '../../models/provider_certification.dart';
 import '../../services/firestore_service.dart';
-import '../../theme/mobile_layout.dart';
-import '../../theme/provider_theme.dart';
 import '../../theme/role_theme.dart';
 import '../../widgets/app_scroll_chrome.dart';
 
@@ -20,6 +21,10 @@ class ProviderCertificationDialog extends StatefulWidget {
     this.initialQualification,
     this.editIndex,
     this.inDialog = true,
+    this.showHeader = true,
+    this.pickDocument,
+    this.uploadDocument,
+    this.firestore,
   });
 
   final String providerId;
@@ -27,6 +32,14 @@ class ProviderCertificationDialog extends StatefulWidget {
   final String? initialQualification;
   final int? editIndex;
   final bool inDialog;
+  final bool showHeader;
+  final Future<CertificateDocument?> Function()? pickDocument;
+  final Future<String> Function(
+    String certificateId,
+    CertificateDocument document,
+  )?
+  uploadDocument;
+  final FirestoreService? firestore;
 
   bool get isEditing => initial != null && !initial!.isEmpty;
 
@@ -42,55 +55,15 @@ class ProviderCertificationDialog extends StatefulWidget {
       initial: initial,
       initialQualification: initialQualification,
       editIndex: editIndex,
-      inDialog: !MobileLayout.useMobileChrome(context),
+      inDialog: true,
+      showHeader: false,
     );
-
-    if (MobileLayout.useMobileChrome(context)) {
-      return Navigator.of(context).push<bool>(
-        MaterialPageRoute(
-          builder: (_) => providerThemed(
-            Scaffold(
-              backgroundColor: FigmaColors.white,
-              appBar: AppBar(
-                backgroundColor: FigmaColors.white,
-                foregroundColor: FigmaColors.gray900,
-                elevation: 0,
-                title: Text(
-                  initial != null && !initial.isEmpty
-                      ? 'Edit certification'
-                      : 'Add certification',
-                  style: GoogleFonts.inter(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              body: body,
-            ),
-          ),
-        ),
-      );
-    }
-
-    return showDialog<bool>(
-      context: context,
-      barrierColor: Colors.black54,
-      builder: (ctx) => providerThemed(
-        Dialog(
-          backgroundColor: FigmaColors.white,
-          insetPadding: const EdgeInsets.symmetric(
-            horizontal: 24,
-            vertical: 32,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560, maxHeight: 720),
-            child: body,
-          ),
-        ),
-      ),
+    return ProviderProfileEditorDialog.open(
+      context,
+      title: initial != null && !initial.isEmpty
+          ? 'Edit certification'
+          : 'Add certification',
+      child: body,
     );
   }
 
@@ -112,16 +85,23 @@ class _ProviderCertificationDialogState
   String? _issueDate;
   String? _expirationDate;
   bool _saving = false;
+  bool _picking = false;
+  late final String _entryId;
   bool _otherQualification = false;
 
   @override
   void initState() {
     super.initState();
     final e = widget.initial;
+    _entryId = e?.id.isNotEmpty == true
+        ? e!.id
+        : ProviderCertificationEntry.newId();
     _name = TextEditingController(
       text: e?.name ?? widget.initialQualification ?? '',
     );
-    _otherQualification = _name.text.isNotEmpty && !approvedQualifications.values.expand((v) => v).contains(_name.text);
+    _otherQualification =
+        _name.text.isNotEmpty &&
+        !approvedQualifications.values.expand((v) => v).contains(_name.text);
     _provider = TextEditingController(text: 'TESDA');
     _description = TextEditingController(text: e?.description ?? '');
     _certId = TextEditingController(text: e?.certificationId ?? '');
@@ -148,41 +128,43 @@ class _ProviderCertificationDialogState
   }
 
   Future<void> _uploadCertificate() async {
-    setState(() => _saving = true);
+    if (_saving || _picking) return;
     try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
-        withData: true,
-      );
-      if (result == null) return;
-      final file = result.files.single;
-      if (file.bytes == null || file.size > 5 * 1024 * 1024) {
-        throw StateError('Choose a file up to 5 MB.');
-      }
-      final url = await StorageService().uploadCertificate(
-        providerId: widget.providerId,
-        certificateId: widget.initial?.id.isNotEmpty == true
-            ? widget.initial!.id
-            : ProviderCertificationEntry.newId(),
-        bytes: file.bytes!,
-        extension: (file.extension ?? '').toLowerCase(),
-      );
-      if (mounted) setState(() => _url.text = url);
-    } catch (e) {
+      // Open the chooser synchronously from the user click, before rebuilding.
+      final selection = (widget.pickDocument ?? pickCertificateDocument)();
+      setState(() => _picking = true);
+      final document = await selection;
+      if (document == null || !mounted) return;
+      document.validate();
+      setState(() => _saving = true);
+      final url = widget.uploadDocument != null
+          ? await widget.uploadDocument!(_entryId, document)
+          : await StorageService().uploadCertificate(
+              providerId: widget.providerId,
+              certificateId: _entryId,
+              bytes: document.bytes,
+              extension: document.extension,
+            );
+      if (mounted) _url.text = url;
+    } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              e is StateError
-                  ? e.message.toString()
-                  : 'Could not upload the certificate. Please retry.',
+              error is StateError
+                  ? error.message.toString()
+                  : AuthService.messageForUser(error),
             ),
           ),
         );
       }
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _picking = false;
+        });
+      }
     }
   }
 
@@ -248,9 +230,7 @@ class _ProviderCertificationDialogState
     setState(() => _saving = true);
     try {
       // New/edited certs always go back to Pending for System Administrator review.
-      final entryId = (widget.initial?.id.isNotEmpty == true)
-          ? widget.initial!.id
-          : ProviderCertificationEntry.newId();
+      final entryId = _entryId;
       final entry = ProviderCertificationEntry(
         id: entryId,
         name: _name.text.trim(),
@@ -263,9 +243,8 @@ class _ProviderCertificationDialogState
         status: CertificationVerificationStatus.pending,
       );
 
-      final profile = await FirestoreService().getProviderProfile(
-        widget.providerId,
-      );
+      final profile = await (widget.firestore ?? FirestoreService())
+          .getProviderProfile(widget.providerId);
       final updated = List<ProviderCertificationEntry>.from(
         profile?.certificationHistory ?? [],
       );
@@ -307,7 +286,7 @@ class _ProviderCertificationDialogState
             String
           >[]; // Any change requires renewed review of the submitted certificate set.
 
-      await FirestoreService().updateServiceProvider(
+      await (widget.firestore ?? FirestoreService()).updateServiceProvider(
         providerId: profile?.providerId ?? widget.providerId,
         data: {
           'certificationHistory': ProviderCertificationEntry.listToFirestore(
@@ -345,10 +324,11 @@ class _ProviderCertificationDialogState
           _labeledField(
             label: 'Certification name',
             field: DropdownButtonFormField<String>(
-              initialValue: _otherQualification ? '__other__' :
-                  approvedQualifications.values
-                      .expand((v) => v)
-                      .contains(_name.text)
+              initialValue: _otherQualification
+                  ? '__other__'
+                  : approvedQualifications.values
+                        .expand((v) => v)
+                        .contains(_name.text)
                   ? _name.text
                   : null,
               isExpanded: true,
@@ -360,7 +340,10 @@ class _ProviderCertificationDialogState
                     value: name,
                     child: Text(name, overflow: TextOverflow.ellipsis),
                   ),
-                const DropdownMenuItem(value: '__other__', child: Text('Other TESDA NC qualification')),
+                const DropdownMenuItem(
+                  value: '__other__',
+                  child: Text('Other TESDA NC qualification'),
+                ),
               ],
               onChanged: (v) => setState(() {
                 _otherQualification = v == '__other__';
@@ -374,12 +357,23 @@ class _ProviderCertificationDialogState
           ),
           if (_otherQualification) ...[
             const SizedBox(height: 12),
-            _labeledField(label: 'Exact TESDA qualification', field: TextFormField(
-              controller: _name, maxLength: 140,
-              decoration: _inputDecoration(hint: 'Qualification name and NC level as printed'),
-              validator: (v) => RegExp(r'^.{3,}\sNC\s+[IVX]{1,6}$', caseSensitive: false).hasMatch((v ?? '').trim())
-                ? null : 'Enter the exact TESDA qualification and NC level',
-            )),
+            _labeledField(
+              label: 'Exact TESDA qualification',
+              field: TextFormField(
+                controller: _name,
+                maxLength: 140,
+                decoration: _inputDecoration(
+                  hint: 'Qualification name and NC level as printed',
+                ),
+                validator: (v) =>
+                    RegExp(
+                      r'^.{3,}\sNC\s+[IVX]{1,6}$',
+                      caseSensitive: false,
+                    ).hasMatch((v ?? '').trim())
+                    ? null
+                    : 'Enter the exact TESDA qualification and NC level',
+              ),
+            ),
           ],
           const SizedBox(height: 18),
           _labeledField(
@@ -459,7 +453,7 @@ class _ProviderCertificationDialogState
           ),
           const SizedBox(height: 8),
           OutlinedButton.icon(
-            onPressed: _saving ? null : _uploadCertificate,
+            onPressed: _saving || _picking ? null : _uploadCertificate,
             icon: const Icon(Icons.upload_file),
             label: const Text('Upload PDF or image (up to 5 MB)'),
           ),
@@ -497,7 +491,7 @@ class _ProviderCertificationDialogState
             ),
           ),
           FilledButton(
-            onPressed: _saving || !_canSave ? null : _save,
+            onPressed: _saving || _picking || !_canSave ? null : _save,
             style: FilledButton.styleFrom(
               backgroundColor: _canSave ? rc.primary : FigmaColors.gray300,
               foregroundColor: FigmaColors.white,
@@ -550,28 +544,29 @@ class _ProviderCertificationDialogState
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 12, 0),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  title,
-                  style: GoogleFonts.inter(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: FigmaColors.gray900,
+        if (widget.showHeader)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 12, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: GoogleFonts.inter(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: FigmaColors.gray900,
+                    ),
                   ),
                 ),
-              ),
-              IconButton(
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.close, size: 22),
-                color: FigmaColors.gray600,
-              ),
-            ],
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close, size: 22),
+                  color: FigmaColors.gray600,
+                ),
+              ],
+            ),
           ),
-        ),
         Flexible(
           child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),

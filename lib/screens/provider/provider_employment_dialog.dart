@@ -1,11 +1,10 @@
+import 'provider_profile_editor_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../figma_ui/figma_colors.dart';
 import '../../models/provider_employment.dart';
 import '../../services/firestore_service.dart';
-import '../../theme/mobile_layout.dart';
-import '../../theme/provider_theme.dart';
 import '../../theme/role_theme.dart';
 import '../../widgets/app_scroll_chrome.dart';
 
@@ -17,12 +16,14 @@ class ProviderEmploymentDialog extends StatefulWidget {
     this.initial,
     this.editIndex,
     this.inDialog = true,
+    this.showHeader = true,
   });
 
   final String providerId;
   final ProviderEmploymentEntry? initial;
   final int? editIndex;
   final bool inDialog;
+  final bool showHeader;
 
   bool get isEditing => initial != null && !initial!.isEmpty;
 
@@ -36,45 +37,15 @@ class ProviderEmploymentDialog extends StatefulWidget {
       providerId: providerId,
       initial: initial,
       editIndex: editIndex,
-      inDialog: !MobileLayout.useMobileChrome(context),
+      inDialog: true,
+      showHeader: false,
     );
-
-    if (MobileLayout.useMobileChrome(context)) {
-      return Navigator.of(context).push<bool>(
-        MaterialPageRoute(
-          builder: (_) => providerThemed(
-            Scaffold(
-              backgroundColor: FigmaColors.white,
-              appBar: AppBar(
-                backgroundColor: FigmaColors.white,
-                foregroundColor: FigmaColors.gray900,
-                elevation: 0,
-                title: Text(
-                  initial != null && !initial.isEmpty ? 'Edit employment' : 'Add employment',
-                  style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700),
-                ),
-              ),
-              body: body,
-            ),
-          ),
-        ),
-      );
-    }
-
-    return showDialog<bool>(
-      context: context,
-      barrierColor: Colors.black54,
-      builder: (ctx) => providerThemed(
-        Dialog(
-          backgroundColor: FigmaColors.white,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560, maxHeight: 720),
-            child: body,
-          ),
-        ),
-      ),
+    return ProviderProfileEditorDialog.open(
+      context,
+      title: initial != null && !initial.isEmpty
+          ? 'Edit employment'
+          : 'Add employment',
+      child: body,
     );
   }
 
@@ -366,7 +337,7 @@ class _ProviderEmploymentDialogState extends State<ProviderEmploymentDialog> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
+        if (widget.showHeader) Padding(
           padding: const EdgeInsets.fromLTRB(20, 18, 12, 0),
           child: Row(
             children: [

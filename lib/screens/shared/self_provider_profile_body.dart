@@ -447,14 +447,6 @@ class _SelfProviderProfileBodyState extends State<SelfProviderProfileBody> {
                         profile: profile,
                         services: services,
                         reviewCount: reviewCount,
-                        onRequirementTap: (id) =>
-                            navigateToProviderProfileRequirement(
-                              context,
-                              id: id,
-                              appUser: widget.appUser,
-                              profile: profile,
-                              onNavigateToTab: widget.onNavigateToTab,
-                            ),
                       ),
                     ),
                     if (profile != null) ...[

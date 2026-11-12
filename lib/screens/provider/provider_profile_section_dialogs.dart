@@ -1,10 +1,9 @@
+import 'provider_profile_editor_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../figma_ui/figma_colors.dart';
 import '../../services/firestore_service.dart';
-import '../../theme/mobile_layout.dart';
-import '../../theme/provider_theme.dart';
 import '../../theme/role_theme.dart';
 /// Max characters for the other-experiences textarea (reference UI).
 abstract final class ProviderOtherExperiencesLimits {
@@ -18,51 +17,29 @@ class ProviderOtherExperiencesDialog extends StatefulWidget {
     required this.providerId,
     required this.initialLines,
     this.inDialog = true,
+    this.showHeader = true,
   });
 
   final String providerId;
   final List<String> initialLines;
   final bool inDialog;
+  final bool showHeader;
 
   static Future<bool?> open(
     BuildContext context, {
     required String providerId,
     required List<String> initialLines,
   }) {
-    final inDialog = !MobileLayout.useMobileChrome(context);
     final body = ProviderOtherExperiencesDialog(
       providerId: providerId,
       initialLines: initialLines,
-      inDialog: inDialog,
+      inDialog: true,
+      showHeader: false,
     );
-
-    if (inDialog) {
-      return showDialog<bool>(
-        context: context,
-        barrierColor: Colors.black54,
-        builder: (ctx) => providerThemed(
-          Dialog(
-            backgroundColor: FigmaColors.white,
-            insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 32),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 560, maxHeight: 520),
-              child: body,
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => providerThemed(
-          Scaffold(
-            backgroundColor: FigmaColors.white,
-            body: SafeArea(child: body),
-          ),
-        ),
-      ),
+    return ProviderProfileEditorDialog.open(
+      context,
+      title: 'Other experiences',
+      child: body,
     );
   }
 
@@ -143,7 +120,7 @@ class _ProviderOtherExperiencesDialogState extends State<ProviderOtherExperience
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
+          if (widget.showHeader) Text(
             'Other experiences',
             style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w700, color: FigmaColors.gray900),
           ),
@@ -197,7 +174,11 @@ class _ProviderOtherExperiencesDialogState extends State<ProviderOtherExperience
         const Divider(height: 1, color: FigmaColors.gray200),
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 14, 24, 20),
-          child: Row(
+          child: OverflowBar(
+            alignment: MainAxisAlignment.spaceBetween,
+            overflowAlignment: OverflowBarAlignment.end,
+            spacing: 12,
+            overflowSpacing: 8,
             children: [
               OutlinedButton(
                 onPressed: _saving ? null : () => Navigator.pop(context),
@@ -209,7 +190,6 @@ class _ProviderOtherExperiencesDialogState extends State<ProviderOtherExperience
                 ),
                 child: Text('Cancel', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)),
               ),
-              const Spacer(),
               FilledButton(
                 onPressed: _saving ? null : _save,
                 style: FilledButton.styleFrom(
@@ -271,51 +251,29 @@ class ProviderLinkedAccountsDialog extends StatefulWidget {
     required this.providerId,
     required this.initial,
     this.inDialog = true,
+    this.showHeader = true,
   });
 
   final String providerId;
   final Map<String, String> initial;
   final bool inDialog;
+  final bool showHeader;
 
   static Future<bool?> open(
     BuildContext context, {
     required String providerId,
     required Map<String, String> initial,
   }) {
-    final inDialog = !MobileLayout.useMobileChrome(context);
     final body = ProviderLinkedAccountsDialog(
       providerId: providerId,
       initial: initial,
-      inDialog: inDialog,
+      inDialog: true,
+      showHeader: false,
     );
-
-    if (inDialog) {
-      return showDialog<bool>(
-        context: context,
-        barrierColor: Colors.black54,
-        builder: (ctx) => providerThemed(
-          Dialog(
-            backgroundColor: FigmaColors.white,
-            insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 32),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 560, maxHeight: 640),
-              child: body,
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => providerThemed(
-          Scaffold(
-            backgroundColor: FigmaColors.white,
-            body: SafeArea(child: body),
-          ),
-        ),
-      ),
+    return ProviderProfileEditorDialog.open(
+      context,
+      title: 'Linked accounts',
+      child: body,
     );
   }
 
@@ -427,7 +385,7 @@ class _ProviderLinkedAccountsDialogState extends State<ProviderLinkedAccountsDia
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
+          if (widget.showHeader) Text(
             'Linked accounts',
             style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w700, color: FigmaColors.gray900),
           ),
@@ -488,7 +446,11 @@ class _ProviderLinkedAccountsDialogState extends State<ProviderLinkedAccountsDia
         const Divider(height: 1, color: FigmaColors.gray200),
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 14, 24, 12),
-          child: Row(
+          child: OverflowBar(
+            alignment: MainAxisAlignment.spaceBetween,
+            overflowAlignment: OverflowBarAlignment.end,
+            spacing: 12,
+            overflowSpacing: 8,
             children: [
               OutlinedButton(
                 onPressed: _saving ? null : () => Navigator.pop(context),
@@ -500,7 +462,6 @@ class _ProviderLinkedAccountsDialogState extends State<ProviderLinkedAccountsDia
                 ),
                 child: Text('Cancel', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)),
               ),
-              const Spacer(),
               FilledButton(
                 onPressed: _saving ? null : _save,
                 style: FilledButton.styleFrom(

@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neighbor_help/models/user_role.dart';
 import 'package:neighbor_help/services/auth_service.dart';
+import 'package:neighbor_help/services/provider_onboarding.dart';
 
 class _User extends Fake implements User {
   @override
@@ -149,6 +150,7 @@ void main() {
   late AuthService signup;
   late AuthService root;
   setUp(() {
+    ProviderOnboarding.consume('signup');
     auth = _Auth();
     store = _Store();
     signup = AuthService(auth: auth, firestore: store);
@@ -178,6 +180,10 @@ void main() {
           });
           final session = root.authStateChanges().first;
           await signup.signInWithGoogle(registrationRole: role);
+          expect(
+            ProviderOnboarding.consume('signup'),
+            role == UserRole.provider,
+          );
           expect(await recovery, isTrue);
           expect((await session)?.uid, 'signup');
           expect(store.docs['users/signup']!['role'], role.firestoreValue);
@@ -204,6 +210,7 @@ void main() {
         });
         final session = root.authStateChanges().first;
         await register(role);
+        expect(ProviderOnboarding.consume('signup'), role == UserRole.provider);
         expect(await recovery, isTrue);
         expect((await session)?.uid, 'signup');
         expect(store.docs['users/signup']!['role'], role.firestoreValue);

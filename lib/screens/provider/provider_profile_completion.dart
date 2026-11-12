@@ -1,3 +1,11 @@
+import 'dart:async';
+
+import '../../services/firestore_service.dart';
+import '../../services/provider_onboarding.dart';
+import '../../models/review.dart';
+import 'provider_profile_editor_dialog.dart';
+import 'provider_service_form_screen.dart';
+import 'widgets/provider_profile_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -53,20 +61,20 @@ enum ProviderProfileRequirementId {
 }
 
 typedef ProviderProfileRequirementHandler =
-    void Function(ProviderProfileRequirementId id);
+    FutureOr<void> Function(ProviderProfileRequirementId id);
 
 /// Opens the screen or tab where the provider can complete [id].
-void navigateToProviderProfileRequirement(
+Future<void> navigateToProviderProfileRequirement(
   BuildContext context, {
   required ProviderProfileRequirementId id,
   required AppUser appUser,
   required ServiceProviderProfile? profile,
   ValueChanged<int>? onNavigateToTab,
-}) {
+}) async {
   switch (id) {
     case ProviderProfileRequirementId.profilePhoto:
       if (profile != null) {
-        ProviderOverviewSettingsScreen.open(
+        await ProviderOverviewSettingsScreen.open(
           context,
           appUser: appUser,
           profile: profile,
@@ -76,12 +84,19 @@ void navigateToProviderProfileRequirement(
       }
       return;
     case ProviderProfileRequirementId.identity:
-      onNavigateToTab?.call(4);
+      await ProviderProfileEditorDialog.open(
+        context,
+        title: 'Identity verification',
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: ProviderVerificationTrustCard(profile: profile),
+        ),
+      );
       return;
     case ProviderProfileRequirementId.overview:
     case ProviderProfileRequirementId.serviceArea:
       if (profile != null) {
-        ProviderOverviewSettingsScreen.open(
+        await ProviderOverviewSettingsScreen.open(
           context,
           appUser: appUser,
           profile: profile,
@@ -91,10 +106,16 @@ void navigateToProviderProfileRequirement(
       }
       return;
     case ProviderProfileRequirementId.services:
-      onNavigateToTab?.call(1);
+      await ProviderServiceFormScreen.open(context, appUser: appUser);
       return;
     case ProviderProfileRequirementId.reviews:
-      onNavigateToTab?.call(4);
+      await ProviderProfileEditorDialog.open(
+        context,
+        title: 'Get 5 reviews',
+        child: _ProfileReviewProgress(
+          providerId: profile?.providerId ?? appUser.userId,
+        ),
+      );
       return;
     case ProviderProfileRequirementId.education:
       if (profile == null) {
@@ -102,7 +123,7 @@ void navigateToProviderProfileRequirement(
         return;
       }
       final edu = profile.effectiveEducationHistory;
-      ProviderEducationDialog.open(
+      await ProviderEducationDialog.open(
         context,
         providerId: profile.providerId,
         initial: edu.isNotEmpty ? edu.first : null,
@@ -115,7 +136,7 @@ void navigateToProviderProfileRequirement(
         return;
       }
       final jobs = profile.employmentHistory;
-      ProviderEmploymentDialog.open(
+      await ProviderEmploymentDialog.open(
         context,
         providerId: profile.providerId,
         initial: jobs.isNotEmpty ? jobs.first : null,
@@ -128,7 +149,7 @@ void navigateToProviderProfileRequirement(
         return;
       }
       final stored = profile.portfolioProjects;
-      ProviderPortfolioFlow.open(
+      await ProviderPortfolioFlow.open(
         context,
         providerId: profile.providerId,
         initial: stored.isNotEmpty
@@ -142,14 +163,17 @@ void navigateToProviderProfileRequirement(
         onNavigateToTab?.call(4);
         return;
       }
-      ProviderCertificationDialog.open(context, providerId: profile.providerId);
+      await ProviderCertificationDialog.open(
+        context,
+        providerId: profile.providerId,
+      );
       return;
     case ProviderProfileRequirementId.otherExperiences:
       if (profile == null) {
         onNavigateToTab?.call(4);
         return;
       }
-      ProviderOtherExperiencesDialog.open(
+      await ProviderOtherExperiencesDialog.open(
         context,
         providerId: profile.providerId,
         initialLines: profile.otherExperiences,
@@ -160,7 +184,7 @@ void navigateToProviderProfileRequirement(
         onNavigateToTab?.call(4);
         return;
       }
-      ProviderLinkedAccountsDialog.open(
+      await ProviderLinkedAccountsDialog.open(
         context,
         providerId: profile.providerId,
         initial: profile.linkedAccounts,
@@ -308,14 +332,14 @@ class ProviderProfileProgressPanel extends StatelessWidget {
     required this.profile,
     required this.services,
     required this.reviewCount,
-    required this.onRequirementTap,
+    this.onRequirementTap,
   });
 
   final AppUser appUser;
   final ServiceProviderProfile? profile;
   final List<ServiceListing> services;
   final int reviewCount;
-  final ProviderProfileRequirementHandler onRequirementTap;
+  final ProviderProfileRequirementHandler? onRequirementTap;
 
   @override
   Widget build(BuildContext context) {
@@ -456,15 +480,62 @@ String _initials(String name) {
   return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
 }
 
-void _completionItemTap(
-  BuildContext dialogContext,
-  ProviderProfileRequirementId id,
-  ProviderProfileRequirementHandler handler,
-) {
-  Navigator.pop(dialogContext);
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    handler(id);
+class ProviderProfileCompletionData {
+  const ProviderProfileCompletionData({
+    required this.appUser,
+    required this.profile,
+    required this.services,
+    required this.reviewCount,
   });
+  final AppUser appUser;
+  final ServiceProviderProfile? profile;
+  final List<ServiceListing> services;
+  final int reviewCount;
+}
+
+/// Opens once after signup, when the provider's application profile is ready.
+class ProviderOnboardingPrompt extends StatefulWidget {
+  const ProviderOnboardingPrompt({super.key, required this.data});
+  final ProviderProfileCompletionData data;
+  @override
+  State<ProviderOnboardingPrompt> createState() =>
+      _ProviderOnboardingPromptState();
+}
+
+class _ProviderOnboardingPromptState extends State<ProviderOnboardingPrompt> {
+  @override
+  void initState() {
+    super.initState();
+    _schedule();
+  }
+
+  @override
+  void didUpdateWidget(covariant ProviderOnboardingPrompt oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _schedule();
+  }
+
+  void _schedule() {
+    final data = widget.data;
+    if (data.profile == null ||
+        !ProviderOnboarding.consume(data.appUser.userId)) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final current = widget.data;
+      showProviderProfileCompletionDialog(
+        context,
+        appUser: current.appUser,
+        profile: current.profile,
+        services: current.services,
+        reviewCount: current.reviewCount,
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
 }
 
 Future<void> showProviderProfileCompletionDialog(
@@ -473,60 +544,191 @@ Future<void> showProviderProfileCompletionDialog(
   required ServiceProviderProfile? profile,
   required List<ServiceListing> services,
   required int reviewCount,
-  required ProviderProfileRequirementHandler onRequirementTap,
+  ProviderProfileRequirementHandler? onRequirementTap,
+  Future<ProviderProfileCompletionData> Function()? reload,
 }) {
-  final items = buildProviderProfileRequirements(
+  final data = ProviderProfileCompletionData(
     appUser: appUser,
     profile: profile,
     services: services,
     reviewCount: reviewCount,
   );
-  final pct = weightedProfileCompletionPercent(items);
-
   if (MobileLayout.useBottomSheets(context)) {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => providerThemed(
+      builder: (_) => providerThemed(
         DraggableScrollableSheet(
           initialChildSize: 0.92,
           minChildSize: 0.5,
           maxChildSize: 0.96,
-          builder: (_, scrollController) => _ProfileCompletionSheet(
-            appUser: appUser,
-            percent: pct,
-            items: items,
-            scrollController: scrollController,
-            onRequirementTap: (id) =>
-                _completionItemTap(ctx, id, onRequirementTap),
-            onClose: () => Navigator.pop(ctx),
+          builder: (_, controller) => _ProfileCompletionSession(
+            data: data,
+            onRequirementTap: onRequirementTap,
+            reload: reload,
+            scrollController: controller,
           ),
         ),
       ),
     );
   }
-
   return showDialog<void>(
     context: context,
     barrierColor: Colors.black54,
-    builder: (ctx) => providerThemed(
+    builder: (_) => providerThemed(
       Dialog(
         backgroundColor: Colors.transparent,
         insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 820, maxHeight: 560),
-          child: _ProfileCompletionDialog(
-            appUser: appUser,
-            percent: pct,
-            items: items,
-            onRequirementTap: (id) =>
-                _completionItemTap(ctx, id, onRequirementTap),
-            onClose: () => Navigator.pop(ctx),
+          child: _ProfileCompletionSession(
+            data: data,
+            onRequirementTap: onRequirementTap,
+            reload: reload,
           ),
         ),
       ),
     ),
+  );
+}
+
+class _ProfileCompletionSession extends StatefulWidget {
+  const _ProfileCompletionSession({
+    required this.data,
+    this.onRequirementTap,
+    this.reload,
+    this.scrollController,
+  });
+  final ProviderProfileCompletionData data;
+  final ProviderProfileRequirementHandler? onRequirementTap;
+  final Future<ProviderProfileCompletionData> Function()? reload;
+  final ScrollController? scrollController;
+  @override
+  State<_ProfileCompletionSession> createState() =>
+      _ProfileCompletionSessionState();
+}
+
+class _ProfileCompletionSessionState extends State<_ProfileCompletionSession> {
+  late ProviderProfileCompletionData _data = widget.data;
+  bool _opening = false;
+
+  Future<void> _open(ProviderProfileRequirementId id) async {
+    if (_opening) return;
+    _opening = true;
+    try {
+      if (widget.onRequirementTap != null) {
+        await widget.onRequirementTap!(id);
+      } else {
+        await navigateToProviderProfileRequirement(
+          context,
+          id: id,
+          appUser: _data.appUser,
+          profile: _data.profile,
+        );
+      }
+      if (!mounted) return;
+      if (widget.reload != null) {
+        final next = await widget.reload!();
+        if (mounted) setState(() => _data = next);
+      } else if (widget.onRequirementTap == null) {
+        final firestore = FirestoreService();
+        final uid = _data.appUser.userId;
+        // Read the current user record and replayed live profile, avoiding stale one-shot caches.
+        final user = await firestore.userDoc(uid).get();
+        final profile = await firestore.providerProfileForUser(uid).first;
+        final services = await firestore.servicesForProviderUser(uid).first;
+        if (mounted) {
+          setState(
+            () => _data = ProviderProfileCompletionData(
+              appUser: user.exists
+                  ? AppUser.fromFirestore(uid, user.data()!)
+                  : _data.appUser,
+              profile: profile,
+              services: services,
+              reviewCount: _data.reviewCount,
+            ),
+          );
+        }
+      }
+    } catch (_) {
+      // Keep the checklist and its last known progress available after a failed load.
+    } finally {
+      _opening = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final items = buildProviderProfileRequirements(
+      appUser: _data.appUser,
+      profile: _data.profile,
+      services: _data.services,
+      reviewCount: _data.reviewCount,
+    );
+    final percent = weightedProfileCompletionPercent(items);
+    if (widget.scrollController != null) {
+      return _ProfileCompletionSheet(
+        appUser: _data.appUser,
+        percent: percent,
+        items: items,
+        scrollController: widget.scrollController!,
+        onRequirementTap: _open,
+        onClose: () => Navigator.pop(context),
+      );
+    }
+    return _ProfileCompletionDialog(
+      appUser: _data.appUser,
+      percent: percent,
+      items: items,
+      onRequirementTap: _open,
+      onClose: () => Navigator.pop(context),
+    );
+  }
+}
+
+class _ProfileReviewProgress extends StatefulWidget {
+  const _ProfileReviewProgress({required this.providerId});
+  final String providerId;
+  @override
+  State<_ProfileReviewProgress> createState() => _ProfileReviewProgressState();
+}
+
+class _ProfileReviewProgressState extends State<_ProfileReviewProgress> {
+  late final _reviews = FirestoreService().reviewsForProvider(
+    widget.providerId,
+  );
+  @override
+  Widget build(BuildContext context) => FutureBuilder<List<Review>>(
+    future: _reviews,
+    builder: (context, snapshot) {
+      if (!snapshot.hasData && !snapshot.hasError) {
+        return const Center(child: CircularProgressIndicator());
+      }
+      final reviews = snapshot.data ?? [];
+      return ListView(
+        padding: const EdgeInsets.all(24),
+        children: [
+          Text(
+            '${reviews.length} / 5 reviews',
+            style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 12),
+          const Text('Build trust with completed job feedback'),
+          if (snapshot.hasError)
+            const Padding(
+              padding: EdgeInsets.only(top: 16),
+              child: Text('Could not load reviews. Please try again.'),
+            ),
+          for (final review in reviews)
+            ListTile(
+              leading: const Icon(Icons.star_rounded, color: Colors.amber),
+              title: Text('${review.rating} / 5'),
+              subtitle: Text(review.comment ?? ''),
+            ),
+        ],
+      );
+    },
   );
 }
 
@@ -569,6 +771,7 @@ class _ProfileCompletionDialog extends StatelessWidget {
               top: 8,
               right: 8,
               child: IconButton(
+                tooltip: 'Close',
                 onPressed: onClose,
                 icon: const Icon(Icons.close, color: FigmaColors.gray600),
               ),

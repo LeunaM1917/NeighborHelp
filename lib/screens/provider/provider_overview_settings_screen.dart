@@ -1,3 +1,4 @@
+import 'provider_profile_editor_dialog.dart';
 import '../../widgets/provider_barangay_editor.dart';
 import '../../services/marketplace_service.dart';
 import '../../utils/image_upload.dart';
@@ -16,7 +17,6 @@ import '../../models/provider.dart';
 import '../../models/provider_profile_traits.dart';
 import '../../services/firestore_service.dart';
 import '../../services/storage_service.dart';
-import '../../theme/mobile_layout.dart';
 import '../../theme/provider_theme.dart';
 import '../../theme/role_theme.dart';
 import '../../ui/app_ui_kit.dart';
@@ -29,12 +29,14 @@ class ProviderOverviewSettingsScreen extends StatefulWidget {
     required this.appUser,
     required this.profile,
     this.inDialog = false,
+    this.showHeader = true,
     this.requireAccountDetails = false,
   });
 
   final AppUser appUser;
   final ServiceProviderProfile profile;
   final bool inDialog;
+  final bool showHeader;
   final bool requireAccountDetails;
 
   static Future<bool?> open(
@@ -43,45 +45,15 @@ class ProviderOverviewSettingsScreen extends StatefulWidget {
     required ServiceProviderProfile profile,
     bool requireAccountDetails = false,
   }) {
-    if (MobileLayout.useMobileChrome(context)) {
-      return Navigator.of(context).push<bool>(
-        MaterialPageRoute(
-          builder: (_) => providerThemed(
-            ProviderOverviewSettingsScreen(
-              appUser: appUser,
-              profile: profile,
-              requireAccountDetails: requireAccountDetails,
-            ),
-          ),
-        ),
-      );
-    }
-
-    return showDialog<bool>(
-      context: context,
-      barrierColor: Colors.black54,
-      builder: (ctx) => providerThemed(
-        Dialog(
-          backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.symmetric(
-            horizontal: 24,
-            vertical: 28,
-          ),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 640, maxHeight: 920),
-            child: Material(
-              color: FigmaColors.gray50,
-              borderRadius: BorderRadius.circular(14),
-              clipBehavior: Clip.antiAlias,
-              child: ProviderOverviewSettingsScreen(
-                appUser: appUser,
-                profile: profile,
-                inDialog: true,
-                requireAccountDetails: requireAccountDetails,
-              ),
-            ),
-          ),
-        ),
+    return ProviderProfileEditorDialog.open(
+      context,
+      title: 'Profile settings',
+      child: ProviderOverviewSettingsScreen(
+        appUser: appUser,
+        profile: profile,
+        inDialog: true,
+        showHeader: false,
+        requireAccountDetails: requireAccountDetails,
       ),
     );
   }
@@ -189,10 +161,14 @@ class _ProviderOverviewSettingsScreenState
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
-      await MarketplaceService.command('providerArea', {
-        'baseBarangayId': _baseId,
-        'serviceBarangayIds': _serviceIds.toList(),
-      });
+      final areaChanged = _baseId != widget.profile.baseBarangayId ||
+          !setEquals(_serviceIds, widget.profile.serviceBarangayIds.toSet());
+      if (areaChanged) {
+        await MarketplaceService.command('providerArea', {
+          'baseBarangayId': _baseId,
+          'serviceBarangayIds': _serviceIds.toList(),
+        });
+      }
       final traits = ProviderProfileTraits.normalize(_selectedTraits.toList());
       await FirestoreService().updateUserProfile(
         userId: widget.appUser.userId,
@@ -244,13 +220,13 @@ class _ProviderOverviewSettingsScreenState
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const AppPreferencesPanel(),
-          if (!widget.inDialog)
+          if (widget.showHeader && !widget.inDialog)
             AppPageHeader(
               title: 'Profile settings',
               subtitle: 'Update your provider account information',
               onBack: () => Navigator.pop(context),
             )
-          else
+          else if (widget.showHeader)
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 12, 0),
               child: Row(

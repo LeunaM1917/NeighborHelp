@@ -1,3 +1,4 @@
+import 'provider_onboarding.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import '../constants/functions_config.dart';
 import 'account_setup_coordinator.dart';
@@ -405,6 +406,7 @@ class AuthService {
     if (user.displayName == null || user.displayName!.isEmpty) {
       await user.updateDisplayName(fullName);
     }
+    if (role == UserRole.provider) ProviderOnboarding.mark(user.uid);
   }
 
   Future<UserCredential> register({
@@ -496,6 +498,7 @@ class AuthService {
         });
       }
       await credential.user!.updateDisplayName(fullName);
+      if (role == UserRole.provider) ProviderOnboarding.mark(uid);
       return credential;
     } catch (_) {
       // Keep RootGate from recovering a half-created provider as a customer.

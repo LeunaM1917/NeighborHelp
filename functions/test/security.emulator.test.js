@@ -114,6 +114,25 @@ test('certificate documents are private and immutable; chat images require parti
   await assertFails(uploadBytes(ref(env.authenticatedContext('stranger').storage(),'messages/booking/stranger/image.png'), bytes, {contentType:'image/png'}));
 });
 
+test('new unverified providers can upload PDF/JPEG/PNG evidence and submit a pending certificate', async () => {
+  const uid = 'new-certificate-provider';
+  const context = env.authenticatedContext(uid);
+  const db = context.firestore();
+  await setDoc(doc(db,'users',uid), {role:'Provider',accountStatus:'Active',fullName:'New Provider'});
+  await setDoc(doc(db,'serviceProviders',uid), {userId:uid,isVerified:false,verificationStatus:'Pending'});
+  const storage = context.storage();
+  const certId = 'new-cert';
+  for (const [extension, contentType] of [['pdf','application/pdf'],['jpg','image/jpeg'],['png','image/png']]) {
+    const object = ref(storage, `certificates/${uid}/${certId}/proof.${extension}`);
+    await assertSucceeds(uploadBytes(object,new Uint8Array([37,80,68,70]),{contentType}));
+    await assertSucceeds(getBytes(object));
+    await assertFails(getBytes(ref(env.authenticatedContext('stranger').storage(), object.fullPath)));
+  }
+  const history = [{id:certId,name:'Carpentry NC II',provider:'TESDA',certificationId:'NC-TEST',status:'Pending',url:`gs://${ref(storage).bucket}/certificates/${uid}/${certId}/proof.pdf`,issueDate:'2025-01-01',expirationDate:'2030-01-01'}];
+  await assertSucceeds(updateDoc(doc(db,'serviceProviders',uid),{certificationHistory:history,approvedCertificationIds:[],updatedBy:uid}));
+  await assertFails(updateDoc(doc(db,'serviceProviders',uid),{approvedCertificationIds:[certId]}));
+});
+
 test('profile photos allow owner image uploads but reject cross-account writes, large files and non-images', async () => {
   const owner=env.authenticatedContext('customer').storage();
   const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=','base64');
