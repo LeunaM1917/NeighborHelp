@@ -24,4 +24,6 @@ Run `flutter analyze`, `flutter test`, `npm.cmd test --prefix functions`, and `n
 
 On November 12, 2026 (Asia/Manila), the updated `bookingCommand` function and Firestore rules were deployed to `neighborhelp-63771` in `us-central1`. The rules permit reviewed hourly listings. No production booking or verification records were created or migrated during this release.
 
-The web release build was verified locally. Hot-restart a running localhost app to load the restored booking form; hosted web and Android clients need their own release. The restored client requires the updated backend. The changed expiry notification wording is covered by emulator tests; the optional `expireContractOffers` scheduler was not deployed in this targeted release.
+On November 12, 2026 (Asia/Manila), the release web build from commit `1b8a50c` was published to https://neighborhelp.web.app using the existing `neighborhelp` Firebase Hosting target. The live index, bootstrap, application bundle and service worker returned HTTP 200 and matched the local build byte for byte; the application bundle differs from the previous hosted release. Existing tabs may need a hard refresh to load the new client. Android still needs its own release.
+
+The restored client requires the updated backend. The changed expiry notification wording is covered by emulator tests; the optional `expireContractOffers` scheduler was not deployed in this targeted release.
