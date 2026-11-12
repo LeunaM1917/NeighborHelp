@@ -7,7 +7,8 @@ import 'package:neighbor_help/models/notification.dart';
 import 'package:neighbor_help/models/provider.dart';
 import 'package:neighbor_help/models/service.dart';
 import 'package:neighbor_help/models/service_proposal.dart';
-import 'package:neighbor_help/screens/admin/widgets/admin_inbox_button.dart';
+import 'package:neighbor_help/screens/shared/notifications_popover.dart';
+import 'package:neighbor_help/services/notification_navigation.dart';
 import 'package:neighbor_help/screens/provider/provider_service_form_screen.dart';
 import 'package:neighbor_help/utils/service_certification_policy.dart';
 import 'package:neighbor_help/widgets/service_proposal_dialogs.dart';
@@ -105,7 +106,9 @@ void main() {
       expect(matches(profileData(grant: false)), false);
       expect(matches(profileData(approved: false)), false);
       expect(matches(profileData(qualification: 'Domestic Work NC II')), false);
-      final category = MarketingServiceCatalog.categoryByName('Other TESDA Services')!;
+      final category = MarketingServiceCatalog.categoryByName(
+        'Other TESDA Services',
+      )!;
       expect(
         MarketingServiceCatalog.withApprovedProposals(category, [
           customListing(status: 'Draft'),
@@ -142,9 +145,9 @@ void main() {
             ),
             onSubmit: (data) async {
               submitted = data;
-                if (fail) {
+              if (fail) {
                 throw StateError('Certificate expired during submission.');
-                }
+              }
             },
           ),
         );
@@ -233,7 +236,7 @@ void main() {
     );
 
     testOnPlatform(
-      'approved custom listing keeps its reviewed category and title at $width',
+      'historical custom listing retains its category and can be edited for a new review at $width',
       (tester) async {
         resize(tester, width);
         final user = AppUser.fromFirestore('provider', {
@@ -249,22 +252,17 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        expect(
-          tester.widget<TextField>(field('Approved category')).readOnly,
-          true,
-        );
+        expect(find.byType(DropdownMenu<String>), findsOneWidget);
+        expect(find.text('Other TESDA Services'), findsWidgets);
         expect(
           tester.widget<TextField>(field('Service title *')).controller!.text,
           'Garden Block Wall Repair',
         );
         expect(
           tester.widget<TextField>(field('Service title *')).readOnly,
-          true,
+          false,
         );
-        expect(
-          find.textContaining('This proposal was approved for Masonry NC II'),
-          findsOneWidget,
-        );
+        expect(find.textContaining('This proposal was approved'), findsNothing);
         expect(tester.takeException(), isNull);
       },
     );
@@ -286,16 +284,33 @@ void main() {
       );
       var destination = -1;
       final read = <String>[];
-      await open(
-        tester,
-        AdminInboxDialog(
-          stream: Stream.value([note]),
-          onRead: (n) async {
-            read.add(n.notificationId);
-          },
-          onNavigate: (i) => destination = i,
+      final user = AppUser.fromFirestore('admin', {'role': 'Administrator'});
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Align(
+              alignment: Alignment.topRight,
+              child: NotificationBell(
+                appUser: user,
+                stream: Stream.value([note]),
+                onRead: (n) async {
+                  read.add(n.notificationId);
+                },
+                onReadAll: () async {},
+                onOpen: (n) => NotificationNavigator().open(
+                  tester.element(find.byType(NotificationBell)),
+                  user: user,
+                  note: n,
+                  onSelectTab: (i) => destination = i,
+                ),
+              ),
+            ),
+          ),
         ),
       );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Notifications'));
+      await tester.pumpAndSettle();
       expect(find.text('Certificate awaiting review'), findsOneWidget);
       await tester.tap(find.text('Certificate awaiting review'));
       await tester.pumpAndSettle();

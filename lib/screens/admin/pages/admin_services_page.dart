@@ -8,7 +8,9 @@ import '../../../models/service.dart';
 import '../../../models/service_approval_status.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/firestore_service.dart';
-import '../../../widgets/service_proposals_section.dart';
+import '../../../services/storage_service.dart';
+import '../../../figma_ui/widgets/figma_network_image.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../widgets/admin_dashboard_widgets.dart';
 import '../widgets/admin_services_widgets.dart';
 import '../widgets/admin_table_details.dart';
@@ -48,16 +50,18 @@ class _AdminServicesPageState extends State<AdminServicesPage> {
     list.sort((a, b) => b.service.updatedAt.compareTo(a.service.updatedAt));
 
     if (_categoryFilter != 'All Categories') {
-      list = list
-          .where((r) {
-            final cat = r.service.category.trim().isEmpty ? 'Uncategorized' : r.service.category.trim();
-            return cat == _categoryFilter;
-          })
-          .toList();
+      list = list.where((r) {
+        final cat = r.service.category.trim().isEmpty
+            ? 'Uncategorized'
+            : r.service.category.trim();
+        return cat == _categoryFilter;
+      }).toList();
     }
 
     if (_statusFilter != 'All Statuses') {
-      list = list.where((r) => serviceMatchesStatusFilter(r.service, _statusFilter)).toList();
+      list = list
+          .where((r) => serviceMatchesStatusFilter(r.service, _statusFilter))
+          .toList();
     }
 
     if (_search.trim().isNotEmpty) {
@@ -76,7 +80,9 @@ class _AdminServicesPageState extends State<AdminServicesPage> {
   List<String> _categoryOptions(List<ServiceListing> services) {
     final cats = <String>{};
     for (final s in services) {
-      final cat = s.category.trim().isEmpty ? 'Uncategorized' : s.category.trim();
+      final cat = s.category.trim().isEmpty
+          ? 'Uncategorized'
+          : s.category.trim();
       cats.add(cat);
     }
     final list = cats.toList()..sort();
@@ -93,13 +99,21 @@ class _AdminServicesPageState extends State<AdminServicesPage> {
       await firestore.setServiceActive(service.serviceId, active);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(active ? 'Service is now active' : 'Service hidden from marketplace')),
+          SnackBar(
+            content: Text(
+              active
+                  ? 'Service is now active'
+                  : 'Service hidden from marketplace',
+            ),
+          ),
         );
       }
     } catch (_) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not update service. Check admin permissions.')),
+          const SnackBar(
+            content: Text('Could not update service. Check admin permissions.'),
+          ),
         );
       }
     }
@@ -111,19 +125,144 @@ class _AdminServicesPageState extends State<AdminServicesPage> {
     ServiceListing service,
   ) async {
     try {
+      final profile = await firestore.getProviderProfileForListing(
+        service.providerId,
+      );
+      if (!context.mounted) return;
+      final cert = profile?.certificationHistory
+          .where((c) => c.id == service.certificationEntryId)
+          .firstOrNull;
+      var notes = '';
+      var confirmed = false;
+      final review = await showDialog<String>(
+        context: context,
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, refresh) => AlertDialog(
+            title: const Text('Review service and certificate alignment'),
+            content: SizedBox(
+              width: 600,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      '${service.category} · ${service.serviceTitle}',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(service.description),
+                    const SizedBox(height: 12),
+                    Text(
+                      cert == null
+                          ? 'No selected certificate. Ask the provider to complete and resubmit the listing.'
+                          : '${cert.name}\nIssuer: ${cert.provider}\nCertificate: ${cert.certificationId}\nStatus: ${cert.status.firestoreValue}\nValid until: ${cert.expirationDate}',
+                    ),
+                    if (cert != null)
+                      TextButton.icon(
+                        icon: const Icon(Icons.open_in_new),
+                        label: const Text('View selected certificate'),
+                        onPressed: () async {
+                          try {
+                            final url = await StorageService().readableUrl(
+                              cert.url,
+                            );
+                            await launchUrl(
+                              Uri.parse(url),
+                              mode: LaunchMode.externalApplication,
+                            );
+                          } catch (_) {
+                            if (ctx.mounted) {
+                              ScaffoldMessenger.of(ctx).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Certificate unavailable. Check access and try again.',
+                                  ),
+                                ),
+                              );
+                            }
+                          }
+                        },
+                      ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final url in service.serviceImages)
+                          SizedBox(
+                            width: 140,
+                            height: 110,
+                            child: FigmaNetworkImage(
+                              url: url,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                      ],
+                    ),
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: confirmed,
+                      onChanged: (v) => refresh(() => confirmed = v ?? false),
+                      title: const Text(
+                        'I confirm this credential covers the service scope and category, and the photos meet listing requirements.',
+                      ),
+                    ),
+                    TextField(
+                      maxLength: 3000,
+                      minLines: 2,
+                      maxLines: 4,
+                      onChanged: (v) => refresh(() => notes = v),
+                      decoration: const InputDecoration(
+                        labelText: 'Alignment review notes (required)',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed:
+                    cert != null && confirmed && notes.trim().length >= 10
+                    ? () => Navigator.pop(ctx, notes.trim())
+                    : null,
+                child: const Text('Approve listing'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (review == null || !context.mounted) return;
       await firestore.adminSetServiceApproval(
         serviceId: service.serviceId,
         status: ServiceApprovalStatus.approved,
+        alignmentConfirmed: true,
+        notes: review,
       );
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${service.serviceTitle} is now live on the marketplace.')),
+          SnackBar(
+            content: Text(
+              '${service.serviceTitle} is now live on the marketplace.',
+            ),
+          ),
         );
       }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e is StateError ? e.message.toString() : 'Could not approve listing.')),
+          SnackBar(
+            content: Text(
+              e is StateError
+                  ? e.message.toString()
+                  : 'Could not approve listing.',
+            ),
+          ),
         );
       }
     }
@@ -134,37 +273,45 @@ class _AdminServicesPageState extends State<AdminServicesPage> {
     FirestoreService firestore,
     ServiceListing service,
   ) async {
-    final reasonController = TextEditingController();
+    var enteredReason = '';
     final reason = await showDialog<String?>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Reject listing'),
         content: TextField(
-          controller: reasonController,
+          onChanged: (v) => enteredReason = v,
           maxLines: 3,
           decoration: const InputDecoration(
-            labelText: 'Reason (optional)',
+            labelText: 'Reason (required, at least 10 characters)',
             hintText: 'Tell the provider what to fix before resubmitting',
             alignLabelWithHint: true,
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, reasonController.text.trim()),
+            onPressed: () {
+              if (enteredReason.trim().length >= 10) {
+                Navigator.pop(dialogContext, enteredReason.trim());
+              }
+            },
             child: const Text('Reject'),
           ),
         ],
       ),
     );
-    reasonController.dispose();
     if (reason == null || !context.mounted) return;
 
     try {
       await firestore.adminSetServiceApproval(
         serviceId: service.serviceId,
         status: ServiceApprovalStatus.rejected,
-        rejectionReason: reason.isEmpty ? 'Does not meet listing guidelines.' : reason,
+        rejectionReason: reason.isEmpty
+            ? 'Does not meet listing guidelines.'
+            : reason,
       );
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -207,7 +354,8 @@ class _AdminServicesPageState extends State<AdminServicesPage> {
       return AdminPageFrame(
         auth: widget.auth,
         title: 'Manage Services',
-        subtitle: 'Review new listings before they go live; hide approved services when needed.',
+        subtitle:
+            'Review new listings before they go live; hide approved services when needed.',
         child: const AdminErrorBox(message: 'Firebase admin required.'),
       );
     }
@@ -247,7 +395,8 @@ class _AdminServicesPageState extends State<AdminServicesPage> {
                         service: s,
                         providerUser: usersById[s.providerId],
                         providerProfile:
-                            profilesByUser[s.providerId] ?? profilesById[s.providerId],
+                            profilesByUser[s.providerId] ??
+                            profilesById[s.providerId],
                       ),
                   ];
 
@@ -262,21 +411,34 @@ class _AdminServicesPageState extends State<AdminServicesPage> {
                   for (final s in services) {
                     if (s.isMarketplaceVisible) {
                       live++;
-                    } else if (s.approvalStatus == ServiceApprovalStatus.pending) {
+                    } else if (s.approvalStatus ==
+                        ServiceApprovalStatus.pending) {
                       pending++;
-                    } else if (s.approvalStatus == ServiceApprovalStatus.rejected) {
+                    } else if (s.approvalStatus ==
+                        ServiceApprovalStatus.rejected) {
                       rejected++;
-                    } else if (s.approvalStatus == ServiceApprovalStatus.approved && !s.isActive) {
+                    } else if (s.approvalStatus ==
+                            ServiceApprovalStatus.approved &&
+                        !s.isActive) {
                       paused++;
                     }
                   }
-                  final livePct = total > 0 ? ((live / total) * 100).round() : 0;
-                  final pendingPct = total > 0 ? ((pending / total) * 100).round() : 0;
+                  final livePct = total > 0
+                      ? ((live / total) * 100).round()
+                      : 0;
+                  final pausedPct = total > 0
+                      ? ((paused / total) * 100).round()
+                      : 0;
 
                   final topCategory = computeTopCategory(services);
-                  final topCategoryCount = countForCategory(services, topCategory);
+                  final topCategoryCount = countForCategory(
+                    services,
+                    topCategory,
+                  );
 
-                  final totalPages = rows.isEmpty ? 1 : (rows.length / _pageSize).ceil();
+                  final totalPages = rows.isEmpty
+                      ? 1
+                      : (rows.length / _pageSize).ceil();
                   final page = _page.clamp(1, totalPages);
 
                   return Column(
@@ -284,16 +446,16 @@ class _AdminServicesPageState extends State<AdminServicesPage> {
                     children: [
                       const AdminDashboardHeader(
                         title: 'Manage Services',
-                        subtitle: 'Review new listings before they go live; hide approved services when needed.',
+                        subtitle:
+                            'Review new listings before they go live; hide approved services when needed.',
                       ),
                       const SizedBox(height: 24),
-                      const ServiceProposalsSection(),
                       AdminMetricGrid(
                         children: [
                           AdminMetricCard(
                             label: 'Total Services',
                             value: '$total',
-                            hint: '↗ 0% vs last 30 days',
+                            hint: 'All listing statuses',
                             icon: Icons.work_outline,
                             iconBg: FigmaColors.tintGreen,
                             iconColor: FigmaColors.green,
@@ -305,7 +467,9 @@ class _AdminServicesPageState extends State<AdminServicesPage> {
                             icon: Icons.rate_review_outlined,
                             iconBg: FigmaColors.orange50,
                             iconColor: FigmaColors.orange600,
-                            trendLabel: pending > 0 ? 'Needs action' : 'All caught up',
+                            trendLabel: pending > 0
+                                ? 'Needs action'
+                                : 'All caught up',
                           ),
                           AdminMetricCard(
                             label: 'Live on Marketplace',
@@ -323,7 +487,7 @@ class _AdminServicesPageState extends State<AdminServicesPage> {
                             icon: Icons.visibility_off_outlined,
                             iconBg: FigmaColors.tintBlue,
                             iconColor: FigmaColors.navy,
-                            trendLabel: '$pendingPct% pending',
+                            trendLabel: '$pausedPct% of total',
                           ),
                         ],
                       ),
@@ -350,12 +514,19 @@ class _AdminServicesPageState extends State<AdminServicesPage> {
                           }),
                           selectedId: _selectedId,
                           onSelect: (r, selected) => setState(
-                            () => _selectedId = selected ? r.service.serviceId : null,
+                            () => _selectedId = selected
+                                ? r.service.serviceId
+                                : null,
                           ),
                           onExport: () {
                             ExportService.exportCollection(context, 'services');
                           },
-                          onHide: (r) => _toggleActive(context, firestore, r.service, !r.service.isActive),
+                          onHide: (r) => _toggleActive(
+                            context,
+                            firestore,
+                            r.service,
+                            !r.service.isActive,
+                          ),
                           page: page,
                           pageSize: _pageSize,
                           onPageChanged: (p) => setState(() => _page = p),
@@ -363,11 +534,13 @@ class _AdminServicesPageState extends State<AdminServicesPage> {
                             _pageSize = s;
                             _page = 1;
                           }),
-                          onMenu: (r, action) => _onMenu(context, firestore, r, action),
+                          onMenu: (r, action) =>
+                              _onMenu(context, firestore, r, action),
                           onOpenDetail: (r) => showAdminServiceDetail(
                             context,
                             row: r,
-                            onAction: (action) => _onMenu(context, firestore, r, action),
+                            onAction: (action) =>
+                                _onMenu(context, firestore, r, action),
                           ),
                         ),
                         side: Column(

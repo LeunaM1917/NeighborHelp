@@ -2,6 +2,26 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const notices = require('../review_status_notifications');
+const adminNotices = require('../admin_activity_notifications');
+
+test('admin notification destinations retain exact record IDs without private identity payloads', () => {
+  const base = {before:{},created:true};
+  const cases = [
+    {collection:'users',id:'customer',after:{role:'Customer'},field:'relatedUserId',value:'customer'},
+    {collection:'serviceProviders',id:'provider',after:{certificationHistory:[{id:'cert',status:'Pending'}]},field:'relatedCertificationId',value:'cert'},
+    {collection:'services',id:'service',after:{approvalStatus:'Pending'},field:'relatedServiceId',value:'service'},
+    {collection:'bookingUserReports',id:'report',after:{bookingId:'booking'},field:'relatedReportId',value:'report'},
+  ];
+  for (const row of cases) {
+    const [notice] = adminNotices({...base,...row,after:{...row.after,governmentIdNumber:'private',identitySessionUrl:'private'}});
+    assert.equal(notice.data[row.field],row.value);
+    assert.equal(notice.data.sourceCollection,row.collection);
+    assert.equal(JSON.stringify(notice).includes('private'),false);
+  }
+  const [identity] = adminNotices({...base,collection:'serviceProviders',id:'provider',after:{diditStatus:'Approved'}});
+  assert.equal(identity.data.relatedUserId,'provider');
+  assert.equal(identity.data.adminTab,4);
+});
 
 for (const collection of ['users', 'serviceProviders']) {
   test(`${collection}: identity submission and all review results identify the status`, () => {

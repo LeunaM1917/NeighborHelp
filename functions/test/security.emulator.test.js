@@ -4,6 +4,8 @@ const path = require('node:path');
 const { initializeTestEnvironment, assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
 const { doc, setDoc, updateDoc, getDoc, getDocs, collection, query, where, or, and, GeoPoint, Timestamp } = require('firebase/firestore');
 const { ref, uploadBytes, getBytes } = require('firebase/storage');
+const {writeBatch,orderBy,documentId,limit,startAfter} = require('firebase/firestore');
+const assert = require('node:assert/strict');
 let env;
 before(async () => {
   env = await initializeTestEnvironment({projectId: 'demo-neighborhelp',
@@ -29,6 +31,40 @@ test('customers cannot promote themselves, reactivate accounts or self-verify', 
   const db = env.authenticatedContext('customer').firestore();
   for (const patch of [{role:'Administrator'}, {accountStatus:'Active',role:'Verification Agency'}, {isVerified:true}]) await assertFails(updateDoc(doc(db,'users','customer'),patch));
   await assertSucceeds(updateDoc(doc(db,'users','customer'), {fullName:'Updated'}));
+});
+
+test('all roles can mark their entire notification inbox read without altering records or another member inbox', async () => {
+  await env.withSecurityRulesDisabled(async c => {
+    const db=c.firestore();
+    for (const uid of ['customer','provider','admin']) {
+      const batch=writeBatch(db);
+      for(let i=0;i<52;i++)batch.set(doc(db,'notifications',`${uid}-${String(i).padStart(3,'0')}`),
+        {userId:uid,title:'Booking update',message:'Status changed',relatedBookingId:'booking',isRead:false,createdAt:Timestamp.now()});
+      await batch.commit();
+    }
+  });
+  for(const uid of ['customer','provider','admin']) {
+    const db=env.authenticatedContext(uid).firestore();
+    let cursor,seen=0;
+    while(true) {
+      const base=[where('userId','==',uid),orderBy(documentId()),limit(20)];
+      if(cursor)base.push(startAfter(cursor));
+      const page=await assertSucceeds(getDocs(query(collection(db,'notifications'),...base)));
+      if(page.empty)break;
+      const batch=writeBatch(db);
+      for(const note of page.docs)batch.update(note.ref,{isRead:true});
+      await assertSucceeds(batch.commit());
+      seen+=page.size;cursor=page.docs.at(-1);
+    }
+    assert.equal(seen,52);
+    const note=(await getDoc(doc(db,'notifications',`${uid}-000`))).data();
+    assert.equal(note.isRead,true);assert.equal(note.relatedBookingId,'booking');
+    await assertFails(updateDoc(doc(db,'notifications',`${uid}-000`),{title:'Changed'}));
+    await assertFails(updateDoc(doc(db,'notifications',`${uid}-000`),{isRead:false}));
+  }
+  const customer=env.authenticatedContext('customer').firestore();
+  await assertFails(getDoc(doc(customer,'notifications','provider-000')));
+  await assertFails(updateDoc(doc(customer,'notifications','provider-000'),{isRead:true}));
 });
 test('registration cannot create a privileged user or verified identity', async () => {
   const db = env.authenticatedContext('new').firestore();
@@ -186,41 +222,15 @@ test('blocks revoke an issued upload permit and private contract records cannot 
   await assertFails(getDoc(doc(env.authenticatedContext('customer').firestore(),'rateLimits','private')));
 });
 
-test('hourly listings require review and providers cannot publish unsupported services',async()=>{
-  const db=env.authenticatedContext('provider').firestore();
-  const data={providerId:'provider',category:'Cleaning',serviceTitle:'House Cleaning',priceType:'fixed',approvalStatus:'Pending',isActive:false};
-  await assertSucceeds(setDoc(doc(db,'services','valid'),data));
-  await assertSucceeds(setDoc(doc(db,'services','hourly'),{...data,priceType:'hourly'}));
-  await assertFails(updateDoc(doc(db,'services','hourly'),{approvalStatus:'Approved',isActive:true}));
-  await assertFails(setDoc(doc(db,'services','custom'),{...data,category:'Custom Services',serviceTitle:'Anything'}));
-  await assertFails(setDoc(doc(db,'services','unsupported'),{...data,category:'Repair and Technical Services',serviceTitle:'Industrial Electrical Design'}));
-});
-
-test('providers need profile completion and KYC for submissions but can keep private drafts',async()=>{
-  const db=env.authenticatedContext('provider').firestore();
-  const data={providerId:'provider',category:'Cleaning',serviceTitle:'House Cleaning',priceType:'fixed',approvalStatus:'Pending',isActive:false};
-  await env.withSecurityRulesDisabled(c=>updateDoc(doc(c.firestore(),'serviceProviders','provider'),{isVerified:false}));
-  await assertFails(setDoc(doc(db,'services','blocked'),data));
-  await assertSucceeds(setDoc(doc(db,'services','draft'),{...data,approvalStatus:'Draft'}));
-  await assertFails(updateDoc(doc(db,'services','draft'),{approvalStatus:'Pending'}));
-  await env.withSecurityRulesDisabled(async c=>{
-    await updateDoc(doc(c.firestore(),'serviceProviders','provider'),{isVerified:true});
-    await updateDoc(doc(c.firestore(),'users','provider'),{contactNumber:''});
-  });
-  await assertFails(setDoc(doc(db,'services','blocked'),data));
-  await env.withSecurityRulesDisabled(c=>updateDoc(doc(c.firestore(),'users','provider'),{contactNumber:'09123456789'}));
-  await assertSucceeds(updateDoc(doc(db,'services','draft'),{approvalStatus:'Pending'}));
-});
-
-test('plumbing and electrical submissions remain pending; retired construction services cannot be submitted',async()=>{
-  const db=env.authenticatedContext('provider').firestore();
-  const base={providerId:'provider',category:'Repair and Technical Services',priceType:'daily',approvalStatus:'Pending',isActive:false};
-  for (const title of ['Plumbing Repair','Electrical Repair']) {
-    await assertSucceeds(setDoc(doc(db,'services',title),{...base,serviceTitle:title}));
-    await assertFails(updateDoc(doc(db,'services',title),{approvalStatus:'Approved',isActive:true}));
-  }
-  for (const title of ['Masonry','Concrete Block Laying','Bricklaying','Wall Plastering','Construction Carpentry','Tile Installation','Tile Repair','Construction Painting']) {
-    await assertFails(setDoc(doc(db,'services',title),{...base,category:'Construction',serviceTitle:title}));
+test('listing writes require validated server commands, including drafts, custom categories and administrator approvals',async()=>{
+  const data={providerId:'provider',category:'Cleaning',serviceTitle:'House Cleaning',priceType:'hourly',approvalStatus:'Pending',isActive:false};
+  await env.withSecurityRulesDisabled(c=>setDoc(doc(c.firestore(),'services','existing'),data));
+  for (const uid of ['provider','admin','customer']) {
+    const db=env.authenticatedContext(uid).firestore();
+    for (const approvalStatus of ['Draft','Pending','Approved']) await assertFails(setDoc(doc(db,'services','forged'),{...data,approvalStatus}));
+    await assertFails(updateDoc(doc(db,'services','existing'),{approvalStatus:'Approved',isActive:true}));
+    await assertFails(updateDoc(doc(db,'services','existing'),{category:'New custom category',serviceTitle:'Custom service'}));
+    await assertFails(updateDoc(doc(db,'services','existing'),{serviceImages:[]}));
   }
 });
 

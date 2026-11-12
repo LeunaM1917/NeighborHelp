@@ -44,6 +44,12 @@ class Booking {
     this.completionResponseDueAt,
     this.correctionRequest,
     this.correctionRequestedAt,
+    this.requestVersion = 1,
+    this.pendingAmendmentId,
+    this.confirmedTerms,
+    this.termsStatus,
+    this.preferredScheduledDate,
+    this.finalFee,
   }) : _status = status;
 
   final String bookingId;
@@ -105,6 +111,23 @@ class Booking {
   final Timestamp? completionResponseDueAt;
   final String? correctionRequest;
   final Timestamp? correctionRequestedAt;
+  final int requestVersion;
+  final String? pendingAmendmentId, termsStatus;
+  final Map<String, dynamic>? confirmedTerms;
+  final Timestamp? preferredScheduledDate;
+  final double? finalFee;
+  bool get requiresProviderEstimate =>
+      requestVersion == 2 && confirmedTerms == null;
+  bool get hasConfirmedSchedule =>
+      isAccepted || isInProgress || isAwaitingConfirmation || isCompleted;
+  String get statusLabel =>
+      requestVersion == 2 &&
+          termsStatus == 'Awaiting customer approval' &&
+          !hasConfirmedSchedule
+      ? 'Awaiting customer approval'
+      : requiresProviderEstimate && isPending
+      ? 'Awaiting provider estimate'
+      : status;
 
   factory Booking.fromFirestore(String id, Map<String, dynamic> data) {
     return Booking(
@@ -153,6 +176,14 @@ class Booking {
       completionResponseDueAt: data['completionResponseDueAt'] as Timestamp?,
       correctionRequest: data['correctionRequest'] as String?,
       correctionRequestedAt: data['correctionRequestedAt'] as Timestamp?,
+      requestVersion: (data['requestVersion'] as num?)?.toInt() ?? 1,
+      pendingAmendmentId: data['pendingAmendmentId'] as String?,
+      confirmedTerms: data['confirmedTerms'] is Map
+          ? Map<String, dynamic>.from(data['confirmedTerms'] as Map)
+          : null,
+      termsStatus: data['termsStatus'] as String?,
+      preferredScheduledDate: data['preferredScheduledDate'] as Timestamp?,
+      finalFee: (data['finalFee'] as num?)?.toDouble(),
     );
   }
 
@@ -230,15 +261,18 @@ class Booking {
     if (hours == hours.roundToDouble()) {
       return '${hours.toInt()} hr${hours == 1 ? '' : 's'}';
     }
-    return '${hours.toStringAsFixed(1)} hrs';
+    return '${hours.toStringAsFixed(2)} hrs';
   }
 
   /// Date and start–end time for booking lists and detail screens.
   String get scheduledWindowLabel {
-    final start = scheduledStart;
-    final end = scheduledEnd;
+    final start = scheduledStart.toUtc().add(const Duration(hours: 8));
+    final end = scheduledEnd?.toUtc().add(const Duration(hours: 8));
     final dateFmt = DateFormat('MMM d, yyyy');
     final timeFmt = DateFormat('h:mm a');
+    if (requiresProviderEstimate) {
+      return 'Preferred: ${dateFmt.format(start)} · ${timeFmt.format(start)} (Manila)';
+    }
     if (end == null) {
       return DateFormat('MMM d, yyyy • h:mm a').format(start);
     }
@@ -260,7 +294,7 @@ class Booking {
     if (pricingType == 'hourly' &&
         hourlyRate != null &&
         durationHours != null) {
-      return '₱${hourlyRate!.toStringAsFixed(0)}/hr × ${_durationHoursLabel(durationHours!)}';
+      return '₱${hourlyRate!.toStringAsFixed(2)}/hr × ${_durationHoursLabel(durationHours!)}';
     }
     if (pricingType == 'fixed') {
       if (durationHours != null) {
@@ -281,6 +315,13 @@ class Booking {
       'scheduledDate': scheduledDate,
       if (scheduledEndDate != null) 'scheduledEndDate': scheduledEndDate,
       'status': _status,
+      'requestVersion': requestVersion,
+      if (pendingAmendmentId != null) 'pendingAmendmentId': pendingAmendmentId,
+      if (confirmedTerms != null) 'confirmedTerms': confirmedTerms,
+      if (termsStatus != null) 'termsStatus': termsStatus,
+      if (preferredScheduledDate != null)
+        'preferredScheduledDate': preferredScheduledDate,
+      if (finalFee != null) 'finalFee': finalFee,
       if (offerExpiresAt != null) 'offerExpiresAt': offerExpiresAt,
       if (expiredAt != null) 'expiredAt': expiredAt,
       'totalFee': totalFee,

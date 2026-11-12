@@ -17,10 +17,12 @@ service firebase.storage {
       allow create, update: if active() && request.auth.uid == userId && image();
       allow delete: if active() && request.auth.uid == userId;
     }
-    match /services/{providerId}/{allPaths=**} {
+    match /services/{providerId}/{serviceId}/{fileName} {
       allow read: if active();
-      allow create, update: if active() && request.auth.uid == providerId && image();
-      allow delete: if active() && request.auth.uid == providerId;
+      // Reviewed images are immutable; replacements use a new object name.
+      allow create: if resource == null && active() && user().role == 'Provider'
+        && request.auth.uid == providerId && image();
+      allow update, delete: if false;
     }
     match /portfolio/{providerId}/{allPaths=**} {
       allow read: if active();

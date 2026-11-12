@@ -22,6 +22,8 @@ class ServiceListing {
     this.rejectionReason = '',
     this.serviceProposalId = '',
     this.requiredQualification = '',
+    this.certificationEntryId = '',
+    this.certificateAlignment = const {},
   });
 
   final String serviceId;
@@ -39,6 +41,8 @@ class ServiceListing {
   final String rejectionReason;
   final String serviceProposalId;
   final String requiredQualification;
+  final String certificationEntryId;
+  final Map<String, dynamic> certificateAlignment;
   final Timestamp createdAt;
   final Timestamp updatedAt;
 
@@ -47,7 +51,8 @@ class ServiceListing {
       approvalStatus.isApproved &&
       isActive &&
       (isSupportedService(category, serviceTitle) ||
-          serviceProposalId.isNotEmpty);
+          serviceProposalId.isNotEmpty ||
+          certificateAlignment['status'] == 'Approved');
 
   factory ServiceListing.fromFirestore(String id, Map<String, dynamic> data) {
     return ServiceListing(
@@ -79,6 +84,10 @@ class ServiceListing {
       rejectionReason: data['rejectionReason'] as String? ?? '',
       serviceProposalId: data['serviceProposalId'] as String? ?? '',
       requiredQualification: data['requiredQualification'] as String? ?? '',
+      certificationEntryId: data['certificationEntryId'] as String? ?? '',
+      certificateAlignment: Map<String, dynamic>.from(
+        data['certificateAlignment'] as Map? ?? {},
+      ),
       createdAt: data['createdAt'] as Timestamp? ?? Timestamp.now(),
       updatedAt: data['updatedAt'] as Timestamp? ?? Timestamp.now(),
     );
@@ -98,6 +107,7 @@ class ServiceListing {
       'isActive': isActive,
       'approvalStatus': approvalStatus.firestoreValue,
       'rejectionReason': rejectionReason,
+      'certificationEntryId': certificationEntryId,
       if (serviceProposalId.isNotEmpty) 'serviceProposalId': serviceProposalId,
       if (requiredQualification.isNotEmpty)
         'requiredQualification': requiredQualification,

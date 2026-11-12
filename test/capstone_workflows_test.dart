@@ -2,6 +2,7 @@ import 'package:neighbor_help/screens/admin/widgets/admin_bookings_widgets.dart'
     show bookingStatusBucket;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:neighbor_help/services/booking_availability.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neighbor_help/models/booking.dart';
 import 'package:neighbor_help/models/provider.dart';
@@ -217,6 +218,12 @@ void main() {
               child: BookingRescheduleCard(
                 booking: booking(),
                 asCustomer: true,
+                loadAvailability: () async => BookingAvailability(
+                  starts: [DateTime.now().toUtc().add(const Duration(days: 1))],
+                  durationHours: 1,
+                  estimatedTotal: 100,
+                  pricingType: 'fixed',
+                ),
               ),
             ),
           ),

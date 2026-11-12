@@ -97,7 +97,19 @@ class _ProviderBookingRequestReviewBodyState
         providerId: widget.appUser.userId,
         accept: accept,
       );
-      if (!responded) return;
+      if (!responded) {
+        if (accept && widget.booking.requiresProviderEstimate) {
+          final latest = await FirestoreService().getBooking(
+            widget.booking.bookingId,
+          );
+          if (mounted &&
+              latest?.pendingAmendmentId != null &&
+              ModalRoute.of(context)?.isCurrent == true) {
+            Navigator.pop(context);
+          }
+        }
+        return;
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -135,7 +147,9 @@ class _ProviderBookingRequestReviewBodyState
           final b = bookingSnap.data ?? widget.booking;
           if (!b.isPending) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) Navigator.pop(context);
+              if (mounted && ModalRoute.of(context)?.isCurrent == true) {
+                Navigator.pop(context);
+              }
             });
           }
 
@@ -213,7 +227,10 @@ class _ProviderBookingRequestReviewBodyState
                               const SizedBox(height: 16),
                               _summaryCard(b, service, customerName),
                               const SizedBox(height: 16),
-                              BookingWorkLocationCard(booking: b, viewerId: widget.appUser.userId),
+                              BookingWorkLocationCard(
+                                booking: b,
+                                viewerId: widget.appUser.userId,
+                              ),
                               if (b.notes != null &&
                                   b.notes!.trim().isNotEmpty) ...[
                                 const SizedBox(height: 16),
@@ -275,7 +292,9 @@ class _ProviderBookingRequestReviewBodyState
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: AppPrimaryButton(
-                                      label: 'Accept',
+                                      label: b.requiresProviderEstimate
+                                          ? 'Accept / set estimate'
+                                          : 'Accept',
                                       icon: Icons.check_rounded,
                                       onPressed: () => _respond(accept: true),
                                     ),
@@ -356,7 +375,7 @@ class _ProviderBookingRequestReviewBodyState
               ],
             ),
           ),
-          FigmaStatusChip(status: b.isCompleted ? 'Completed' : b.status),
+          FigmaStatusChip(status: b.isCompleted ? 'Completed' : b.statusLabel),
         ],
       ),
     );
@@ -372,7 +391,12 @@ class _ProviderBookingRequestReviewBodyState
             const Divider(height: 1, color: FigmaColors.gray100),
             _summaryRow('Service', service?.serviceTitle ?? '—'),
             const Divider(height: 1, color: FigmaColors.gray100),
-            _summaryRow('Date & time', b.scheduledWindowLabel),
+            _summaryRow(
+              b.requiresProviderEstimate
+                  ? 'Preferred start / estimate'
+                  : 'Date & time',
+              b.scheduledWindowLabel,
+            ),
             const Divider(height: 1, color: FigmaColors.gray100),
             _summaryRow(
               'Location',
@@ -383,8 +407,8 @@ class _ProviderBookingRequestReviewBodyState
               _summaryRow(
                 'Estimated fee',
                 b.pricingSummary != null
-                    ? '₱${b.totalFee!.toStringAsFixed(0)} (${b.pricingSummary})'
-                    : '₱${b.totalFee!.toStringAsFixed(0)}',
+                    ? '₱${b.totalFee!.toStringAsFixed(2)} (${b.pricingSummary})'
+                    : '₱${b.totalFee!.toStringAsFixed(2)}',
               ),
             ],
             const Divider(height: 1, color: FigmaColors.gray100),

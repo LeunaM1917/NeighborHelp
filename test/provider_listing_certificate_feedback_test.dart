@@ -97,6 +97,11 @@ Future<void> openForm(
     'priceType': 'fixed',
     'estimatedDuration': '1–2 hours',
     'approvalStatus': 'Draft',
+    'serviceImages': [
+      'https://example.test/one.png',
+      'https://example.test/two.png',
+      'https://example.test/three.png',
+    ],
   });
   await tester.pumpWidget(
     MaterialApp(
@@ -167,7 +172,7 @@ void main() {
     await openForm(tester, store, 390);
     await tester.tap(find.text('Save as draft'));
     await tester.pumpAndSettle();
-    expect(store.reads, 0);
+    expect(store.reads, 1);
     expect(store.writes, hasLength(1));
     expect(store.writes.single['isActive'], false);
     expect(find.text('Open listing'), findsOneWidget);
@@ -185,7 +190,12 @@ void main() {
           );
       expect(check(profile()), ServiceCertificateStatus.missing);
       expect(
-        check(profile(status: 'Approved', qualification: 'Electrical Installation and Maintenance NC II')),
+        check(
+          profile(
+            status: 'Approved',
+            qualification: 'Electrical Installation and Maintenance NC II',
+          ),
+        ),
         ServiceCertificateStatus.missing,
       );
       expect(
@@ -218,7 +228,7 @@ void main() {
         final store = ListingStore(profile());
         await openForm(tester, store, width);
         final before = tester.getSize(find.byType(ProviderServiceFormScreen));
-        await tester.tap(find.text('Save changes'));
+        await tester.tap(find.text('Submit for approval'));
         await tester.pumpAndSettle();
         final popup = find.byType(AppNotificationDialog);
         expect(popup, findsOneWidget);
@@ -238,7 +248,7 @@ void main() {
       (tester) async {
         final store = ListingStore(profile());
         await openForm(tester, store, width);
-        await tester.tap(find.text('Save changes'));
+        await tester.tap(find.text('Submit for approval'));
         await tester.pumpAndSettle();
         expect(find.text('Matching certificate required'), findsOneWidget);
         expect(
@@ -272,7 +282,7 @@ void main() {
     ) async {
       final store = ListingStore(profile(status: row.$1, expiry: row.$2));
       await openForm(tester, store, 390);
-      await tester.tap(find.text('Save changes'));
+      await tester.tap(find.text('Submit for approval'));
       await tester.pumpAndSettle();
       expect(find.text(row.$3), findsOneWidget);
       expect(
@@ -284,9 +294,9 @@ void main() {
       await tester.pumpAndSettle();
       // Approval received while this form was open must be read on the next attempt.
       store.profile = profile(status: 'Approved');
-      await tester.tap(find.text('Save changes'));
+      await tester.tap(find.text('Submit for approval'));
       await tester.pumpAndSettle();
-      expect(store.reads, 4);
+      expect(store.reads, 5);
       expect(store.writes.single['approvalStatus'], 'Pending');
       expect(store.writes.single['isActive'], false);
       expect(find.text('Open listing'), findsOneWidget);
@@ -299,20 +309,20 @@ void main() {
     (tester) async {
       final store = ListingStore(profile(status: 'Approved'))..failRead = true;
       await openForm(tester, store, 390);
-      await tester.tap(find.text('Save changes'));
+      await tester.tap(find.text('Submit for approval'));
       await tester.pumpAndSettle();
       expect(find.text('Could not check account setup'), findsOneWidget);
       await tester.tap(find.text('Keep browsing'));
       await tester.pumpAndSettle();
       store.failRead = false;
       store.failSave = true;
-      await tester.tap(find.text('Save changes'));
+      await tester.tap(find.text('Submit for approval'));
       await tester.pumpAndSettle();
       expect(find.text('Could not save service'), findsOneWidget);
       await tester.tap(find.text('Keep editing'));
       await tester.pumpAndSettle();
       store.failSave = false;
-      await tester.tap(find.text('Save changes'));
+      await tester.tap(find.text('Submit for approval'));
       await tester.pumpAndSettle();
       expect(store.writes, hasLength(1));
       expect(tester.takeException(), isNull);
@@ -324,7 +334,7 @@ void main() {
   ) async {
     final store = ListingStore(profile(status: 'Approved', verified: false));
     await openForm(tester, store, 390);
-    await tester.tap(find.text('Save changes'));
+    await tester.tap(find.text('Submit for approval'));
     await tester.pumpAndSettle();
     expect(find.text('Complete your profile and verification'), findsOneWidget);
     expect(store.writes, isEmpty);

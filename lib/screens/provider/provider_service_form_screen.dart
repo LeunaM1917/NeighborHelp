@@ -10,6 +10,9 @@ import '../../figma_ui/marketing_service_images.dart';
 import '../../figma_ui/service_categories.dart';
 import '../../figma_ui/widgets/figma_network_image.dart';
 import '../../models/app_user.dart';
+import '../../models/provider.dart';
+import '../../models/provider_certification.dart';
+import '../../utils/image_upload.dart';
 import '../../models/service.dart';
 import '../../models/service_approval_status.dart';
 import '../../services/firestore_service.dart';
@@ -44,7 +47,14 @@ class ProviderServiceFormScreen extends StatefulWidget {
     required AppUser appUser,
     ServiceListing? existing,
   }) async {
-    if (!await requireAccountSetup(context, appUser: appUser, role: UserRole.provider, action: 'list a service')) return false;
+    if (!await requireAccountSetup(
+      context,
+      appUser: appUser,
+      role: UserRole.provider,
+      action: 'list a service',
+    )) {
+      return false;
+    }
     if (!context.mounted) return false;
     if (MobileLayout.useMobileChrome(context)) {
       return Navigator.of(context).push<bool>(
@@ -89,10 +99,12 @@ class _LocalServiceImage {
 
   final Uint8List bytes;
   final String filename;
+  String? uploadedUrl;
 }
 
 class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _photoSectionKey = GlobalKey();
   final _title = TextEditingController();
   final _description = TextEditingController();
   final _price = TextEditingController();
@@ -101,7 +113,16 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
   String _priceType = 'negotiable';
   String? _duration;
   bool _isActive = true;
-  bool get _isProposedService => widget.existing?.serviceProposalId.isNotEmpty == true;
+  ServiceProviderProfile? _profile;
+  String? _certificateId;
+  String? _photoError;
+  String? _credentialError;
+  bool _loadingCertificates = false;
+  String? _newServiceId;
+  final Set<String> _customCategories = {};
+  final Set<String> _customServices = {};
+  final List<Map<String, dynamic>> _catalog = [];
+  int _categoryMenuVersion = 0;
   bool _saving = false;
 
   final List<String> _imageUrls = [];
@@ -130,9 +151,13 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
       _title.text = e.serviceTitle;
       _description.text = e.description;
       _price.text = e.estimatedPrice.toStringAsFixed(0);
-      _category = (_isProposedService || ServiceCategories.categoryNames.contains(e.category))
-          ? e.category
-          : null;
+      _category = e.category;
+      if (!ServiceCategories.categoryNames.contains(e.category)) {
+        _customCategories.add(e.category);
+      }
+      _certificateId = e.certificationEntryId.isEmpty
+          ? null
+          : e.certificationEntryId;
       _priceType = _priceTypes.contains(e.priceType.toLowerCase())
           ? e.priceType.toLowerCase()
           : 'negotiable';
@@ -147,6 +172,8 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
           : null;
       _duration = '1–2 hours';
     }
+    _loadCertificates();
+    _loadCatalog();
     _title.addListener(_onFieldsChanged);
     _description.addListener(_onFieldsChanged);
     _price.addListener(_onFieldsChanged);
@@ -169,13 +196,28 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
       ? MarketingServiceCatalog.categoryByName(_category!)
       : null;
 
-  List<String> get _templates => !_isProposedService && _category != null
-      ? ServiceCategories.serviceNamesForCategory(_category!)
-      : const [];
+  List<String> get _templates => [
+    ...{
+      ...ServiceCategories.serviceNamesForCategory(_category ?? ''),
+      ..._catalog
+          .where(
+            (s) =>
+                normalizeCredential('${s['category']}') ==
+                normalizeCredential(_category ?? ''),
+          )
+          .map((s) => '${s['serviceTitle']}'),
+      ..._customServices,
+    },
+  ];
 
   void _applyTemplate(String serviceName) {
+    _certificateId = null;
     final cat = _marketingCategory;
-    if (cat == null) return;
+    if (cat == null) {
+      setState(() => _title.text = serviceName);
+      _selectMatchingCertificate();
+      return;
+    }
     for (final s in cat.services) {
       if (s.name == serviceName) {
         setState(() {
@@ -185,10 +227,12 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
             _price.text = s.startingPricePhp.toString();
           }
         });
+        _selectMatchingCertificate();
         return;
       }
     }
     setState(() => _title.text = serviceName);
+    _selectMatchingCertificate();
   }
 
   Future<void> _pickPhotos() async {
@@ -202,13 +246,20 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
       if (picks.isEmpty) return;
       for (final x in picks.take(remaining)) {
         final bytes = await x.readAsBytes();
-        if (bytes.isEmpty) continue;
+        ImageUploadFormat.inspect(bytes);
+        if (_localImages.any((image) => listEquals(image.bytes, bytes))) {
+          _snack('This photo is already selected. Choose another photo.');
+          continue;
+        }
         setState(() {
           _localImages.add(_LocalServiceImage(bytes: bytes, filename: x.name));
+          _photoError = null;
         });
       }
-    } catch (_) {
-      _snack('Could not pick photos');
+    } catch (e) {
+      _snack(
+        e is ArgumentError ? e.message.toString() : 'Could not pick photos',
+      );
     }
   }
 
@@ -216,68 +267,32 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
     final urls = List<String>.from(_imageUrls);
     for (var i = 0; i < _localImages.length; i++) {
       final local = _localImages[i];
-      final url = await StorageService().uploadServiceImage(
-        providerId: widget.appUser.userId,
-        serviceId: serviceId,
-        bytes: local.bytes,
-        filename: '${DateTime.now().millisecondsSinceEpoch}_$i.jpg',
-      );
+      final url = local.uploadedUrl ??= await StorageService()
+          .uploadServiceImage(
+            providerId: widget.appUser.userId,
+            serviceId: serviceId,
+            bytes: local.bytes,
+            filename: '${DateTime.now().millisecondsSinceEpoch}_$i.jpg',
+          );
       urls.add(url);
     }
     return urls;
   }
 
-  List<String> _defaultImageUrls() {
-    final category = _category;
-    if (category == null) return [];
-    return [
-      MarketingServiceImages.urlFor(
-        serviceName: _title.text.trim(),
-        categoryId: ServiceCategories.categoryIdForName(category),
-        categoryName: category,
-      ),
-    ];
-  }
-
-  bool _materialChanged(ServiceListing existing) {
-    return _title.text.trim() != existing.serviceTitle ||
-        (_category ?? '') != existing.category ||
-        _description.text.trim() != existing.description ||
-        (double.tryParse(_price.text.trim()) ?? 0) != existing.estimatedPrice ||
-        _priceType != existing.priceType ||
-        (_duration ?? '') != existing.estimatedDuration;
-  }
-
   Future<void> _save({required bool publish}) async {
     if (_saving) return;
-    if (publish && !await requireAccountSetup(context, appUser: widget.appUser,
-      role: UserRole.provider, action: 'list a service', firestore: widget.firestore)) {
+    if (publish &&
+        !await requireAccountSetup(
+          context,
+          appUser: widget.appUser,
+          role: UserRole.provider,
+          action: 'list a service',
+          firestore: widget.firestore,
+        )) {
       return;
     }
-    if (!mounted) return;
-    if (!_formKey.currentState!.validate()) return;
-    final category = _category;
-    final duration = _duration;
-    if (category == null) {
-      _snack('Choose a category');
-      return;
-    }
-    if (duration == null || duration.isEmpty) {
-      _snack('Select estimated duration');
-      return;
-    }
-
+    if (!mounted || (publish && !_formKey.currentState!.validate())) return;
     setState(() => _saving = true);
-    final price = double.tryParse(_price.text.trim()) ?? 0;
-
-    if (!_isProposedService && !isSupportedService(category, _title.text.trim())) {
-      if (mounted) {
-        setState(() => _saving = false);
-        _snack('Choose a supported service from the catalog.');
-      }
-      return;
-    }
-    var checkingEligibility = publish;
     try {
       final firestore = widget.firestore ?? FirestoreService();
       if (publish) {
@@ -285,81 +300,87 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
           widget.appUser.userId,
         );
         if (!mounted) return;
-        final status = profile == null
-            ? ServiceCertificateStatus.missing
-            : serviceCertificateStatus(
-                profile,
-                category: category,
-                serviceTitle: _title.text.trim(),
-              );
-        if (status != ServiceCertificateStatus.approved) {
-          await _showCertificateHelp(status, category, _title.text.trim());
-          return;
-        }
-        if (!(profile?.isVerifiedProvider ?? false)) {
-          await _showListingNotice(
-            'Identity verification required',
-            'Your certificate qualifies for this service. Complete government ID verification in your profile and wait for System Administrator approval before submitting your listing. You can keep editing or save a draft.',
+        _profile = profile;
+        _selectMatchingCertificate();
+        final selected = profile?.certificationHistory
+            .where((c) => c.id == _certificateId)
+            .firstOrNull;
+        final family = approvedServiceFamily(
+          _category ?? '',
+          _title.text.trim(),
+        );
+        final valid =
+            selected != null &&
+            isCurrentReviewedCredential(profile!, selected) &&
+            (family == null ||
+                selected.credentialType == 'equivalent' ||
+                (approvedQualifications[family] ?? [])
+                    .map(normalizeCredential)
+                    .contains(normalizeCredential(selected.name)));
+        if (!valid) {
+          await _showCertificateHelp(
+            selected?.isPending == true
+                ? ServiceCertificateStatus.pending
+                : selected?.isRejected == true
+                ? ServiceCertificateStatus.rejected
+                : profile == null
+                ? ServiceCertificateStatus.missing
+                : serviceCertificateStatus(
+                    profile,
+                    category: _category ?? '',
+                    serviceTitle: _title.text.trim(),
+                  ),
+            _category ?? '',
+            _title.text.trim(),
           );
           return;
         }
+        if (!profile.isVerifiedProvider) {
+          await _showListingNotice(
+            'Identity verification required',
+            'Complete government ID verification in your profile and wait for System Administrator approval before submitting your listing. You can save a draft.',
+          );
+          return;
+        }
+        if (_imageUrls.length + _localImages.length < 3) {
+          setState(
+            () => _photoError =
+                'Add at least 3 service photos before submitting for approval.',
+          );
+          final photoContext = _photoSectionKey.currentContext;
+          if (photoContext != null && photoContext.mounted) {
+            await Scrollable.ensureVisible(
+              photoContext,
+              duration: const Duration(milliseconds: 250),
+              alignment: 0.2,
+            );
+          }
+          return;
+        }
       }
-      checkingEligibility = false;
-
       final existing = widget.existing;
-      final approval = publish
-          ? ServiceApprovalStatus.pending
-          : (existing?.approvalStatus ?? ServiceApprovalStatus.draft);
-      final titleForPolicy = _title.text.trim();
-      final needsCert = serviceRequiresCertification(
-        category: category,
-        serviceTitle: titleForPolicy,
-      );
-
-      if (widget.isEditing) {
-        final id = existing!.serviceId;
-        var images = await _uploadImages(id);
-        if (images.isEmpty) images = _defaultImageUrls();
-        final updates = <String, dynamic>{
-          'serviceTitle': titleForPolicy,
-          'category': category,
-          'description': _description.text.trim(),
-          'estimatedPrice': price,
-          'priceType': _priceType,
-          'estimatedDuration': duration,
-          'serviceImages': images,
-          'requiresCertification': needsCert,
-        };
-        if (publish || _materialChanged(existing)) {
-          updates['approvalStatus'] =
-              ServiceApprovalStatus.pending.firestoreValue;
-          updates['isActive'] = false;
-          updates['rejectionReason'] = '';
-        } else if (existing.approvalStatus.isApproved) {
-          updates['isActive'] = _isActive;
-        } else {
-          updates['isActive'] = false;
-        }
-        await firestore.updateService(id, updates);
-      } else {
-        final id = await firestore.createServiceListing(
-          providerId: widget.appUser.userId,
-          serviceTitle: titleForPolicy,
-          category: category,
-          description: _description.text.trim(),
-          estimatedPrice: price,
-          priceType: _priceType,
-          estimatedDuration: duration,
-          serviceImages: _defaultImageUrls(),
-          isActive: false,
-          approvalStatus: approval,
-        );
-        await firestore.updateService(id, {'requiresCertification': needsCert});
-        var images = await _uploadImages(id);
-        if (images.length > 1 || _localImages.isNotEmpty) {
-          await firestore.updateService(id, {'serviceImages': images});
-        }
-      }
+      final id =
+          existing?.serviceId ?? (_newServiceId ??= firestore.newServiceId());
+      final images = await _uploadImages(id);
+      // Keep successful uploads for retries; never submit a partially saved listing.
+      _imageUrls
+        ..clear()
+        ..addAll(images);
+      _localImages.clear();
+      final fields = <String, dynamic>{
+        'serviceTitle': _title.text.trim(),
+        'category': _category ?? '',
+        'description': _description.text.trim(),
+        'estimatedPrice': double.tryParse(_price.text.trim()) ?? 0,
+        'priceType': _priceType,
+        'estimatedDuration': _duration ?? '',
+        'serviceImages': images,
+        'certificationEntryId': _certificateId ?? '',
+        'isActive': false,
+        'approvalStatus': publish ? 'Pending' : 'Draft',
+      };
+      // The server creates or revises this provider's listing atomically.
+      await firestore.updateService(id, fields);
       if (!mounted) return;
       if (publish) {
         _snack(
@@ -367,20 +388,212 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
         );
       }
       Navigator.pop(context, true);
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
         await _showListingNotice(
-          checkingEligibility
-              ? 'Could not check verification'
-              : 'Could not save service',
-          checkingEligibility
-              ? 'We could not load your latest certificate and identity status. Check your connection and try again. Your form is still here.'
-              : 'We could not confirm that all listing details and photos were saved. Your form is still here. Check your connection, then check your service list before submitting again.',
+          'Could not save service',
+          error is StateError
+              ? error.message.toString()
+              : 'Check your connection and try again. Your listing details are still here.',
         );
       }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  Future<void> _loadCertificates() async {
+    setState(() {
+      _loadingCertificates = true;
+      _credentialError = null;
+    });
+    try {
+      final profile = await (widget.firestore ?? FirestoreService())
+          .getProviderProfileForListing(widget.appUser.userId);
+      if (mounted) {
+        setState(() => _profile = profile);
+        _selectMatchingCertificate();
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _credentialError =
+              'Could not load certificates. Retry to select your credential.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingCertificates = false);
+    }
+  }
+
+  Future<void> _loadCatalog() async {
+    try {
+      final options = await (widget.firestore ?? FirestoreService())
+          .approvedServiceOptions();
+      if (!mounted) return;
+      setState(() {
+        _catalog.addAll(options);
+        _customCategories.addAll(
+          options
+              .map((s) => '${s['category']}')
+              .where((c) => !ServiceCategories.categoryNames.contains(c)),
+        );
+      });
+    } catch (_) {
+      /* The built-in catalog remains available while offline. */
+    }
+  }
+
+  Future<void> _setVisibility(bool value) async {
+    setState(() => _saving = true);
+    try {
+      await (widget.firestore ?? FirestoreService()).setServiceActive(
+        widget.existing!.serviceId,
+        value,
+      );
+      if (mounted) setState(() => _isActive = value);
+    } catch (error) {
+      if (mounted) {
+        _snack(
+          error is StateError
+              ? error.message.toString()
+              : 'Could not update listing visibility.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  void _selectMatchingCertificate() {
+    final profile = _profile;
+    if (profile == null || _certificateId != null) return;
+    final family = approvedServiceFamily(_category ?? '', _title.text.trim());
+    final names = (approvedQualifications[family] ?? [])
+        .map(normalizeCredential)
+        .toSet();
+    final matching = profile.certificationHistory.where(
+      (c) =>
+          isCurrentReviewedCredential(profile, c) &&
+          (family == null || names.contains(normalizeCredential(c.name))),
+    );
+    if (matching.isNotEmpty) setState(() => _certificateId = matching.first.id);
+  }
+
+  Future<void> _addCustomName({required bool category}) async {
+    var entered = '';
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(category ? 'Add Category' : 'Add Service'),
+        content: TextField(
+          onChanged: (v) => entered = v,
+          autofocus: true,
+          maxLength: category ? 100 : 140,
+          decoration: InputDecoration(
+            labelText: category ? 'Category name' : 'Service name',
+            helperMaxLines: 3,
+            helperText:
+                'Certificate alignment will be reviewed with your listing.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (entered.trim().length >= 3) {
+                Navigator.pop(ctx, entered.trim());
+              }
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (category) setState(() => _categoryMenuVersion++);
+    if (result == null) return;
+    final candidates = category
+        ? [...ServiceCategories.categoryNames, ..._customCategories]
+        : _templates;
+    final name =
+        candidates
+            .where((n) => normalizeCredential(n) == normalizeCredential(result))
+            .firstOrNull ??
+        result;
+    setState(() {
+      if (category) {
+        if (!ServiceCategories.categoryNames.contains(name)) {
+          _customCategories.add(name);
+        }
+        _category = name;
+        _title.clear();
+        _customServices.clear();
+      } else {
+        if (!_templates.contains(name)) _customServices.add(name);
+        _title.text = name;
+      }
+    });
+  }
+
+  Widget _certificateField() {
+    final certs =
+        _profile?.certificationHistory.where((c) => c.id.isNotEmpty).toList() ??
+        <ProviderCertificationEntry>[];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        DropdownButtonFormField<String>(
+          key: ValueKey('credential-$_certificateId-${certs.length}'),
+          initialValue: certs.any((c) => c.id == _certificateId)
+              ? _certificateId
+              : null,
+          isExpanded: true,
+          decoration: const InputDecoration(
+            labelText: 'Certificate for this service *',
+          ),
+          items: [
+            for (final c in certs)
+              DropdownMenuItem(
+                value: c.id,
+                child: Text(
+                  '${c.name} (${c.provider}) · ${c.status.firestoreValue}',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+          ],
+          onChanged: _loadingCertificates
+              ? null
+              : (v) => setState(() => _certificateId = v),
+        ),
+        if (_loadingCertificates) const LinearProgressIndicator(),
+        if (_credentialError != null)
+          TextButton(
+            onPressed: _loadCertificates,
+            child: Text(_credentialError!),
+          ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            icon: const Icon(Icons.upload_file),
+            label: const Text('Submit a certificate for verification'),
+            onPressed: () async {
+              final saved = await ProviderCertificationDialog.open(
+                context,
+                providerId: widget.appUser.userId,
+              );
+              if (saved == true && mounted) await _loadCertificates();
+            },
+          ),
+        ),
+        const Text(
+          'TESDA NC or an accepted equivalent. New categories, custom services and credential alignment require administrator approval.',
+        ),
+      ],
+    );
   }
 
   Future<void> _showListingNotice(String title, String message) =>
@@ -413,8 +626,9 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
     String title,
   ) async {
     final family = approvedServiceFamily(category, title);
-    final qualifications = _isProposedService && widget.existing!.requiredQualification.isNotEmpty
-      ? [widget.existing!.requiredQualification] : approvedQualifications[family] ?? <String>[];
+    final qualifications =
+        approvedQualifications[family] ??
+        <String>['a relevant TESDA NC or accepted equivalent credential'];
     final (heading, guidance) = switch (status) {
       ServiceCertificateStatus.pending => (
         'Certificate awaiting review',
@@ -468,6 +682,8 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
       initialQualification: qualifications.firstOrNull,
     );
     if (saved == true && mounted) {
+      await _loadCertificates();
+      if (!mounted) return;
       await _showListingNotice(
         'Certificate submitted',
         'Your certificate is pending System Administrator review. Uploading it does not publish your listing. You will receive a status notification; submit your listing after approval. Your listing details are still here.',
@@ -483,7 +699,7 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
 
   String get _previewPrice {
     final n = double.tryParse(_price.text.trim());
-    if (n == null || n <= 0) return '₱---';
+    if (n == null || !n.isFinite || n <= 0 || n > 10000000) return '₱---';
     final pt = _priceType.toLowerCase();
     if (pt == 'fixed') return '₱${n.toStringAsFixed(0)} fixed';
     return '₱${n.toStringAsFixed(0)} $_priceType';
@@ -620,11 +836,8 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
   );
 
   Widget _buildCategoryField() {
-    if (_isProposedService) {
-      return TextFormField(initialValue: _category, readOnly: true,
-        decoration: const InputDecoration(labelText: 'Approved category'));
-    }
     return FormField<String>(
+      key: ValueKey('$_category-$_categoryMenuVersion'),
       initialValue: _category,
       validator: (v) => v == null || v.isEmpty ? 'Required' : null,
       builder: (field) {
@@ -647,12 +860,25 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
                     label: c.name,
                     leadingIcon: Icon(c.icon, size: 20, color: c.fg),
                   ),
+                for (final name in _customCategories)
+                  DropdownMenuEntry<String>(value: name, label: name),
+                const DropdownMenuEntry<String>(
+                  value: '__add_category__',
+                  label: 'Add Category',
+                  leadingIcon: Icon(Icons.add),
+                ),
               ],
               onSelected: (value) {
+                if (value == '__add_category__') {
+                  _addCustomName(category: true);
+                  return;
+                }
                 field.didChange(value);
                 setState(() {
                   _category = value;
                   _title.clear();
+                  _customServices.clear();
+                  _certificateId = null;
                 });
               },
               menuStyle: MenuStyle(
@@ -674,12 +900,8 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (_isProposedService) ...[
-          Text('This proposal was approved for ${widget.existing!.requiredQualification}. The service name and category stay fixed. Add your price and submit this listing for review.'),
-          const SizedBox(height: 16),
-        ],
         _buildCategoryField(),
-        if (templates.isNotEmpty) ...[
+        if (_category != null) ...[
           const SizedBox(height: 20),
           Text(
             'Choose a TESDA-aligned service',
@@ -691,7 +913,7 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
           ),
           const SizedBox(height: 6),
           Text(
-            'Choose the work you offer. A matching TESDA certificate approved by the System Administrator is required before submitting your listing.',
+            'Choose the work you offer. A matching TESDA NC or accepted equivalent credential approved by the System Administrator is required before submitting your listing.',
             style: GoogleFonts.inter(
               fontSize: 12,
               color: FigmaColors.gray500,
@@ -705,31 +927,17 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
             children: [
               for (final name in templates)
                 _CatalogChip(label: name, onTap: () => _applyTemplate(name)),
+              _CatalogChip(
+                label: '+ Add Service',
+                onTap: () => _addCustomName(category: false),
+              ),
             ],
-          ),
-        ] else if (_category == 'Custom Services') ...[
-          const SizedBox(height: 20),
-          Text(
-            'Custom service',
-            style: GoogleFonts.inter(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: FigmaColors.gray800,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Enter any service title that fits your skills. The Administrator will review it before customers can see it.',
-            style: GoogleFonts.inter(
-              fontSize: 12,
-              color: FigmaColors.gray500,
-              height: 1.35,
-            ),
           ),
         ],
         const SizedBox(height: 20),
         Text(
-          'Upload service photos (optional)',
+          'Upload service photos (at least 3)',
+          key: _photoSectionKey,
           style: GoogleFonts.inter(
             fontSize: 14,
             fontWeight: FontWeight.w600,
@@ -744,16 +952,21 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
           onRemoveUrl: (url) => setState(() => _imageUrls.remove(url)),
           onRemoveLocal: (i) => setState(() => _localImages.removeAt(i)),
         ),
+        if (_photoError != null)
+          Text(_photoError!, style: const TextStyle(color: Colors.red)),
+        Text(
+          '${_imageUrls.length + _localImages.length}/6 photos. JPG, PNG or WebP, up to 5 MB each. Remove a photo and add its replacement.',
+        ),
         const SizedBox(height: 20),
         TextFormField(
           controller: _title,
           decoration: const InputDecoration(
             labelText: 'Service title *',
-            hintText: 'Choose a supported catalog service above',
+            hintText: 'Choose a service above or enter a custom service name',
           ),
-          readOnly: true,
-          validator: (v) => !_isProposedService && !isSupportedService(_category ?? '', v ?? '')
-              ? 'Choose a supported catalog service'
+          maxLength: 140,
+          validator: (v) => (v?.trim().length ?? 0) < 3
+              ? 'Enter a service title with at least 3 characters'
               : null,
         ),
         if (isSupportedService(_category ?? '', _title.text.trim())) ...[
@@ -770,6 +983,8 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
             ),
           ),
         ],
+        const SizedBox(height: 16),
+        _certificateField(),
         const SizedBox(height: 16),
         TextFormField(
           controller: _description,
@@ -807,7 +1022,9 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
                 ),
                 validator: (v) {
                   final n = double.tryParse(v?.trim() ?? '');
-                  if (n == null || n <= 0) return 'Enter a valid price';
+                  if (n == null || !n.isFinite || n <= 0 || n > 10000000) {
+                    return 'Enter a valid price';
+                  }
                   return null;
                 },
               ),
@@ -857,7 +1074,7 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
               style: GoogleFonts.inter(fontWeight: FontWeight.w600),
             ),
             subtitle: Text(
-              'Turn off to pause this approved listing on the marketplace.',
+              'Visibility updates immediately. Changes to listing details require a new approval.',
               style: GoogleFonts.inter(
                 fontSize: 13,
                 color: FigmaColors.gray500,
@@ -870,7 +1087,7 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
                   ? FigmaColors.navy
                   : null,
             ),
-            onChanged: (v) => setState(() => _isActive = v),
+            onChanged: _saving ? null : _setVisibility,
           ),
         ] else if (widget.isEditing) ...[
           const SizedBox(height: 16),
@@ -1106,9 +1323,7 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
       child: LayoutBuilder(
         builder: (context, c) {
           final stack = c.maxWidth < 640;
-          final publishLabel = widget.isEditing
-              ? 'Save changes'
-              : 'Publish service';
+          const publishLabel = 'Submit for approval';
 
           if (stack) {
             return Column(
@@ -1272,7 +1487,9 @@ class _PhotoStrip extends StatelessWidget {
     ];
 
     return SizedBox(
-      height: _slot,
+      height:
+          _slot *
+          (MediaQuery.textScalerOf(context).scale(11) / 11).clamp(1.0, 1.75),
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: slots.length,
@@ -1329,7 +1546,7 @@ class _AddPhotoSlot extends StatelessWidget {
                   textAlign: TextAlign.center,
                 ),
                 Text(
-                  'PNG, JPG up to 10MB',
+                  'JPG, PNG, WebP up to 5MB',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.inter(
@@ -1570,15 +1787,18 @@ class _RemovePhotoButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.black54,
-      shape: const CircleBorder(),
-      child: InkWell(
-        onTap: onTap,
-        customBorder: const CircleBorder(),
-        child: const Padding(
-          padding: EdgeInsets.all(4),
-          child: Icon(Icons.close, size: 14, color: FigmaColors.white),
+    return Tooltip(
+      message: 'Remove photo',
+      child: Material(
+        color: Colors.black54,
+        shape: const CircleBorder(),
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: const Padding(
+            padding: EdgeInsets.all(4),
+            child: Icon(Icons.close, size: 14, color: FigmaColors.white),
+          ),
         ),
       ),
     );

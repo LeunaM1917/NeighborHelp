@@ -32,7 +32,8 @@ class _AdminCertificateReviewPageState
     ProviderCertificationEntry cert,
     String holder,
   ) async {
-    final notes = TextEditingController(text: cert.verificationNotes);
+    final equivalent = cert.credentialType == 'equivalent';
+    var notes = cert.verificationNotes;
     var checked = false;
     var decision = 'Pending';
     final result = await showDialog<Map<String, dynamic>>(
@@ -48,23 +49,27 @@ class _AdminCertificateReviewPageState
                   SelectableText(
                     'Holder: $holder\nQualification: ${cert.name}\nCertificate number: ${cert.certificationId}\nIssuer: ${cert.provider}\nValidity: ${cert.issueDate} to ${cert.expirationDate}',
                   ),
-                  TextButton.icon(
-                    onPressed: () => launchUrl(
-                      Uri.parse(tesdaRegistryUrl),
-                      mode: LaunchMode.externalApplication,
+                  if (!equivalent)
+                    TextButton.icon(
+                      onPressed: () => launchUrl(
+                        Uri.parse(tesdaRegistryUrl),
+                        mode: LaunchMode.externalApplication,
+                      ),
+                      icon: const Icon(Icons.open_in_new),
+                      label: const Text('Check through TESDA'),
                     ),
-                    icon: const Icon(Icons.open_in_new),
-                    label: const Text('Check through TESDA'),
-                  ),
-                  const Text(
-                    'Search the official registry and compare the holder, number, qualification and validity. Opening the link does not verify the certificate. A missing result needs follow-up and is not proof of fraud.',
-                  ),
+                  if (!equivalent)
+                    const Text(
+                      'Search the official registry and compare the holder, number, qualification and validity. Opening the link does not verify the certificate. A missing result needs follow-up and is not proof of fraud.',
+                    ),
                   CheckboxListTile(
                     contentPadding: EdgeInsets.zero,
                     value: checked,
                     onChanged: (v) => refresh(() => checked = v ?? false),
-                    title: const Text(
-                      'I checked the official TESDA registry and confirmed that these details match.',
+                    title: Text(
+                      equivalent
+                          ? 'I contacted or checked the issuing authority and confirmed the holder, credential, scope and validity. Listing alignment still requires approval.'
+                          : 'I checked the official TESDA registry and confirmed that these details match.',
                     ),
                   ),
                   DropdownButtonFormField<String>(
@@ -89,12 +94,12 @@ class _AdminCertificateReviewPageState
                     onChanged: (v) => refresh(() => decision = v!),
                   ),
                   const SizedBox(height: 12),
-                  TextField(
-                    controller: notes,
+                  TextFormField(
+                    initialValue: notes,
                     minLines: 3,
                     maxLines: 6,
                     maxLength: 3000,
-                    onChanged: (_) => refresh(() {}),
+                    onChanged: (v) => refresh(() => notes = v),
                     decoration: const InputDecoration(
                       labelText: 'Review notes and registry findings',
                       hintText:
@@ -112,12 +117,13 @@ class _AdminCertificateReviewPageState
             ),
             FilledButton(
               onPressed:
-                  notes.text.trim().length >= 10 &&
+                  notes.trim().length >= 10 &&
                       (decision != 'Approved' || checked)
                   ? () => Navigator.pop(ctx, {
                       'decision': decision,
-                      'registryChecked': checked,
-                      'notes': notes.text.trim(),
+                      'registryChecked': !equivalent && checked,
+                      'issuerVerified': equivalent && checked,
+                      'notes': notes.trim(),
                     })
                   : null,
               child: const Text('Save review'),
@@ -126,7 +132,6 @@ class _AdminCertificateReviewPageState
         ),
       ),
     );
-    notes.dispose();
     if (result == null || !mounted) return;
     setState(() => _busy = true);
     try {
@@ -166,7 +171,7 @@ class _AdminCertificateReviewPageState
         const AdminDashboardHeader(
           title: 'Certificate verification',
           subtitle:
-              'The System Administrator verifies TESDA certificates separately from ID Analyzer identity checks. PRC licence verification is not supported.',
+              'The System Administrator verifies TESDA certificates or equivalent credentials with the issuing authority. Each service also requires a separate certificate alignment review.',
         ),
         const SizedBox(height: 24),
         StreamBuilder<List<ServiceProviderProfile>>(

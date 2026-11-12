@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:neighbor_help/models/provider.dart';
 import 'package:neighbor_help/models/provider_certification.dart';
 import 'package:neighbor_help/screens/provider/provider_certification_dialog.dart';
 import 'package:neighbor_help/screens/provider/provider_profile_editor_dialog.dart';
@@ -14,13 +13,15 @@ import 'support/ui_test_support.dart';
 class CertificateStore extends Fake implements FirestoreService {
   Map<String, dynamic>? saved;
   @override
-  Future<ServiceProviderProfile?> getProviderProfile(String id) async =>
-      ServiceProviderProfile.fromFirestore(id, {'userId': id});
-  @override
-  Future<void> updateServiceProvider({
+  Future<void> submitProviderCertificate({
     required String providerId,
-    required Map<String, dynamic> data,
-  }) async => saved = data;
+    required ProviderCertificationEntry entry,
+  }) async {
+    saved = {
+      'certificationHistory': [entry.toMap()],
+      'approvedCertificationIds': <String>[],
+    };
+  }
 }
 
 void main() {

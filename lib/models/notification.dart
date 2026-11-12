@@ -29,8 +29,14 @@ class AppNotification {
   final String notificationType;
   final String? relatedBookingId;
   final String? relatedInquiryId;
-  final String? relatedServiceId, relatedCertificationId, relatedProviderId,
-      relatedUserId, relatedReportId, relatedReviewId, relatedProposalId, sourceCollection;
+  final String? relatedServiceId,
+      relatedCertificationId,
+      relatedProviderId,
+      relatedUserId,
+      relatedReportId,
+      relatedReviewId,
+      relatedProposalId,
+      sourceCollection;
   final int? adminTab;
   final bool isRead;
   final Timestamp createdAt;
@@ -45,7 +51,9 @@ class AppNotification {
       relatedBookingId: data['relatedBookingId'] as String?,
       relatedInquiryId: data['relatedInquiryId'] as String?,
       relatedServiceId: data['relatedServiceId'] as String?,
-      relatedCertificationId: data['relatedCertificationId'] as String? ?? data['relatedCertificateId'] as String?,
+      relatedCertificationId:
+          data['relatedCertificationId'] as String? ??
+          data['relatedCertificateId'] as String?,
       relatedProviderId: data['relatedProviderId'] as String?,
       relatedUserId: data['relatedUserId'] as String?,
       relatedReportId: data['relatedReportId'] as String?,
@@ -54,7 +62,9 @@ class AppNotification {
       sourceCollection: data['sourceCollection'] as String?,
       adminTab: data['adminTab'] is int ? data['adminTab'] as int : null,
       isRead: data['isRead'] as bool? ?? false,
-      createdAt: data['createdAt'] as Timestamp? ?? Timestamp.fromMillisecondsSinceEpoch(0),
+      createdAt:
+          data['createdAt'] as Timestamp? ??
+          Timestamp.fromMillisecondsSinceEpoch(0),
     );
   }
 
@@ -67,7 +77,8 @@ class AppNotification {
       'relatedBookingId': relatedBookingId,
       'relatedInquiryId': relatedInquiryId,
       if (relatedServiceId != null) 'relatedServiceId': relatedServiceId,
-      if (relatedCertificationId != null) 'relatedCertificationId': relatedCertificationId,
+      if (relatedCertificationId != null)
+        'relatedCertificationId': relatedCertificationId,
       if (relatedProviderId != null) 'relatedProviderId': relatedProviderId,
       if (relatedUserId != null) 'relatedUserId': relatedUserId,
       if (relatedReportId != null) 'relatedReportId': relatedReportId,

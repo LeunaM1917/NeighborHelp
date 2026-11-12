@@ -1,25 +1,25 @@
 'use strict';
-module.exports=({collection,before,after,created})=>{
+module.exports=({collection,id,before,after,created})=>{
   const notices=[];
-  const add=(key,title,message,tab)=>notices.push({key,data:{title,message,adminTab:tab,inAppOnly:true,notificationType:'Admin Activity'}});
+  const add=(key,title,message,tab,related={})=>notices.push({key,data:{title,message,adminTab:tab,inAppOnly:true,notificationType:'Admin Activity',sourceCollection:collection,...related}});
   const name=after.fullName||after.businessName||'A user';
   if(collection==='users'&&created&&['Customer','Provider'].includes(after.role))
-    add('registered','New '+after.role.toLowerCase()+' registered',`${name} registered a ${after.role.toLowerCase()} account.`,after.role==='Provider'?2:1);
+    add('registered','New '+after.role.toLowerCase()+' registered',`${name} registered a ${after.role.toLowerCase()} account.`,after.role==='Provider'?2:1,id?{relatedUserId:id}:{});
   if(collection==='serviceProviders'){
     const previous=new Map((before.certificationHistory||[]).map(c=>[c.id,c]));
     for(const c of after.certificationHistory||[]){
       if(!c.id||String(c.status||'Pending')!=='Pending')continue;
       const prior=previous.get(c.id),fields=['name','url','certificationId','issueDate','expirationDate'];
       if(!prior||String(prior.status||'Pending')!=='Pending'||fields.some(f=>prior[f]!==c[f]))
-        add('certificate:'+c.id,'Certificate awaiting review',`${c.name||'A TESDA certificate'} was submitted for authentication. Open Certificates to review the holder and qualification.`,5);
+        add('certificate:'+c.id,'Certificate awaiting review',`${c.name||'A TESDA certificate'} was submitted for authentication. Open Certificates to review the holder and qualification.`,5,id?{relatedCertificationId:c.id,relatedProviderId:id}:{});
     }
   }
   if(['users','serviceProviders'].includes(collection)&&after.diditStatus!==before.diditStatus
     &&['Approved','In Review','Declined'].includes(after.diditStatus))
-    add('identity','Identity verification update',`${name} has a new identity result: ${after.diditStatus}. Open Verification for details.`,4);
+    add('identity','Identity verification update',`${name} has a new identity result: ${after.diditStatus}. Open Verification for details.`,4,id?{relatedUserId:id}:{});
   if(collection==='services'&&after.approvalStatus==='Pending'&&before.approvalStatus!=='Pending')
-    add('listing','Service listing awaiting review',`${after.serviceTitle||'A service listing'} was submitted for review.`,6);
+    add('listing','Service listing awaiting review',`${after.serviceTitle||'A service listing'} was submitted for review.`,6,id?{relatedServiceId:id}:{});
   if(collection==='bookingUserReports'&&created)
-    add('report','New user report',`A user submitted a report: ${after.reason||'Open User Reports to review the case.'}`,3);
+    add('report','New user report',`A user submitted a report: ${after.reason||'Open User Reports to review the case.'}`,3,id?{relatedReportId:id,relatedBookingId:after.bookingId||''}:{});
   return notices;
 };

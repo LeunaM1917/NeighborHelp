@@ -1,3 +1,4 @@
+import '../../services/booking_availability.dart';
 import '../../ui/workflow_ui.dart';
 import '../../l10n/app_strings.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -28,6 +29,7 @@ class _AgreementAmendmentScreenState extends State<AgreementAmendmentScreen> {
   late double _hours;
   late DateTime _start;
   bool _busy = false;
+  bool get _direct => widget.bookingData['agreement'] == null;
   @override
   void initState() {
     super.initState();
@@ -44,10 +46,30 @@ class _AgreementAmendmentScreenState extends State<AgreementAmendmentScreen> {
       ])
         key: TextEditingController(text: b[key] as String? ?? ''),
     };
-    _rate = TextEditingController(text: (b['proposedRate'] as num).toString());
-    _days = TextEditingController(text: (b['numberOfDays'] as num).toString());
-    _type = b['pricingType'] as String;
-    _hours = (b['hoursPerDay'] as num).toDouble();
+    _rate = TextEditingController(
+      text:
+          ((b['proposedRate'] ?? b['hourlyRate'] ?? b['totalFee'] ?? 1) as num)
+              .toString(),
+    );
+    _days = TextEditingController(
+      text: ((b['numberOfDays'] ?? 1) as num).toString(),
+    );
+    _type = _direct
+        ? b['pricingType'] == 'hourly'
+              ? 'hourly'
+              : 'fixed'
+        : b['pricingType'] as String;
+    _hours = ((b['hoursPerDay'] ?? b['durationHours'] ?? 1) as num).toDouble();
+    if (_direct) {
+      _rate.text =
+          ((_type == 'hourly'
+                          ? b['hourlyRate'] ??
+                                (b['totalFee'] as num? ?? 1) / _hours
+                          : b['totalFee'])
+                      as num? ??
+                  1)
+              .toStringAsFixed(2);
+    }
     _start = (b['scheduledDate'] as Timestamp).toDate().toUtc().add(
       const Duration(hours: 8),
     );
@@ -65,9 +87,11 @@ class _AgreementAmendmentScreenState extends State<AgreementAmendmentScreen> {
     if (!_form.currentState!.validate()) return;
     setState(() => _busy = true);
     try {
-      final template = await MarketplaceService.command('inquiryCommand', {
-        'action': 'template',
-      });
+      final template = _direct
+          ? <String, dynamic>{}
+          : await MarketplaceService.command('inquiryCommand', {
+              'action': 'template',
+            });
       final revisionId = FirebaseFirestore.instance
           .collection('bookings')
           .doc()
@@ -76,8 +100,9 @@ class _AgreementAmendmentScreenState extends State<AgreementAmendmentScreen> {
         'bookingId': widget.bookingId,
         'revisionId': revisionId,
         'reason': _reason.text.trim(),
-        'expectedHash': (widget.bookingData['agreement'] as Map)['hash'],
-        'templateVersion': template['version'],
+        if (!_direct)
+          'expectedHash': (widget.bookingData['agreement'] as Map)['hash'],
+        if (!_direct) 'templateVersion': template['version'],
         'acceptAgreement': true,
         'scheduledDate': DateTime.utc(
           _start.year,
@@ -90,6 +115,7 @@ class _AgreementAmendmentScreenState extends State<AgreementAmendmentScreen> {
         'proposedRate': double.parse(_rate.text),
         'numberOfDays': int.parse(_days.text),
         'hoursPerDay': _hours,
+        if (_direct) 'durationHours': _hours,
         for (final f in _fields.entries) f.key: f.value.text.trim(),
       };
       final preview = await MarketplaceService.command('agreementCommand', {
@@ -101,7 +127,9 @@ class _AgreementAmendmentScreenState extends State<AgreementAmendmentScreen> {
       final ok = await confirmServiceAgreement(
         context,
         agreement: agreement,
-        title: 'Review proposed amendment',
+        title: _direct
+            ? 'Review provider estimate'
+            : 'Review proposed amendment',
         confirmation:
             'I voluntarily propose these exact revised terms. They take effect only after the other participant accepts.',
       );
@@ -111,7 +139,16 @@ class _AgreementAmendmentScreenState extends State<AgreementAmendmentScreen> {
         ...payload,
         'agreementHash': agreement['hash'],
       });
-      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        if (_direct) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Estimate sent for customer approval.'),
+            ),
+          );
+        }
+        Navigator.pop(context, true);
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -131,11 +168,23 @@ class _AgreementAmendmentScreenState extends State<AgreementAmendmentScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: Text(context.tr('Propose contract amendment'))),
+    appBar: AppBar(
+      title: Text(
+        context.tr(
+          _direct
+              ? 'Set estimate and proposed terms'
+              : 'Propose contract amendment',
+        ),
+      ),
+    ),
     body: Form(
       key: _form,
       child: WorkflowPage(
-        title: context.tr('Propose contract amendment'),
+        title: context.tr(
+          _direct
+              ? 'Set estimate and proposed terms'
+              : 'Propose contract amendment',
+        ),
         subtitle:
             'Keep the agreed changes together for both parties to review.',
         children: [
@@ -171,8 +220,10 @@ class _AgreementAmendmentScreenState extends State<AgreementAmendmentScreen> {
                     label: Text(context.tr('Fixed amount')),
                   ),
                   ButtonSegment(
-                    value: 'daily',
-                    label: Text(context.tr('Daily rate')),
+                    value: _direct ? 'hourly' : 'daily',
+                    label: Text(
+                      context.tr(_direct ? 'Hourly rate' : 'Daily rate'),
+                    ),
                   ),
                 ],
                 selected: {_type},
@@ -182,45 +233,66 @@ class _AgreementAmendmentScreenState extends State<AgreementAmendmentScreen> {
               ),
               TextFormField(
                 controller: _rate,
+                onChanged: _direct ? (_) => setState(() {}) : null,
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
                 decoration: InputDecoration(
                   labelText: _type == 'fixed'
                       ? 'Revised total labour fee (PHP)'
+                      : _direct
+                      ? 'Proposed hourly rate (PHP)'
                       : 'Revised daily rate (PHP)',
                 ),
                 validator: (v) {
                   final n = double.tryParse(v ?? '');
                   return n == null || !n.isFinite || n <= 0 || n > 1000000
                       ? 'Enter a positive amount up to 1,000,000'
+                      : (n * 100 - (n * 100).round()).abs() > .000001
+                      ? 'Use at most two decimal places'
                       : null;
                 },
               ),
-              TextFormField(
-                controller: _days,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: 'Revised total consecutive working days (1–30)',
+              if (!_direct)
+                TextFormField(
+                  controller: _days,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: 'Revised total consecutive working days (1–30)',
+                  ),
+                  validator: (v) {
+                    final n = int.tryParse(v ?? '');
+                    return n == null || n < 1 || n > 30
+                        ? 'Choose 1–30 days'
+                        : null;
+                  },
                 ),
-                validator: (v) {
-                  final n = int.tryParse(v ?? '');
-                  return n == null || n < 1 || n > 30
-                      ? 'Choose 1–30 days'
-                      : null;
-                },
-              ),
               DropdownButtonFormField<double>(
+                isExpanded: true,
                 initialValue: _hours,
-                decoration: InputDecoration(labelText: 'Hours per day'),
+                decoration: InputDecoration(
+                  labelText: _direct
+                      ? 'Provider-estimated duration (hours)'
+                      : 'Hours per day',
+                ),
                 items: [
-                  for (var h = .5; h <= 8; h += .5)
+                  for (
+                    double h = _direct ? .25 : .5;
+                    h <= (_direct ? 24 : 8);
+                    h += _direct ? .25 : .5
+                  )
                     DropdownMenuItem(value: h, child: Text('$h hours')),
                 ],
-                onChanged: _busy || widget.bookingData['startedAt'] != null
+                onChanged:
+                    _busy ||
+                        (!_direct && widget.bookingData['startedAt'] != null)
                     ? null
                     : (v) => setState(() => _hours = v!),
               ),
+              if (_direct)
+                Text(
+                  'Proposed total: PHP ${((_type == 'hourly' ? _hours : 1) * (double.tryParse(_rate.text) ?? 0)).toStringAsFixed(2)}. Customer approval is required.',
+                ),
               Text(
                 'Start: ${DateFormat('MMM d, yyyy h:mm a').format(_start)} (Asia/Manila)',
               ),
@@ -228,6 +300,46 @@ class _AgreementAmendmentScreenState extends State<AgreementAmendmentScreen> {
                 onPressed: _busy || widget.bookingData['startedAt'] != null
                     ? null
                     : () async {
+                        if (_direct) {
+                          try {
+                            final available = await BookingAvailability.load(
+                              providerId:
+                                  widget.bookingData['providerId'] as String,
+                              serviceId:
+                                  widget.bookingData['serviceId'] as String,
+                              durationHours: _hours,
+                              excludeBookingId: widget.bookingId,
+                            );
+                            if (!context.mounted) return;
+                            final day = await chooseAvailableDay(
+                              context,
+                              available,
+                              initial: _start,
+                            );
+                            if (day == null || !context.mounted) return;
+                            final instant = await chooseAvailableStart(
+                              context,
+                              available,
+                              day,
+                            );
+                            if (instant != null && mounted) {
+                              setState(() => _start = manilaCalendar(instant));
+                            }
+                          } catch (error) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    error is StateError
+                                        ? error.message.toString()
+                                        : 'Could not load available times. Retry.',
+                                  ),
+                                ),
+                              );
+                            }
+                          }
+                          return;
+                        }
                         final now = DateTime.now().toUtc().add(
                           const Duration(hours: 8),
                         );
@@ -265,39 +377,46 @@ class _AgreementAmendmentScreenState extends State<AgreementAmendmentScreen> {
                 ),
             ],
           ),
-          WorkflowSection(
-            title: 'Revised work and responsibilities',
-            icon: Icons.description_outlined,
-            children: [
-              for (final f in _fields.entries)
-                TextFormField(
-                  controller: f.value,
-                  minLines: 2,
-                  maxLines: 5,
-                  maxLength: 3000,
-                  decoration: InputDecoration(
-                    labelText: context.tr(
-                      {
-                        'scope': 'Scope of work',
-                        'deliverables': 'Deliverables',
-                        'exclusions': 'Exclusions',
-                        'materials': 'Materials and costs',
-                        'paymentTerms': 'Payment arrangement',
-                        'completionCriteria': 'Completion criteria',
-                        'responsibilities': 'Responsibilities',
-                      }[f.key]!,
+          if (!_direct)
+            WorkflowSection(
+              title: 'Revised work and responsibilities',
+              icon: Icons.description_outlined,
+              children: [
+                for (final f in _fields.entries)
+                  TextFormField(
+                    controller: f.value,
+                    minLines: 2,
+                    maxLines: 5,
+                    maxLength: 3000,
+                    decoration: InputDecoration(
+                      labelText: context.tr(
+                        {
+                          'scope': 'Scope of work',
+                          'deliverables': 'Deliverables',
+                          'exclusions': 'Exclusions',
+                          'materials': 'Materials and costs',
+                          'paymentTerms': 'Payment arrangement',
+                          'completionCriteria': 'Completion criteria',
+                          'responsibilities': 'Responsibilities',
+                        }[f.key]!,
+                      ),
                     ),
+                    validator: (v) => (v?.trim().length ?? 0) < 5
+                        ? 'Describe in at least 5 characters'
+                        : null,
                   ),
-                  validator: (v) => (v?.trim().length ?? 0) < 5
-                      ? 'Describe in at least 5 characters'
-                      : null,
-                ),
-            ],
-          ),
+              ],
+            ),
           WorkflowActions(
             child: FilledButton(
               onPressed: _busy ? null : _submit,
-              child: Text(_busy ? 'Preparing…' : 'Preview amendment'),
+              child: Text(
+                _busy
+                    ? 'Preparing…'
+                    : _direct
+                    ? 'Preview provider estimate'
+                    : 'Preview amendment',
+              ),
             ),
           ),
         ],

@@ -1,3 +1,4 @@
+import '../../services/booking_availability.dart';
 import '../../widgets/service_location_picker.dart';
 import '../../widgets/account_setup_gate.dart';
 import '../../models/user_role.dart';
@@ -43,19 +44,18 @@ class CustomerServiceDetailScreen extends StatefulWidget {
 
 enum BookingPricingMode { hourly, fixed }
 
-const _bookingDurationOptions = [1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 6.0, 8.0];
-
 class _CustomerServiceDetailScreenState
     extends State<CustomerServiceDetailScreen> {
   final _location = TextEditingController();
   final _notes = TextEditingController();
-  final _fixedPrice = TextEditingController();
   GeoPoint? _bookingLocation;
   String? _resolvedAddress;
   DateTime? _preferredDate;
   TimeOfDay? _preferredTime;
   BookingPricingMode _pricingMode = BookingPricingMode.hourly;
   double _durationHours = 1;
+  BookingAvailability? _availability;
+  bool _checkingSchedule = false;
   bool _submitting = false;
 
   @override
@@ -65,37 +65,25 @@ class _CustomerServiceDetailScreenState
     _pricingMode = pt.contains('hour')
         ? BookingPricingMode.hourly
         : BookingPricingMode.fixed;
-    _fixedPrice.text = widget.listing.estimatedPrice.toStringAsFixed(0);
-    _durationHours = _parseDefaultDuration(widget.listing.estimatedDuration);
-    _preferredTime = const TimeOfDay(hour: 9, minute: 0);
+    _durationHours = listingDurationHours(widget.listing.estimatedDuration);
+    _preferredTime = null;
   }
 
-  double get _hourlyRate => widget.listing.estimatedPrice;
+  double get _hourlyRate =>
+      double.parse(widget.listing.estimatedPrice.toStringAsFixed(2));
 
   double get _estimatedTotal {
+    if (_availability != null) return _availability!.estimatedTotal;
     if (_pricingMode == BookingPricingMode.hourly) {
-      return _hourlyRate * _durationHours;
+      return ((_hourlyRate * 100).round() * _durationHours).round() / 100;
     }
-    return double.tryParse(_fixedPrice.text.trim()) ?? 0;
-  }
-
-  static double _parseDefaultDuration(String raw) {
-    final match = RegExp(r'(\d+(?:\.\d+)?)').firstMatch(raw);
-    if (match == null) return 1;
-    final value = double.tryParse(match.group(1)!);
-    if (value == null || value <= 0) return 1;
-    final hours = raw.toLowerCase().contains('min') ? value / 60 : value;
-    return _bookingDurationOptions.firstWhere(
-      (option) => option >= hours,
-      orElse: () => _bookingDurationOptions.last,
-    );
+    return widget.listing.estimatedPrice;
   }
 
   @override
   void dispose() {
     _location.dispose();
     _notes.dispose();
-    _fixedPrice.dispose();
     super.dispose();
   }
 
@@ -172,7 +160,6 @@ class _CustomerServiceDetailScreenState
                     ],
                   ),
                   notes: _notes,
-                  fixedPrice: _fixedPrice,
                   preferredDate: _preferredDate,
                   preferredTime: _preferredTime,
                   pricingMode: _pricingMode,
@@ -181,10 +168,8 @@ class _CustomerServiceDetailScreenState
                   estimatedTotal: _estimatedTotal,
                   onPickDate: _pickDate,
                   onPickTime: _pickTime,
-                  onPricingModeChanged: (m) => setState(() => _pricingMode = m),
-                  onDurationChanged: (h) => setState(() => _durationHours = h),
-                  onFixedPriceChanged: () => setState(() {}),
                   submitting: _submitting,
+                  checkingSchedule: _checkingSchedule,
                   onSubmit: _submitBooking,
                 );
 
@@ -273,23 +258,100 @@ class _CustomerServiceDetailScreenState
     );
   }
 
-  Future<void> _pickDate() async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _preferredDate ?? now.add(const Duration(days: 1)),
-      firstDate: now,
-      lastDate: now.add(const Duration(days: 90)),
+  Future<BookingAvailability> _loadAvailability() async {
+    final availability = await BookingAvailability.load(
+      providerId: widget.listing.providerId,
+      serviceId: widget.listing.serviceId,
     );
-    if (picked != null && mounted) setState(() => _preferredDate = picked);
+    if (mounted) {
+      setState(() {
+        _availability = availability;
+        _durationHours = availability.durationHours;
+        _pricingMode = availability.pricingType == 'hourly'
+            ? BookingPricingMode.hourly
+            : BookingPricingMode.fixed;
+      });
+    }
+    return availability;
+  }
+
+  Future<void> _pickDate() async {
+    if (_checkingSchedule) return;
+    setState(() => _checkingSchedule = true);
+    try {
+      final availability = await _loadAvailability();
+      if (!mounted) return;
+      final day = await chooseAvailableDay(
+        context,
+        availability,
+        initial: _preferredDate,
+      );
+      if (day != null && mounted) {
+        setState(() {
+          _preferredDate = day;
+          _preferredTime = null;
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              error is StateError
+                  ? error.message.toString()
+                  : 'Could not load available dates. Please retry.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _checkingSchedule = false);
+    }
   }
 
   Future<void> _pickTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: _preferredTime ?? const TimeOfDay(hour: 9, minute: 0),
-    );
-    if (picked != null && mounted) setState(() => _preferredTime = picked);
+    if (_checkingSchedule) return;
+    if (_preferredDate == null) {
+      await _pickDate();
+    }
+    if (!mounted || _preferredDate == null) return;
+    setState(() {
+      _checkingSchedule = true;
+      _preferredTime = null;
+    });
+    try {
+      final availability = await _loadAvailability();
+      if (!mounted) return;
+      if (!availability.hasDay(_preferredDate!)) {
+        throw StateError(
+          'This date is no longer available. Choose another date.',
+        );
+      }
+      final start = await chooseAvailableStart(
+        context,
+        availability,
+        _preferredDate!,
+      );
+      if (start != null && mounted) {
+        setState(
+          () => _preferredTime = TimeOfDay.fromDateTime(manilaCalendar(start)),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              error is StateError
+                  ? error.message.toString()
+                  : 'Could not load available start times. Please retry.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _checkingSchedule = false);
+    }
   }
 
   Future<void> _submitBooking() async {
@@ -321,16 +383,14 @@ class _CustomerServiceDetailScreenState
       ).showSnackBar(const SnackBar(content: Text('Enter a service location')));
       return;
     }
-    if (_pricingMode == BookingPricingMode.fixed) {
-      final fixed = double.tryParse(_fixedPrice.text.trim());
-      if (fixed == null || !fixed.isFinite || fixed <= 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Enter a valid fixed price')),
-        );
-        return;
-      }
+    if (_notes.text.trim().length < 10 || _notes.text.trim().length > 3000) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Describe the job in 10 to 3000 characters.'),
+        ),
+      );
+      return;
     }
-
     if (_bookingLocation == null || _resolvedAddress != _location.text.trim()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -347,13 +407,7 @@ class _CustomerServiceDetailScreenState
         .collection(FirestoreCollections.bookings)
         .doc();
     final now = Timestamp.now();
-    final startDt = DateTime(
-      _preferredDate!.year,
-      _preferredDate!.month,
-      _preferredDate!.day,
-      _preferredTime!.hour,
-      _preferredTime!.minute,
-    );
+    final startDt = manilaInstant(_preferredDate!, _preferredTime!);
     if (!startDt.isAfter(DateTime.now())) {
       setState(() => _submitting = false);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -376,6 +430,7 @@ class _CustomerServiceDetailScreenState
       scheduledDate: Timestamp.fromDate(startDt),
       scheduledEndDate: Timestamp.fromDate(endDt),
       status: 'Pending',
+      requestVersion: 2,
       totalFee: _estimatedTotal,
       pricingType: isHourly ? 'hourly' : 'fixed',
       hourlyRate: isHourly ? _hourlyRate : null,
@@ -880,7 +935,6 @@ class BookingRequestPanel extends StatelessWidget {
     required this.location,
     required this.locationPicker,
     required this.notes,
-    required this.fixedPrice,
     required this.preferredDate,
     required this.preferredTime,
     required this.pricingMode,
@@ -889,18 +943,15 @@ class BookingRequestPanel extends StatelessWidget {
     required this.estimatedTotal,
     required this.onPickDate,
     required this.onPickTime,
-    required this.onPricingModeChanged,
-    required this.onDurationChanged,
-    required this.onFixedPriceChanged,
     required this.onSubmit,
     this.submitting = false,
+    this.checkingSchedule = false,
   });
 
   final ServiceListing listing;
   final TextEditingController location;
   final Widget locationPicker;
   final TextEditingController notes;
-  final TextEditingController fixedPrice;
   final DateTime? preferredDate;
   final TimeOfDay? preferredTime;
   final BookingPricingMode pricingMode;
@@ -909,17 +960,15 @@ class BookingRequestPanel extends StatelessWidget {
   final double estimatedTotal;
   final VoidCallback onPickDate;
   final VoidCallback onPickTime;
-  final ValueChanged<BookingPricingMode> onPricingModeChanged;
-  final ValueChanged<double> onDurationChanged;
-  final VoidCallback onFixedPriceChanged;
   final VoidCallback onSubmit;
   final bool submitting;
+  final bool checkingSchedule;
 
   String _durationLabel(double hours) {
     if (hours == hours.roundToDouble()) {
       return '${hours.toInt()} hr${hours == 1 ? '' : 's'}';
     }
-    return '${hours.toStringAsFixed(1)} hrs';
+    return '${hours.toStringAsFixed(2)} hrs';
   }
 
   static String _formatEndTime(
@@ -929,7 +978,7 @@ class BookingRequestPanel extends StatelessWidget {
     double hours,
   ) {
     if (date == null || start == null) return '—';
-    final startDt = DateTime(
+    final startDt = DateTime.utc(
       date.year,
       date.month,
       date.day,
@@ -949,7 +998,7 @@ class BookingRequestPanel extends StatelessWidget {
     double hours,
     String Function(double) durationLabel,
   ) {
-    final startDt = DateTime(
+    final startDt = DateTime.utc(
       date.year,
       date.month,
       date.day,
@@ -960,7 +1009,7 @@ class BookingRequestPanel extends StatelessWidget {
       Duration(milliseconds: (hours * 3600000).round()),
     );
     final dateFmt = DateFormat('MMM d, yyyy');
-    return 'Provider sees: ${dateFmt.format(startDt)} • ${start.format(context)} – ${TimeOfDay.fromDateTime(endDt).format(context)} (${durationLabel(hours)})';
+    return 'Preferred start / estimated end: ${dateFmt.format(startDt)} • ${start.format(context)} – ${TimeOfDay.fromDateTime(endDt).format(context)} (${durationLabel(hours)})';
   }
 
   @override
@@ -987,7 +1036,7 @@ class BookingRequestPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Send a request to confirm availability before booking.',
+            'Choose an available preferred start. Duration and price are estimates until both parties approve.',
             style: GoogleFonts.inter(
               fontSize: 13,
               color: FigmaColors.gray600,
@@ -1006,13 +1055,13 @@ class BookingRequestPanel extends StatelessWidget {
           locationPicker,
           const SizedBox(height: 14),
           OutlinedButton.icon(
-            onPressed: onPickDate,
+            onPressed: submitting || checkingSchedule ? null : onPickDate,
             icon: const Icon(Icons.event_outlined),
             label: Text(dateLabel),
           ),
           const SizedBox(height: 10),
           Text(
-            'Service window',
+            'Preferred schedule (Asia/Manila)',
             style: GoogleFonts.inter(
               fontSize: 13,
               fontWeight: FontWeight.w600,
@@ -1020,26 +1069,9 @@ class BookingRequestPanel extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          DropdownButtonFormField<double>(
-            // ignore: deprecated_member_use
-            value: _bookingDurationOptions.contains(durationHours)
-                ? durationHours
-                : _bookingDurationOptions.first,
-            decoration: InputDecoration(
-              labelText: isHourly ? 'Estimated duration' : 'Expected duration',
-              helperText: isHourly
-                  ? null
-                  : 'Fixed-rate jobs need a clear start and end so providers know the scope.',
-              helperMaxLines: 2,
-              prefixIcon: const Icon(Icons.timelapse_outlined),
-            ),
-            items: [
-              for (final h in _bookingDurationOptions)
-                DropdownMenuItem(value: h, child: Text(_durationLabel(h))),
-            ],
-            onChanged: (v) {
-              if (v != null) onDurationChanged(v);
-            },
+          Text(
+            'Provider listing estimate: ${_durationLabel(durationHours)}. The provider sets the final duration for your approval.',
+            style: GoogleFonts.inter(fontSize: 12, color: FigmaColors.gray600),
           ),
           const SizedBox(height: 10),
           Row(
@@ -1047,7 +1079,7 @@ class BookingRequestPanel extends StatelessWidget {
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: onPickTime,
+                  onPressed: submitting || checkingSchedule ? null : onPickTime,
                   icon: const Icon(Icons.schedule_outlined),
                   label: Text(startTimeLabel),
                 ),
@@ -1075,64 +1107,23 @@ class BookingRequestPanel extends StatelessWidget {
           ],
           const SizedBox(height: 18),
           Text(
-            'How do you want to pay?',
-            style: GoogleFonts.inter(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: FigmaColors.gray800,
-            ),
+            isHourly
+                ? 'Hourly service at PHP ${hourlyRate.toStringAsFixed(2)}/hour'
+                : 'Fixed-rate service',
+            style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 13),
           ),
           const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: _PricingModeChip(
-                  label: 'Hourly rate',
-                  subtitle: '₱${hourlyRate.toStringAsFixed(0)}/hr',
-                  selected: isHourly,
-                  onTap: () => onPricingModeChanged(BookingPricingMode.hourly),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _PricingModeChip(
-                  label: 'Fixed rate',
-                  subtitle: 'You set the price',
-                  selected: !isHourly,
-                  onTap: () => onPricingModeChanged(BookingPricingMode.fixed),
-                ),
-              ),
-            ],
+          const Text(
+            'Your preferred start is not a reservation. The provider reviews the job and proposes duration, schedule and price. Confirm those exact terms before work is booked.',
+            style: TextStyle(fontSize: 12),
           ),
-          const SizedBox(height: 14),
-          if (isHourly) ...[
-            Text(
-              '₱${hourlyRate.toStringAsFixed(0)} × ${_durationLabel(durationHours)} = ₱${estimatedTotal.toStringAsFixed(0)}',
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                color: FigmaColors.gray600,
-              ),
-            ),
-          ] else ...[
-            TextField(
-              controller: fixedPrice,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              onChanged: (_) => onFixedPriceChanged(),
-              decoration: const InputDecoration(
-                labelText: 'Your offered price (₱)',
-                hintText: 'e.g. 500',
-                prefixIcon: Icon(Icons.payments_outlined),
-              ),
-            ),
-          ],
           const SizedBox(height: 14),
           TextField(
             controller: notes,
             maxLines: 4,
+            maxLength: 3000,
             decoration: const InputDecoration(
-              labelText: 'Request notes',
+              labelText: 'Job description',
               hintText: 'Describe the work needed or special instructions',
               alignLabelWithHint: true,
             ),
@@ -1152,7 +1143,7 @@ class BookingRequestPanel extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        'Estimated service fee',
+                        'Listing price estimate',
                         style: GoogleFonts.inter(
                           fontSize: 13,
                           color: FigmaColors.gray600,
@@ -1160,7 +1151,7 @@ class BookingRequestPanel extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      '₱${estimatedTotal.toStringAsFixed(0)}',
+                      '₱${estimatedTotal.toStringAsFixed(2)}',
                       style: GoogleFonts.inter(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
@@ -1172,7 +1163,7 @@ class BookingRequestPanel extends StatelessWidget {
                 if (isHourly) ...[
                   const SizedBox(height: 4),
                   Text(
-                    'Based on ₱${hourlyRate.toStringAsFixed(0)}/hr for ${_durationLabel(durationHours)}',
+                    'Based on ₱${hourlyRate.toStringAsFixed(2)}/hr for ${_durationLabel(durationHours)}',
                     style: GoogleFonts.inter(
                       fontSize: 12,
                       color: FigmaColors.gray500,
@@ -1193,8 +1184,8 @@ class BookingRequestPanel extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           FilledButton.icon(
-            onPressed: submitting ? null : onSubmit,
-            icon: submitting
+            onPressed: submitting || checkingSchedule ? null : onSubmit,
+            icon: submitting || checkingSchedule
                 ? const SizedBox(
                     width: 18,
                     height: 18,
@@ -1204,7 +1195,13 @@ class BookingRequestPanel extends StatelessWidget {
                     ),
                   )
                 : const Icon(Icons.send_outlined),
-            label: Text(submitting ? 'Sending…' : 'Send booking request'),
+            label: Text(
+              submitting
+                  ? 'Sending…'
+                  : checkingSchedule
+                  ? 'Checking availability…'
+                  : 'Send booking request',
+            ),
           ),
         ],
       ),
@@ -1230,7 +1227,7 @@ class _EndTimeDisplay extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'End time',
+            'Estimated end',
             style: GoogleFonts.inter(fontSize: 11, color: FigmaColors.gray500),
           ),
           const SizedBox(height: 4),
@@ -1255,64 +1252,6 @@ class _EndTimeDisplay extends StatelessWidget {
             ],
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _PricingModeChip extends StatelessWidget {
-  const _PricingModeChip({
-    required this.label,
-    required this.subtitle,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final String subtitle;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final rc = context.roleColors;
-    return Material(
-      color: selected ? rc.tint : FigmaColors.white,
-      borderRadius: BorderRadius.circular(10),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: selected ? rc.primary : FigmaColors.gray200,
-              width: selected ? 2 : 1,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: selected ? rc.primary : FigmaColors.gray900,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: GoogleFonts.inter(
-                  fontSize: 11,
-                  color: FigmaColors.gray600,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -1419,12 +1358,14 @@ class _InfoPanel extends StatelessWidget {
                 child: Icon(icon, color: rc.primary, size: 21),
               ),
               const SizedBox(width: 12),
-              Text(
-                title,
-                style: GoogleFonts.inter(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: FigmaColors.gray900,
+              Expanded(
+                child: Text(
+                  title,
+                  style: GoogleFonts.inter(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: FigmaColors.gray900,
+                  ),
                 ),
               ),
             ],

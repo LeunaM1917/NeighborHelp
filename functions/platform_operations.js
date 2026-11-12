@@ -52,6 +52,8 @@ module.exports = function platformOperations({ db, admin, functions, region, mes
   out.inquiryCommand = functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'}).https.onCall(require('./inquiry_commands')({db, functions}));
   out.certificateCommand = functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'}).https.onCall(require('./certificate_commands')({db, functions}));
   out.serviceProposalCommand = functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'}).https.onCall(require('./service_proposal_commands')({db, functions}));
+  out.serviceListingCommand = functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'}).https.onCall((data, context) =>
+    require('./service_listing_commands')({db, functions, bucket: require('firebase-admin/storage').getStorage().bucket()})(data, context));
   out.contractCommand = functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'}).https.onCall(require('./contract_commands')({db,functions}));
   out.providerAvailability = functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK === 'true'}).https.onCall(require('./availability_command')({db,functions}));
   out.providerTimeOff=functions.region(region).runWith({enforceAppCheck:process.env.ENFORCE_APP_CHECK==='true'}).https.onCall(require('./time_off_commands')({db,functions}));
@@ -112,6 +114,7 @@ module.exports = function platformOperations({ db, admin, functions, region, mes
 
   out.onBookingUpdated = functions.region(region).firestore.document('bookings/{bookingId}').onUpdate(async (change, context) => {
     const a = change.before.data(), b = change.after.data();
+    if(b.lastEstimateEvent&&b.lastEstimateEvent!==a.lastEstimateEvent)return null; // Estimate command notifies both parties atomically.
     const statusChanged = a.status !== b.status;
     const requestChanged = JSON.stringify(a.rescheduleRequest || null) !== JSON.stringify(b.rescheduleRequest || null);
     // Expiry notifications are committed with the transition, once per participant.
@@ -119,7 +122,7 @@ module.exports = function platformOperations({ db, admin, functions, region, mes
     if (!statusChanged && !requestChanged && a.scheduledDate?.toMillis?.() === b.scheduledDate?.toMillis?.()) return null;
     const title = statusChanged ? `Booking ${b.status}` : b.rescheduleRequest ? 'Reschedule requested' : 'Reschedule response';
     const message = statusChanged ? b.status === 'Changes Requested' ? `The provider requested changes: ${b.changeRequest}. Discuss the changes and send a new offer.` : `Your booking is now ${b.status.toLowerCase()}.` : b.rescheduleRequest ? 'The customer proposed a new date. Open the booking to respond.' : 'Open your booking to check the agreed schedule.';
-    await Promise.all([b.customerId, b.providerId].filter(uid => uid !== b.updatedBy).map(uid => notify(context.eventId, uid, title, message, change.after.id, 'Booking Update')));
+    await Promise.all([b.customerId, b.providerId].filter(uid => b.requestVersion===2 || uid !== b.updatedBy).map(uid => notify(context.eventId, uid, title, message, change.after.id, 'Booking Update')));
     if (complete(b) && !complete(a)) await Promise.all([b.customerId, b.providerId].map(uid => notify(`${context.eventId}:review`, uid, 'Leave a review', 'Your service is complete. Share feedback about this booking.', change.after.id, 'Review Request')));
     return null;
   });
@@ -153,7 +156,7 @@ module.exports = function platformOperations({ db, admin, functions, region, mes
         action: `${collection}.${!change.before.exists ? 'created' : !change.after.exists ? 'deleted' : 'updated'}`, collection,
         referenceId: context.params.id, changedFields: changed, createdAt: stamp() });
       if (change.after.exists) {
-        const activities=require('./admin_activity_notifications')({collection,before,after,created:change.before.exists===false});
+        const activities=require('./admin_activity_notifications')({collection,id:context.params.id,before,after,created:change.before.exists===false});
         if(activities.length){
           const admins=await db.collection('users').where('role','==','Administrator').get();
           for(const recipient of admins.docs)if(recipient.data().accountStatus==='Active')for(const activity of activities){

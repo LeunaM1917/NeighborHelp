@@ -45,6 +45,10 @@ app.*.map.json
 /android/app/release
 secrets.local.json
 android/secrets.properties
+android/key.properties
+*.keystore
+*.jks
+/web/downloads/
 .cursor/mcp.json
 # Local build and emulator test output
 /android/.kotlin/

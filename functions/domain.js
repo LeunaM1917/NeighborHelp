@@ -28,12 +28,13 @@ function hasMatchingCertificate(profile, category, title, now = new Date()) {
   if (!profile) return false;
   const approved = new Set(profile.approvedCertificationIds || []);
   const policy=require('./marketplace_policy');
-  if(family) return (profile.certificationHistory || []).some(c => policy.eligibleCertificate(c, approved, family, now));
-  return Object.values(profile.approvedServiceProposals || {}).some(grant => grant.status==='Approved'
+  if(family && (profile.certificationHistory || []).some(c => policy.eligibleCertificate(c, approved, family, now))) return true;
+  return [...Object.values(profile.approvedServiceProposals || {}),...Object.values(profile.approvedServiceListings || {})].some(grant => grant.status==='Approved'
     && grant.reviewedBy && grant.reviewedAt && policy.normalize(grant.category)===policy.normalize(category)
     && policy.normalize(grant.serviceTitle)===policy.normalize(title)
-    && (profile.certificationHistory || []).some(c=>policy.normalize(c.name)===policy.normalize(grant.qualificationName)
-      && policy.eligibleTesdaCertificate(c,approved,now)));
+    && (profile.certificationHistory || []).some(c=>(grant.reviewType!=='directListing' || grant.certificationEntryId===c.id)
+      && policy.normalize(c.name)===policy.normalize(grant.qualificationName)
+      && policy.eligibleReviewedCredential(c,approved,now)));
 }
 function distanceKm(a, b) {
   const rad = x => x * Math.PI / 180;

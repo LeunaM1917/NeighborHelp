@@ -1,3 +1,4 @@
+import '../../widgets/contract_records_card.dart';
 import '../../l10n/app_strings.dart';
 import '../../widgets/service_agreement_card.dart';
 import '../../widgets/booking_reschedule_card.dart';
@@ -133,9 +134,13 @@ class _ProviderBookingDetailScreenState
         providerId: widget.appUser.userId,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Completion reported. Waiting for customer confirmation.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Completion reported. Waiting for customer confirmation.',
+          ),
+        ),
+      );
       Navigator.pop(context);
     } catch (_) {
       if (mounted) {
@@ -218,7 +223,10 @@ class _ProviderBookingDetailScreenState
                                     ),
 
                                     const SizedBox(height: 20),
-                                    BookingWorkLocationCard(booking: b, viewerId: widget.appUser.userId),
+                                    BookingWorkLocationCard(
+                                      booking: b,
+                                      viewerId: widget.appUser.userId,
+                                    ),
                                     const SizedBox(height: 20),
                                     AppSection(
                                       title: 'Service details',
@@ -245,8 +253,8 @@ class _ProviderBookingDetailScreenState
                                                 Icons.payments_outlined,
                                                 'Estimated fee',
                                                 b.pricingSummary != null
-                                                    ? '₱${b.totalFee!.toStringAsFixed(0)} (${b.pricingSummary})'
-                                                    : '₱${b.totalFee!.toStringAsFixed(0)}',
+                                                    ? '₱${b.totalFee!.toStringAsFixed(2)} (${b.pricingSummary})'
+                                                    : '₱${b.totalFee!.toStringAsFixed(2)}',
                                               ),
                                             if (b.isCompleted) ...[
                                               const Padding(
@@ -321,6 +329,12 @@ class _ProviderBookingDetailScreenState
                                         booking: b,
                                         asCustomer: false,
                                       ),
+                                      if (b.agreement == null ||
+                                          b.contractId != null)
+                                        ContractRecordsCard(
+                                          booking: b,
+                                          viewerId: widget.appUser.userId,
+                                        ),
                                       BookingCancellationCard(
                                         appUser: widget.appUser,
                                         booking: b,
@@ -354,7 +368,8 @@ class _ProviderBookingDetailScreenState
                                       final wide = c.maxWidth >= 900;
                                       if (wide) {
                                         return Column(
-                                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.stretch,
                                           children: [
                                             Row(
                                               crossAxisAlignment:
@@ -363,7 +378,8 @@ class _ProviderBookingDetailScreenState
                                                 Expanded(
                                                   child: Column(
                                                     crossAxisAlignment:
-                                                        CrossAxisAlignment.stretch,
+                                                        CrossAxisAlignment
+                                                            .stretch,
                                                     children: mainChildren,
                                                   ),
                                                 ),
@@ -372,7 +388,8 @@ class _ProviderBookingDetailScreenState
                                                   width: 340,
                                                   child: Column(
                                                     crossAxisAlignment:
-                                                        CrossAxisAlignment.stretch,
+                                                        CrossAxisAlignment
+                                                            .stretch,
                                                     children: sideChildren,
                                                   ),
                                                 ),
@@ -469,7 +486,7 @@ class _ProviderBookingDetailScreenState
                 ),
               ),
               const SizedBox(width: 12),
-              FigmaStatusChip(status: b.isCompleted ? 'Completed' : b.status),
+              FigmaStatusChip(status: b.isCompleted ? 'Completed' : b.statusLabel),
             ],
           ),
           const SizedBox(height: 16),
@@ -482,7 +499,7 @@ class _ProviderBookingDetailScreenState
               if (b.totalFee != null)
                 _chip(
                   Icons.payments_outlined,
-                  'Estimated fee ₱${b.totalFee!.toStringAsFixed(0)}',
+                  'Estimated fee ₱${b.totalFee!.toStringAsFixed(2)}',
                 ),
             ],
           ),
@@ -537,7 +554,7 @@ class _ProviderBookingDetailScreenState
               const Divider(height: 1, color: FigmaColors.gray100),
               _summaryRow(
                 'Estimated fee',
-                '₱${b.totalFee!.toStringAsFixed(0)}',
+                '₱${b.totalFee!.toStringAsFixed(2)}',
               ),
             ],
             const Divider(height: 1, color: FigmaColors.gray100),
@@ -553,7 +570,9 @@ class _ProviderBookingDetailScreenState
                     ),
                   ),
                   const Spacer(),
-                  FigmaStatusChip(status: b.isCompleted ? 'Completed' : b.status),
+                  FigmaStatusChip(
+                    status: b.isCompleted ? 'Completed' : b.statusLabel,
+                  ),
                 ],
               ),
             ),

@@ -10,6 +10,7 @@ import '../models/app_user.dart';
 import '../models/user_role.dart';
 import 'account_setup_gate.dart';
 import '../services/firestore_service.dart';
+import '../screens/shared/agreement_amendment_screen.dart';
 
 Future<bool> reviewAndRespondToOffer(
   BuildContext context, {
@@ -18,12 +19,32 @@ Future<bool> reviewAndRespondToOffer(
   required String providerId,
   required bool accept,
 }) async {
-  if (accept && !await requireAccountSetup(context, appUser: appUser, role: UserRole.provider, action: 'accept a booking')) return false;
+  if (accept &&
+      !await requireAccountSetup(
+        context,
+        appUser: appUser,
+        role: UserRole.provider,
+        action: 'accept a booking',
+      )) {
+    return false;
+  }
   if (!context.mounted) return false;
   final current = await FirestoreService().getBooking(booking.bookingId);
   if (current == null || !context.mounted) return false;
   if (current.isExpired) {
     throw StateError('This offer expired. Discuss and send a new offer.');
+  }
+  if (accept && current.requiresProviderEstimate) {
+    await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AgreementAmendmentScreen(
+          bookingId: current.bookingId,
+          bookingData: current.toMap(),
+        ),
+      ),
+    );
+    return false;
   }
   if (accept && current.agreement != null) {
     final agreed = await confirmServiceAgreement(

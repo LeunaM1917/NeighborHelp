@@ -34,11 +34,18 @@ class AdminAccountActions extends StatelessWidget {
         ? parts.first[0].toUpperCase()
         : '${parts.first[0]}${parts.last[0]}'.toUpperCase();
     final children = <Widget>[
-      if (onAdminNotificationSelected != null) AdminInboxButton(appUser: appUser, onNavigate: onAdminNotificationSelected!) else IconButton(
-        tooltip: 'Notifications',
-        onPressed: onNotificationsTap,
-        icon: const Icon(Icons.notifications_outlined, size: 22),
-      ),
+      if (onAdminNotificationSelected != null)
+        AdminInboxButton(
+          appUser: appUser,
+          onNavigate: onAdminNotificationSelected!,
+          openBesideAnchor: vertical,
+        )
+      else
+        IconButton(
+          tooltip: 'Notifications',
+          onPressed: onNotificationsTap,
+          icon: const Icon(Icons.notifications_outlined, size: 22),
+        ),
       if (vertical) const SizedBox(height: 8),
       PopupMenuButton<String>(
         tooltip: 'Account menu',

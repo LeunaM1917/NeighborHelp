@@ -78,7 +78,7 @@ test('proposal approval creates a private bound draft; providers cannot publish,
   assert.equal(service.estimatedPrice,0);assert.equal(service.requiredQualification,'Domestic Work NC II');
   await db.doc('serviceProviders/p').update({locationPolicyVersion:1});
   const client=env.authenticatedContext('p').firestore();
-  await assertSucceeds(updateDoc(doc(client,'services',id),{estimatedPrice:700,approvalStatus:'Pending',isActive:false}));
+  await assertFails(updateDoc(doc(client,'services',id),{estimatedPrice:700,approvalStatus:'Pending',isActive:false}));
   await assertFails(updateDoc(doc(client,'services',id),{approvalStatus:'Approved',isActive:true}));
   await assertFails(updateDoc(doc(client,'services',id),{serviceTitle:'House Cleaning',category:'Construction'}));
   await assertFails(setDoc(doc(client,'services','cloned-approval'),{...service,createdAt:service.createdAt.toDate(),updatedAt:service.updatedAt.toDate()}));

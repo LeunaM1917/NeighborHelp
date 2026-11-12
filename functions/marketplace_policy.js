@@ -30,6 +30,14 @@ function eligibleTesdaCertificate(c, approved, now = new Date()) {
 function eligibleCertificate(c, approved, family, now = new Date()) {
   return eligibleTesdaCertificate(c, approved, now) && credentialFamily(c.name) === family;
 }
+function eligibleReviewedCredential(c, approved, now = new Date()) {
+  if (c.credentialType !== 'equivalent') return eligibleTesdaCertificate(c, approved, now);
+  const expiry = new Date(`${c.expirationDate}T23:59:59.999+08:00`);
+  return approved.has(c.id) && c.status === 'Approved' && c.verificationSource === 'Issuing authority verification'
+    && c.issuerVerified === true && Boolean(c.reviewedBy) && Boolean(c.reviewedAt)
+    && Boolean(c.certificationId) && Boolean(c.url) && Boolean(c.name) && Boolean(c.provider)
+    && Number.isFinite(expiry.getTime()) && expiry >= now;
+}
 const validTesdaQualification = name => typeof name === 'string' && name.trim().length <= 140
   && /^.{3,}\sNC\s+[IVX]{1,6}$/i.test(name.trim());
-module.exports = {catalog, qualifications, normalize, serviceFamily, credentialFamily, eligibleCertificate, eligibleTesdaCertificate, validTesdaQualification};
+module.exports = {catalog, qualifications, normalize, serviceFamily, credentialFamily, eligibleCertificate, eligibleTesdaCertificate, eligibleReviewedCredential, validTesdaQualification};

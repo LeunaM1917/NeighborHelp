@@ -128,13 +128,15 @@ class StorageService {
     required Uint8List bytes,
     required String filename,
   }) async {
+    final format = ImageUploadFormat.inspect(bytes);
+    final stem = filename.replaceAll(RegExp(r'\.[^.]+$'), '');
     final ref = _storage
         .ref()
         .child('services')
         .child(providerId)
         .child(serviceId)
-        .child(filename);
-    await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
+        .child('$stem.${format.extension}');
+    await ref.putData(bytes, SettableMetadata(contentType: format.contentType));
     return ref.getDownloadURL();
   }
 

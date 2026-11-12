@@ -68,8 +68,14 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
       final ok = await confirmServiceAgreement(
         context,
         agreement: Map<String, dynamic>.from(data['agreement'] as Map),
-        title: context.tr('Review amendment'),
-        confirmation: 'I voluntarily accept this exact amended agreement.',
+        title: context.tr(
+          widget.booking.agreement == null
+              ? 'Review provider estimate'
+              : 'Review amendment',
+        ),
+        confirmation: widget.booking.agreement == null
+            ? 'I approve the provider’s proposed schedule, estimated duration and total agreed fee.'
+            : 'I voluntarily accept this exact amended agreement.',
       );
       if (ok != true) return;
     }
@@ -278,6 +284,10 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
         );
       }
       return ExpansionTile(
+        key: ValueKey('$collection:${widget.booking.pendingAmendmentId ?? ''}'),
+        initiallyExpanded:
+            collection == 'amendments' &&
+            widget.booking.pendingAmendmentId != null,
         title: Text('$title (${docs.length})'),
         children: [
           for (final doc in docs)
@@ -361,10 +371,12 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
                   data['agreement'] as Map,
                 );
                 return ExpansionTile(
+                  key: ValueKey(doc.id),
+                  initiallyExpanded: data['status'] == 'Proposed',
                   title: Text(
                     collection == 'agreementVersions'
                         ? 'Accepted version ${data['revision']}'
-                        : 'Amendment · ${data['status']}',
+                        : '${widget.booking.agreement == null ? 'Provider estimate' : 'Amendment'} · ${data['status']}',
                   ),
                   subtitle: Text(
                     collection == 'agreementVersions'
@@ -414,7 +426,13 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
                                           () =>
                                               _amend('withdraw', doc.id, data),
                                         ),
-                                  child: Text(context.tr('Withdraw amendment')),
+                                  child: Text(
+                                    context.tr(
+                                      widget.booking.agreement == null
+                                          ? 'Withdraw estimate'
+                                          : 'Withdraw amendment',
+                                    ),
+                                  ),
                                 ),
                               ]
                             : [
@@ -446,12 +464,79 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
   );
   @override
   Widget build(BuildContext context) {
-    if (widget.booking.contractId == null) return const SizedBox.shrink();
+    if (widget.booking.contractId == null && widget.booking.agreement != null) {
+      return const SizedBox.shrink();
+    }
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: _ref.snapshots(),
       builder: (context, snap) {
         final data = snap.data?.data();
         if (data == null) return const SizedBox.shrink();
+        if (data['agreement'] == null) {
+          final booking = widget.booking;
+          final canPropose =
+              widget.viewerId == booking.providerId &&
+              (booking.isPending ||
+                  booking.isAccepted ||
+                  booking.isInProgress ||
+                  booking.statusNormalized == 'changes requested');
+          return WorkflowSurface(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: WorkflowFields(
+                children: [
+                  Text(
+                    'Provider estimate and confirmed terms',
+                    style: WorkflowStyles.sectionTitle,
+                  ),
+                  Text(
+                    data['termsStatus'] as String? ??
+                        (booking.isPending
+                            ? 'Awaiting provider response'
+                            : 'Recorded booking terms'),
+                  ),
+                  Text(
+                    'Preferred start: ${_time(data['preferredScheduledDate'] ?? data['scheduledDate'])}',
+                  ),
+                  Text(
+                    '${booking.hasConfirmedSchedule ? 'Confirmed schedule' : 'Preferred schedule / listing estimate'}: ${booking.scheduledWindowLabel} (Asia/Manila)',
+                  ),
+                  Text(
+                    '${booking.durationHours ?? 0} estimated hours · ${booking.pricingSummary ?? ''}',
+                  ),
+                  Text(
+                    '${booking.hasConfirmedSchedule ? 'Agreed' : 'Estimated'} fee: PHP ${(booking.totalFee ?? 0).toStringAsFixed(2)}',
+                  ),
+                  if (booking.finalFee != null)
+                    Text(
+                      'Final agreed fee: PHP ${booking.finalFee!.toStringAsFixed(2)}',
+                    ),
+                  const Text(
+                    'Changes to duration, price or schedule take effect only after customer approval. Extra time does not automatically increase the agreed fee.',
+                  ),
+                  if (canPropose)
+                    OutlinedButton.icon(
+                      onPressed: _busy || data['pendingAmendmentId'] != null
+                          ? null
+                          : () => Navigator.push<void>(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => AgreementAmendmentScreen(
+                                  bookingId: booking.bookingId,
+                                  bookingData: data,
+                                ),
+                              ),
+                            ),
+                      icon: const Icon(Icons.edit_calendar_outlined),
+                      label: const Text('Set estimate / propose changes'),
+                    ),
+                  _history('amendments', 'Provider proposals and responses'),
+                  _history('agreementVersions', 'Confirmed booking terms'),
+                ],
+              ),
+            ),
+          );
+        }
         final grossReceived =
                 ((data['confirmedPaymentCents'] as num?) ?? 0) / 100,
             refunded = ((data['confirmedRefundCents'] as num?) ?? 0) / 100,

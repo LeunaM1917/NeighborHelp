@@ -1,3 +1,5 @@
+import '../../services/notification_navigation.dart';
+import '../shared/notifications_popover.dart';
 import 'package:flutter/material.dart';
 
 import '../../figma_ui/app_shell_layout.dart';
@@ -30,6 +32,7 @@ class _ProviderShellState extends State<ProviderShell> {
   static const _messagesTabIndex = 3;
 
   void _activateMessagesTab() {
+    NotificationsPopover.hide();
     if (mounted) setState(() => _tab = _messagesTabIndex);
   }
 
@@ -46,6 +49,7 @@ class _ProviderShellState extends State<ProviderShell> {
 
   @override
   void dispose() {
+    NotificationsPopover.hide();
     if (MessagesHub.shellMessagesActivator == _activateMessagesTab) {
       MessagesHub.shellMessagesActivator = null;
     }
@@ -54,6 +58,7 @@ class _ProviderShellState extends State<ProviderShell> {
   }
 
   void _onTabChanged(int index) {
+    NotificationsPopover.hide();
     if (index == _tab) {
       _tabScroll.scrollToTop(index);
       return;
@@ -96,45 +101,48 @@ class _ProviderShellState extends State<ProviderShell> {
 
   @override
   Widget build(BuildContext context) {
-    return RoleThemeScope(
-      palette: RoleTheme.provider,
-      child: Scaffold(
-        body: AppShellLayout(
-        tabs: _tabs,
-        currentIndex: _tab,
-        onTabChanged: _onTabChanged,
-        scrollController: _tabScroll.controllerFor(_tab),
-        appUser: widget.appUser,
-        roleBadge: 'Provider',
-        onSignOut: () => widget.auth.signOut(),
-        messagesTabIndex: _messagesTabIndex,
-        child: IndexedStack(
-          index: _tab,
-          children: [
-            ProviderDashboardTab(
-              appUser: widget.appUser,
-              scrollController: _tabScroll.controllerFor(0),
-              onNavigateToTab: (i) => setState(() => _tab = i),
+    return NotificationNavigationScope(
+      onSelectTab: _onTabChanged,
+      child: RoleThemeScope(
+        palette: RoleTheme.provider,
+        child: Scaffold(
+          body: AppShellLayout(
+            tabs: _tabs,
+            currentIndex: _tab,
+            onTabChanged: _onTabChanged,
+            scrollController: _tabScroll.controllerFor(_tab),
+            appUser: widget.appUser,
+            roleBadge: 'Provider',
+            onSignOut: () => widget.auth.signOut(),
+            messagesTabIndex: _messagesTabIndex,
+            child: IndexedStack(
+              index: _tab,
+              children: [
+                ProviderDashboardTab(
+                  appUser: widget.appUser,
+                  scrollController: _tabScroll.controllerFor(0),
+                  onNavigateToTab: _onTabChanged,
+                ),
+                ProviderServicesTab(
+                  appUser: widget.appUser,
+                  scrollController: _tabScroll.controllerFor(1),
+                  onNavigateToTab: _onTabChanged,
+                ),
+                ProviderJobsTab(
+                  appUser: widget.appUser,
+                  scrollController: _tabScroll.controllerFor(2),
+                  onNavigateToTab: _onTabChanged,
+                ),
+                ProviderMessagesTab(appUser: widget.appUser),
+                ProviderProfileTab(
+                  appUser: widget.appUser,
+                  scrollController: _tabScroll.controllerFor(4),
+                  onNavigateToTab: _onTabChanged,
+                  onSignOut: () => widget.auth.signOut(),
+                ),
+              ],
             ),
-            ProviderServicesTab(
-              appUser: widget.appUser,
-              scrollController: _tabScroll.controllerFor(1),
-              onNavigateToTab: (i) => setState(() => _tab = i),
-            ),
-            ProviderJobsTab(
-              appUser: widget.appUser,
-              scrollController: _tabScroll.controllerFor(2),
-              onNavigateToTab: (i) => setState(() => _tab = i),
-            ),
-            ProviderMessagesTab(appUser: widget.appUser),
-            ProviderProfileTab(
-              appUser: widget.appUser,
-              scrollController: _tabScroll.controllerFor(4),
-              onNavigateToTab: (i) => setState(() => _tab = i),
-              onSignOut: () => widget.auth.signOut(),
-            ),
-          ],
-        ),
+          ),
         ),
       ),
     );

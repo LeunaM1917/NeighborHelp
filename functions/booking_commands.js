@@ -64,6 +64,10 @@ module.exports = function bookingCommands({ db, admin, functions }) {
             serviceLocation: address, location, scheduledDate: timestamp(start),
             scheduledEndDate: timestamp(end), ...details, status: 'Pending',
             notes: String(data.notes || '').trim().slice(0, 3000), createdAt: stamp()};
+          if(details.requestVersion===2) {
+            patch.preferredScheduledDate=timestamp(start);
+            newWindow=patch;
+          }
         } else {
           // Keep existing contract clients/records compatible during the rollout.
           const offer = validateOffer(data, fail);
@@ -96,6 +100,8 @@ module.exports = function bookingCommands({ db, admin, functions }) {
           case 'accept':
           case 'decline': {
             if (!provider || status !== 'pending') fail('failed-precondition', 'Only the provider can respond to a pending booking.');
+            if(action==='accept'&&b.requestVersion===2)fail('failed-precondition','Set the estimated duration and price, then send the terms for customer approval.');
+            if(b.pendingAmendmentId)fail('failed-precondition','Respond to or withdraw the pending estimate first.');
             if(offerExpiry.expired(b))fail('failed-precondition','This offer expired. Ask the customer to discuss and send a new offer.');
             if (action === 'accept' && b.agreement && (data.acceptAgreement !== true || data.agreementHash !== b.agreement.hash)) fail('failed-precondition', 'Review and accept the current contract.');
             if (action === 'accept' && windowFor(b).start <= Date.now()) fail('failed-precondition','This offer has passed its start time. Ask the customer for a new offer.');
@@ -121,15 +127,17 @@ module.exports = function bookingCommands({ db, admin, functions }) {
             patch = { status: 'Cancelled', cancelledAt: stamp(), cancellationReason: String(data.reason).trim().slice(0, 3000), cancelledByRole: customer ? 'customer' : provider ? 'provider' : 'administrator' };
             break;
           case 'start':
+            if(b.pendingAmendmentId)fail('failed-precondition','Resolve the proposed estimate before starting work.');
+            if(b.requestVersion===2&&(!b.confirmedTerms||b.customerAcceptedHash!==b.confirmedTerms.hash||b.providerAcceptedHash!==b.confirmedTerms.hash))fail('failed-precondition','Both parties must approve the same booking terms before work starts.');
             if (!provider || status !== 'accepted' || b.startedAt) fail('failed-precondition', 'Only an accepted booking can be started by its provider.');
             if (b.agreement && b.providerAcceptedHash !== b.agreement.hash) fail('failed-precondition','Both parties must accept the same agreement before work starts.');
-            if(b.agreement) {
+            if(b.agreement||b.requestVersion===2) {
               const profile=(await tx.get(db.doc(`serviceProviders/${providerId}`))).data();
               const service=(await tx.get(db.doc(`services/${b.serviceId}`))).data();
               if(!profile?.isVerified || !service || !hasMatchingCertificate(profile,service.category,service.serviceTitle)) fail('failed-precondition','A current verified matching certificate is required before work starts.');
             }
             if (Date.now() < windowFor(b).start) fail('failed-precondition', 'The scheduled start time has not arrived.');
-            if (b.agreement && Date.now() >= windowFor(b).end) fail('failed-precondition','The agreed work period has ended. Discuss and accept a new schedule before starting.');
+            if ((b.agreement || b.requestVersion===2) && Date.now() >= windowFor(b).end) fail('failed-precondition','The agreed work period has ended. Discuss and accept a new schedule before starting.');
             patch = { status: 'In Progress', startedAt: stamp() };
             break;
           case 'complete':
@@ -141,7 +149,7 @@ module.exports = function bookingCommands({ db, admin, functions }) {
           case 'confirmCompletion':
             if(!customer || status !== 'awaiting confirmation') fail('failed-precondition','Only the customer can confirm reported completion.');
             if(data.confirmDeliverables !== true) fail('failed-precondition','Inspect the agreed deliverables and confirm they are complete.');
-            patch = {status:b.agreement ? 'Milestone Complete' : 'Completed',completedAt:stamp(),completionConfirmedBy:uid};
+            patch = {status:b.agreement ? 'Milestone Complete' : 'Completed',completedAt:stamp(),completionConfirmedBy:uid,...(b.requestVersion===2?{finalFee:b.totalFee}:{})};
             break;
           case 'requestCorrections':
             if(!customer || status !== 'awaiting confirmation') fail('failed-precondition','Only the customer can request corrections to reported work.');
@@ -149,10 +157,12 @@ module.exports = function bookingCommands({ db, admin, functions }) {
             patch = {status:'In Progress',correctionRequest:String(data.reason).trim().slice(0,3000),correctionRequestedAt:stamp(),correctionRounds:FieldValue.increment(1)};
             break;
           case 'requestReschedule': {
+            if(b.pendingAmendmentId)fail('failed-precondition','Resolve the pending estimate before requesting a different date.');
             if (b.agreement) fail('failed-precondition','The schedule is part of the agreement. Cancel this offer with a recorded reason, discuss the change, and send a new offer for both parties to accept.');
             if (!customer || !['pending', 'accepted'].includes(status)) fail('failed-precondition', 'Only the customer can reschedule an unstarted booking.');
             const start = Number(data.scheduledDate), end = start + (windowFor(b).end - windowFor(b).start);
             if (!validWindow(start, end)) fail('invalid-argument', 'Select a future date and time.');
+            if(b.requestVersion===2)newWindow={...b,scheduledDate:timestamp(start),scheduledEndDate:timestamp(end)};
             patch = { rescheduleRequest: { scheduledDate: timestamp(start), scheduledEndDate: timestamp(end), requestedBy: uid, requestedAt: timestamp(Date.now()) } };
             break;
           }
@@ -161,11 +171,12 @@ module.exports = function bookingCommands({ db, admin, functions }) {
             if (!provider || !b.rescheduleRequest || !['pending', 'accepted'].includes(status)) fail('failed-precondition', 'No reschedule request is awaiting your response.');
             patch = { rescheduleRequest: FieldValue.delete() };
             if (action === 'approveReschedule') {
+              if(b.requestVersion===2)fail('failed-precondition','Send a revised provider estimate for customer approval instead of replacing confirmed terms directly.');
               const proposed = b.rescheduleRequest;
               if (!validWindow(proposed.scheduledDate.toMillis(), proposed.scheduledEndDate.toMillis())) fail('failed-precondition', 'The requested time has passed. Ask for a new date.');
               patch.scheduledDate = proposed.scheduledDate;
               patch.scheduledEndDate = proposed.scheduledEndDate;
-              if (active(b)) newWindow = { ...b, ...proposed };
+              newWindow = { ...b, ...proposed };
             }
             break;
           case 'adminStatus': {
@@ -240,6 +251,7 @@ module.exports = function bookingCommands({ db, admin, functions }) {
       if (['Milestone Complete', 'Completed'].includes(patch.status)) tx.update(db.collection('serviceProviders').doc(providerId), { completedBookings: FieldValue.increment(1) });
       tx.create(auditRef, { actorId: uid, actorRole: actor.role, action: `booking.${action}`, collection: 'bookings', referenceId: id,
         beforeStatus: b?.status || '', afterStatus: patch.status || b?.status || '', createdAt: stamp() });
+      if(action==='create'&&patch.requestVersion===2)tx.create(db.collection('notifications').doc(),{userId:uid,title:'Booking request sent',message:'Your preferred start and job description were sent. The provider will set the estimated duration and price for your approval.',relatedBookingId:id,notificationType:'Booking',isRead:false,createdAt:stamp()});
       return { bookingId: id };
     });
   };

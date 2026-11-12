@@ -18,6 +18,7 @@ void main() {
     await Firebase.initializeApp();
   });
   final booking = <String, dynamic>{
+    'agreement': {'hash': 'legacy-preview', 'text': 'Existing agreement'},
     'totalFee': 400,
     'proposedRate': 400,
     'pricingType': 'fixed',

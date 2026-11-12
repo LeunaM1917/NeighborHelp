@@ -81,6 +81,7 @@ class _ProviderAvailabilityScreenState
   late ProviderWeeklyAvailability _schedule;
   bool _loading = true;
   bool _saving = false;
+  String? _loadError;
 
   @override
   void initState() {
@@ -90,14 +91,28 @@ class _ProviderAvailabilityScreenState
   }
 
   Future<void> _load() async {
-    final data = await FirestoreService().providerAvailability(
-      widget.appUser.userId,
-    );
-    if (mounted) {
-      setState(() {
-        _schedule = ProviderWeeklyAvailability.fromFirestore(data);
-        _loading = false;
-      });
+    setState(() {
+      _loading = true;
+      _loadError = null;
+    });
+    try {
+      final data = await FirestoreService().providerAvailability(
+        widget.appUser.userId,
+      );
+      if (mounted) {
+        setState(() {
+          _schedule = ProviderWeeklyAvailability.fromFirestore(data);
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _loadError =
+              'Could not load working hours. Retry before making changes.';
+        });
+      }
     }
   }
 
@@ -113,10 +128,16 @@ class _ProviderAvailabilityScreenState
         context,
       ).showSnackBar(const SnackBar(content: Text('Availability saved')));
       Navigator.pop(context, true);
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not save availability.')),
+          SnackBar(
+            content: Text(
+              error is StateError
+                  ? error.message.toString()
+                  : 'Could not save availability.',
+            ),
+          ),
         );
       }
     } finally {
@@ -232,6 +253,16 @@ class _ProviderAvailabilityScreenState
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
+              : _loadError != null
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(_loadError!),
+                      TextButton(onPressed: _load, child: const Text('Retry')),
+                    ],
+                  ),
+                )
               : AppScrollChrome(
                   child: SingleChildScrollView(
                     padding: EdgeInsets.fromLTRB(
@@ -313,7 +344,9 @@ class _ProviderAvailabilityScreenState
                 ),
               );
               final saveBtn = FilledButton.icon(
-                onPressed: _saving ? null : _save,
+                onPressed: _saving || _loading || _loadError != null
+                    ? null
+                    : _save,
                 icon: _saving
                     ? const SizedBox(
                         width: 18,

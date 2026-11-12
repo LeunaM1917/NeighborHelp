@@ -55,6 +55,7 @@ test('admin inbox receives registration and certificate activity once and never 
   await ops.auditUsers.run(change,event);await ops.auditUsers.run(change,event);
   let inbox=await db.collection('notifications').where('userId','==','admin').get();
   assert.equal(inbox.size,1);assert.equal(inbox.docs[0].data().adminTab,1);
+  assert.equal(inbox.docs[0].data().relatedUserId,'new-member');
   await inbox.docs[0].ref.update({isRead:true});await ops.auditUsers.run(change,event);
   assert.equal((await inbox.docs[0].ref.get()).data().isRead,true);
   const before={userId:'provider',certificationHistory:[]},after={...before,certificationHistory:[{id:'test-cert',name:'Masonry NC II',status:'Pending'}]};
@@ -63,6 +64,9 @@ test('admin inbox receives registration and certificate activity once and never 
     {params:{id:'provider'},eventId:'submitted-certificate-inbox'});
   inbox=await db.collection('notifications').where('userId','==','admin').get();
   assert.equal(inbox.size,2);assert.ok(inbox.docs.some(d=>d.data().adminTab===5));
+  const certificateNotice=inbox.docs.find(d=>d.data().adminTab===5).data();
+  assert.equal(certificateNotice.relatedProviderId,'provider');
+  assert.equal(certificateNotice.relatedCertificationId,'test-cert');
   await db.doc('users/admin/devices/test').set({token:'valid-admin-push-token'});
   await ops.deliverPushNotification.run({data:()=>({...inbox.docs[0].data(),inAppOnly:true})});
   assert.equal(sent.length,0);
@@ -82,6 +86,19 @@ test('booking notifications are idempotent and preserve read receipts on event r
 const reviewChange = (before, after) => ({
   before: {exists: before !== null, data: () => before},
   after: {exists: after !== null, data: () => after},
+});
+
+test('provider-estimated bookings notify both parties on lifecycle changes without duplicate estimate alerts',async()=>{
+  const before={status:'Pending',requestVersion:2,customerId:'customer',providerId:'provider'};
+  const after={...before,status:'Declined',updatedBy:'provider'};
+  const change={before:{data:()=>before},after:{data:()=>after,id:'direct-request'}};
+  await ops.onBookingUpdated.run(change,{eventId:'direct-request-declined'});
+  await ops.onBookingUpdated.run(change,{eventId:'direct-request-declined'});
+  const notifications=await db.collection('notifications').get();
+  assert.equal(notifications.size,2);
+  assert.deepEqual(notifications.docs.map(d=>d.data().userId).sort(),['customer','provider']);
+  await ops.onBookingUpdated.run({before:{data:()=>before},after:{data:()=>({...before,status:'Changes Requested',lastEstimateEvent:'estimate:propose'}),id:'direct-request'}},{eventId:'direct-estimate-proposed'});
+  assert.equal((await db.collection('notifications').get()).size,2);
 });
 
 test('identity status notifications persist for customers/providers and retries preserve read receipts', async () => {

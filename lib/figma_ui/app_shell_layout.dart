@@ -380,7 +380,6 @@ class _ShellUtilityActions extends StatefulWidget {
 
 class _ShellUtilityActionsState extends State<_ShellUtilityActions> {
   final _helpKey = GlobalKey();
-  final _bellKey = GlobalKey();
 
   @override
   void dispose() {
@@ -391,90 +390,45 @@ class _ShellUtilityActionsState extends State<_ShellUtilityActions> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final role = context.roleColors;
-
-    return StreamBuilder(
-      stream: FirestoreService().notificationsForUser(widget.appUser.userId),
-      builder: (context, snap) {
-        final unread = (snap.data ?? []).where((n) => !n.isRead).length;
-        final compact = widget.compact;
-
-        final tight = compact && MobileLayout.isNativeApp(context);
-        final iconConstraints = tight
-            ? const BoxConstraints(minWidth: 32, minHeight: 32)
-            : compact
-            ? const BoxConstraints(minWidth: 36, minHeight: 36)
-            : const BoxConstraints(minWidth: 48, minHeight: 48);
-
-        return Flex(
-          direction: widget.vertical ? Axis.vertical : Axis.horizontal,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              key: _helpKey,
-              tooltip: 'Help',
-              visualDensity: compact
-                  ? VisualDensity.compact
-                  : VisualDensity.standard,
-              constraints: iconConstraints,
-              padding: compact ? EdgeInsets.zero : null,
-              onPressed: () {
-                NotificationsPopover.hide();
-                HelpSupportPopover.toggle(
-                  context,
-                  anchorKey: _helpKey,
-                  roleLabel: widget.roleBadge,
-                  openBesideAnchor: widget.vertical,
-                );
-              },
-              icon: Icon(Icons.help_outline_rounded, size: compact ? 22 : 24),
-              style: IconButton.styleFrom(
-                foregroundColor: FigmaColors.gray700,
-                backgroundColor: FigmaColors.gray100,
-              ),
-            ),
-            SizedBox(width: compact ? 0 : 4),
-            Badge(
-              isLabelVisible: unread > 0,
-              label: Text(unread > 9 ? '9+' : '$unread'),
-              backgroundColor: role.primary,
-              child: IconButton(
-                key: _bellKey,
-                tooltip: 'Notifications',
-                visualDensity: compact
-                    ? VisualDensity.compact
-                    : VisualDensity.standard,
-                constraints: iconConstraints,
-                padding: compact ? EdgeInsets.zero : null,
-                onPressed: () {
-                  HelpSupportPopover.hide();
-                  NotificationsPopover.toggle(
-                    context,
-                    anchorKey: _bellKey,
-                    appUser: widget.appUser,
-                    openBesideAnchor: widget.vertical,
-                  );
-                },
-                icon: Icon(
-                  unread > 0
-                      ? Icons.notifications_rounded
-                      : Icons.notifications_outlined,
-                  size: compact ? 22 : 24,
-                  color: unread > 0
-                      ? role.primary
-                      : colorScheme.onSurfaceVariant,
-                ),
-                style: IconButton.styleFrom(
-                  foregroundColor: FigmaColors.gray700,
-                  backgroundColor: unread > 0 ? role.tint : FigmaColors.gray100,
-                ),
-              ),
-            ),
-            SizedBox(width: compact ? 4 : 8),
-          ],
-        );
-      },
+    final compact = widget.compact;
+    return Flex(
+      direction: widget.vertical ? Axis.vertical : Axis.horizontal,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          key: _helpKey,
+          tooltip: 'Help',
+          visualDensity: compact
+              ? VisualDensity.compact
+              : VisualDensity.standard,
+          constraints: BoxConstraints(
+            minWidth: compact ? 36 : 48,
+            minHeight: compact ? 36 : 48,
+          ),
+          padding: compact ? EdgeInsets.zero : null,
+          onPressed: () {
+            NotificationsPopover.hide();
+            HelpSupportPopover.toggle(
+              context,
+              anchorKey: _helpKey,
+              roleLabel: widget.roleBadge,
+              openBesideAnchor: widget.vertical,
+            );
+          },
+          icon: Icon(Icons.help_outline_rounded, size: compact ? 22 : 24),
+          style: IconButton.styleFrom(
+            foregroundColor: FigmaColors.gray700,
+            backgroundColor: FigmaColors.gray100,
+          ),
+        ),
+        SizedBox(width: compact ? 0 : 4),
+        NotificationBell(
+          appUser: widget.appUser,
+          compact: compact,
+          openBesideAnchor: widget.vertical,
+        ),
+        SizedBox(width: compact ? 4 : 8),
+      ],
     );
   }
 }
@@ -581,13 +535,13 @@ class _UserMenu extends StatelessWidget {
               backgroundColor: role.tint,
               photoUrl: appUser.profilePhotoUrl,
               fallback: Text(
-                      initials,
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: role.primary,
-                      ),
-                    ),
+                initials,
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: role.primary,
+                ),
+              ),
             ),
             if (!compact) ...[
               const SizedBox(width: 8),

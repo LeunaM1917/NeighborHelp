@@ -30,7 +30,7 @@ module.exports = function reviewStatusNotifications({collection, id, before = {}
           ? 'Your identity verification has been approved.'
           : 'Your identity verification has been rejected. Open your profile to review the result and any next steps.';
       add('identity', id, status, `Identity verification ${status.toLowerCase()}`, message,
-        {notificationType: 'Verification'});
+        {notificationType: 'Verification', relatedUserId: userId, sourceCollection: collection});
     }
   }
 

@@ -18,7 +18,6 @@ import '../../../theme/role_theme.dart';
 import '../../../widgets/loading_indicator.dart';
 import '../../../widgets/account_setup_gate.dart';
 import '../../../widgets/stream_snapshot.dart';
-import '../../../widgets/service_proposals_section.dart';
 import '../provider_availability_screen.dart';
 import '../provider_service_form_screen.dart';
 import '../widgets/provider_services_widgets.dart';
@@ -71,7 +70,10 @@ class _ProviderServicesTabState extends State<ProviderServicesTab> {
     setState(() => _reviews = reviews);
   }
 
-  Future<void> _openForm(BuildContext context, {ServiceListing? existing}) async {
+  Future<void> _openForm(
+    BuildContext context, {
+    ServiceListing? existing,
+  }) async {
     final saved = await ProviderServiceFormScreen.open(
       context,
       appUser: widget.appUser,
@@ -79,7 +81,9 @@ class _ProviderServicesTabState extends State<ProviderServicesTab> {
     );
     if (saved == true && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(existing == null ? 'Service saved' : 'Service updated')),
+        SnackBar(
+          content: Text(existing == null ? 'Service saved' : 'Service updated'),
+        ),
       );
     }
   }
@@ -92,22 +96,38 @@ class _ProviderServicesTabState extends State<ProviderServicesTab> {
     return ((width + gap) / (minCardWidth + gap)).floor().clamp(1, 4);
   }
 
-  Future<void> _toggleActive(BuildContext context, ServiceListing service) async {
+  Future<void> _toggleActive(
+    BuildContext context,
+    ServiceListing service,
+  ) async {
     if (!service.approvalStatus.isApproved) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Listing must be approved before you can pause or resume visibility.'),
+          content: Text(
+            'Listing must be approved before you can pause or resume visibility.',
+          ),
         ),
       );
       return;
     }
     try {
-      if (!service.isActive && !await requireAccountSetup(context, appUser: widget.appUser, action: 'list a service')) return;
+      if (!service.isActive &&
+          !await requireAccountSetup(
+            context,
+            appUser: widget.appUser,
+            action: 'list a service',
+          )) {
+        return;
+      }
       if (!context.mounted) return;
       await _firestore.setServiceActive(service.serviceId, !service.isActive);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(service.isActive ? 'Service paused' : 'Service activated')),
+          SnackBar(
+            content: Text(
+              service.isActive ? 'Service paused' : 'Service activated',
+            ),
+          ),
         );
       }
     } catch (_) {
@@ -137,7 +157,9 @@ class _ProviderServicesTabState extends State<ProviderServicesTab> {
                 padding: const EdgeInsets.only(top: 28, bottom: 48),
                 child: StreamBuilder<List<ServiceListing>>(
                   initialData: const [],
-                  stream: _firestore.servicesForProviderUser(widget.appUser.userId),
+                  stream: _firestore.servicesForProviderUser(
+                    widget.appUser.userId,
+                  ),
                   builder: (context, serviceSnap) {
                     if (isStreamWaiting(serviceSnap)) {
                       return const Padding(
@@ -148,16 +170,24 @@ class _ProviderServicesTabState extends State<ProviderServicesTab> {
 
                     return StreamBuilder<List<Booking>>(
                       initialData: const [],
-                      stream: _firestore.bookingsForProviderUser(widget.appUser.userId),
+                      stream: _firestore.bookingsForProviderUser(
+                        widget.appUser.userId,
+                      ),
                       builder: (context, bookingSnap) {
                         final allServices = serviceSnap.data ?? [];
                         final bookings = bookingSnap.data ?? [];
                         final bookingCounts = bookingCountByService(bookings);
                         final ratings = ratingsByService(_reviews);
 
-                        final active = allServices.where((s) => s.isMarketplaceVisible).length;
+                        final active = allServices
+                            .where((s) => s.isMarketplaceVisible)
+                            .length;
                         final paused = allServices
-                            .where((s) => s.approvalStatus == ServiceApprovalStatus.pending)
+                            .where(
+                              (s) =>
+                                  s.approvalStatus ==
+                                  ServiceApprovalStatus.pending,
+                            )
                             .length;
                         final filtered = filterAndSortServices(
                           services: allServices,
@@ -172,25 +202,33 @@ class _ProviderServicesTabState extends State<ProviderServicesTab> {
                           final d = b.createdAt.toDate();
                           return d.year == now.year && d.month == now.month;
                         }).length;
-                        final inquiries = bookings
-                            .where((b) {
-                              final s = b.status.toLowerCase();
-                              return s == 'pending' || s == 'accepted' || s == 'in progress' || s == 'awaiting confirmation';
-                            })
+                        final inquiries = bookings.where((b) {
+                          final s = b.status.toLowerCase();
+                          return s == 'pending' ||
+                              s == 'accepted' ||
+                              s == 'in progress' ||
+                              s == 'awaiting confirmation';
+                        }).length;
+                        final completed = bookings
+                            .where((b) => b.isCompleted)
                             .length;
-                        final completed = bookings.where((b) => b.isCompleted).length;
-                        final views = (thisMonth * 8 + allServices.length * 12).clamp(0, 9999);
-                        final conversion = inquiries > 0 ? (completed / inquiries) * 100 : 0.0;
+                        final views = (thisMonth * 8 + allServices.length * 12)
+                            .clamp(0, 9999);
+                        final conversion = inquiries > 0
+                            ? (completed / inquiries) * 100
+                            : 0.0;
                         final trend = performanceTrendLabel();
 
                         final serviceCategories = [
-                          ...{for (final s in allServices) if (s.category.isNotEmpty) s.category},
+                          ...{
+                            for (final s in allServices)
+                              if (s.category.isNotEmpty) s.category,
+                          },
                         ]..sort();
 
                         final main = Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            ServiceProposalsSection(appUser: widget.appUser),
                             ProviderServicesStatsRow(
                               total: allServices.length,
                               active: active,
@@ -203,9 +241,13 @@ class _ProviderServicesTabState extends State<ProviderServicesTab> {
                               category: _category,
                               status: _status,
                               sort: _sort,
-                              categories: serviceCategories.isNotEmpty ? serviceCategories : categories,
-                              onCategoryChanged: (v) => setState(() => _category = v),
-                              onStatusChanged: (v) => setState(() => _status = v),
+                              categories: serviceCategories.isNotEmpty
+                                  ? serviceCategories
+                                  : categories,
+                              onCategoryChanged: (v) =>
+                                  setState(() => _category = v),
+                              onStatusChanged: (v) =>
+                                  setState(() => _status = v),
                               onSortChanged: (v) => setState(() => _sort = v),
                               onAddService: () => _openForm(context),
                             ),
@@ -213,7 +255,9 @@ class _ProviderServicesTabState extends State<ProviderServicesTab> {
                             if (filtered.isEmpty)
                               FigmaEmptyState(
                                 icon: Icons.home_repair_service_outlined,
-                                title: allServices.isEmpty ? 'No services listed' : 'No matching services',
+                                title: allServices.isEmpty
+                                    ? 'No services listed'
+                                    : 'No matching services',
                                 message: allServices.isEmpty
                                     ? 'Add your first service so customers can find and book you.'
                                     : 'Try changing your search or filters.',
@@ -222,7 +266,9 @@ class _ProviderServicesTabState extends State<ProviderServicesTab> {
                                   style: FilledButton.styleFrom(
                                     backgroundColor: rc.primary,
                                     foregroundColor: rc.onPrimary,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
                                   ),
                                   icon: const Icon(Icons.add),
                                   label: const Text('Add your service'),
@@ -231,7 +277,9 @@ class _ProviderServicesTabState extends State<ProviderServicesTab> {
                             else
                               LayoutBuilder(
                                 builder: (context, c) {
-                                  final cols = _serviceGridColumnCount(c.maxWidth);
+                                  final cols = _serviceGridColumnCount(
+                                    c.maxWidth,
+                                  );
                                   final gap = 16.0;
                                   final w = cols == 1
                                       ? c.maxWidth
@@ -245,13 +293,22 @@ class _ProviderServicesTabState extends State<ProviderServicesTab> {
                                           width: w,
                                           child: ProviderServiceGridCard(
                                             listing: s,
-                                            bookingCount: bookingCounts[s.serviceId] ?? 0,
-                                            rating: ratings[s.serviceId]?.avg ?? 0,
-                                            reviewCount: ratings[s.serviceId]?.count ?? 0,
-                                            onEdit: () => _openForm(context, existing: s),
+                                            bookingCount:
+                                                bookingCounts[s.serviceId] ?? 0,
+                                            rating:
+                                                ratings[s.serviceId]?.avg ?? 0,
+                                            reviewCount:
+                                                ratings[s.serviceId]?.count ??
+                                                0,
+                                            onEdit: () =>
+                                                _openForm(context, existing: s),
                                             onMenu: (action) {
-                                              if (action == 'edit') _openForm(context, existing: s);
-                                              if (action == 'toggle') _toggleActive(context, s);
+                                              if (action == 'edit') {
+                                                _openForm(context, existing: s);
+                                              }
+                                              if (action == 'toggle') {
+                                                _toggleActive(context, s);
+                                              }
                                             },
                                           ),
                                         ),
@@ -263,7 +320,10 @@ class _ProviderServicesTabState extends State<ProviderServicesTab> {
                             Center(
                               child: Text(
                                 'Showing ${filtered.length} of ${allServices.length} services',
-                                style: GoogleFonts.inter(fontSize: 14, color: FigmaColors.gray600),
+                                style: GoogleFonts.inter(
+                                  fontSize: 14,
+                                  color: FigmaColors.gray600,
+                                ),
                               ),
                             ),
                           ],
@@ -277,10 +337,15 @@ class _ProviderServicesTabState extends State<ProviderServicesTab> {
                                 onAddService: () => _openForm(context),
                                 onManageServices: () {},
                                 onUpdateAvailability: () {
-                                  ProviderAvailabilityScreen.open(context, appUser: widget.appUser);
+                                  ProviderAvailabilityScreen.open(
+                                    context,
+                                    appUser: widget.appUser,
+                                  );
                                 },
-                                onViewBookings: () => widget.onNavigateToTab?.call(2),
-                                onServiceSettings: () => widget.onNavigateToTab?.call(4),
+                                onViewBookings: () =>
+                                    widget.onNavigateToTab?.call(2),
+                                onServiceSettings: () =>
+                                    widget.onNavigateToTab?.call(4),
                               ),
                               const SizedBox(height: 20),
                             ],
@@ -297,7 +362,10 @@ class _ProviderServicesTabState extends State<ProviderServicesTab> {
                                 if (filtered.isNotEmpty) {
                                   _openForm(context, existing: filtered.first);
                                 } else if (allServices.isNotEmpty) {
-                                  _openForm(context, existing: allServices.first);
+                                  _openForm(
+                                    context,
+                                    existing: allServices.first,
+                                  );
                                 } else {
                                   _openForm(context);
                                 }
@@ -319,7 +387,11 @@ class _ProviderServicesTabState extends State<ProviderServicesTab> {
                               );
                             }
                             return Column(
-                              children: [main, const SizedBox(height: 28), side],
+                              children: [
+                                main,
+                                const SizedBox(height: 28),
+                                side,
+                              ],
                             );
                           },
                         );

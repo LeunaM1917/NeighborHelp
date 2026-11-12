@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
 import '../models/booking.dart';
 import '../services/firestore_service.dart';
+import '../services/booking_availability.dart';
+import '../screens/shared/agreement_amendment_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class BookingRescheduleCard extends StatefulWidget {
   const BookingRescheduleCard({
     super.key,
     required this.booking,
     required this.asCustomer,
+    this.loadAvailability,
   });
   final Booking booking;
   final bool asCustomer;
+  final Future<BookingAvailability> Function()? loadAvailability;
   @override
   State<BookingRescheduleCard> createState() => _BookingRescheduleCardState();
 }
@@ -38,23 +43,41 @@ class _BookingRescheduleCardState extends State<BookingRescheduleCard> {
   }
 
   Future<void> _request() async {
-    final now = DateTime.now();
-    final day = await showDatePicker(
-      context: context,
-      firstDate: now,
-      lastDate: now.add(const Duration(days: 365)),
-      initialDate: now.add(const Duration(days: 1)),
-    );
-    if (day == null || !mounted) return;
-    final time = await showTimePicker(
-      context: context,
-      initialTime: const TimeOfDay(hour: 9, minute: 0),
-    );
-    if (time == null || !mounted) return;
-    final when = DateTime(day.year, day.month, day.day, time.hour, time.minute);
-    await _run(
-      () =>
-          FirestoreService().requestReschedule(widget.booking.bookingId, when),
+    await _run(() async {
+      final availability =
+          await (widget.loadAvailability?.call() ??
+              BookingAvailability.load(
+                providerId: widget.booking.providerId,
+                serviceId: widget.booking.serviceId,
+                excludeBookingId: widget.booking.bookingId,
+              ));
+      if (!mounted) return;
+      final day = await chooseAvailableDay(context, availability);
+      if (day == null || !mounted) return;
+      final start = await chooseAvailableStart(context, availability, day);
+      if (start != null) {
+        await FirestoreService().requestReschedule(
+          widget.booking.bookingId,
+          start,
+        );
+      }
+    });
+  }
+
+  Future<void> _proposeEstimate() async {
+    final b = widget.booking;
+    await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AgreementAmendmentScreen(
+          bookingId: b.bookingId,
+          bookingData: {
+            ...b.toMap(),
+            if (b.rescheduleDate != null)
+              'scheduledDate': Timestamp.fromDate(b.rescheduleDate!),
+          },
+        ),
+      ),
     );
   }
 
@@ -87,7 +110,9 @@ class _BookingRescheduleCardState extends State<BookingRescheduleCard> {
               const SizedBox(height: 8),
               Text(
                 b.rescheduleDate == null
-                    ? 'A new schedule takes effect after the provider accepts it.'
+                    ? b.requestVersion == 2
+                          ? 'Ask for a preferred start. The provider sends revised terms for customer approval before the confirmed schedule changes.'
+                          : 'A new schedule takes effect after the provider accepts it.'
                     : 'Requested: ${MaterialLocalizations.of(context).formatMediumDate(b.rescheduleDate!)} ${TimeOfDay.fromDateTime(b.rescheduleDate!).format(context)}. The original schedule remains in place until accepted.',
               ),
               const SizedBox(height: 8),
@@ -108,12 +133,18 @@ class _BookingRescheduleCardState extends State<BookingRescheduleCard> {
                       onPressed: _busy
                           ? null
                           : () => _run(
-                              () => FirestoreService().respondToReschedule(
-                                b.bookingId,
-                                approve: true,
-                              ),
+                              () => b.requestVersion == 2
+                                  ? _proposeEstimate()
+                                  : FirestoreService().respondToReschedule(
+                                      b.bookingId,
+                                      approve: true,
+                                    ),
                             ),
-                      child: const Text('Accept new date'),
+                      child: Text(
+                        b.requestVersion == 2
+                            ? 'Set revised estimate'
+                            : 'Accept new date',
+                      ),
                     ),
                     OutlinedButton(
                       onPressed: _busy

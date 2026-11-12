@@ -33,15 +33,23 @@ class BrandLockup extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 10),
-            Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(text: 'Neighbor', style: titleStyle),
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text.rich(
                   TextSpan(
-                    text: 'Help',
-                    style: titleStyle.copyWith(color: colorScheme.secondary),
+                    children: [
+                      TextSpan(text: 'Neighbor', style: titleStyle),
+                      TextSpan(
+                        text: 'Help',
+                        style: titleStyle.copyWith(
+                          color: colorScheme.secondary,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ],
@@ -97,12 +105,7 @@ class MarketplacePanel extends StatelessWidget {
 
 /// Full-screen backdrop for auth flows.
 class AuthScaffold extends StatelessWidget {
-  const AuthScaffold({
-    super.key,
-    required this.body,
-    this.leading,
-    this.title,
-  });
+  const AuthScaffold({super.key, required this.body, this.leading, this.title});
 
   final Widget body;
   final Widget? leading;
@@ -132,7 +135,10 @@ class AuthScaffold extends StatelessWidget {
             final maxW = c.maxWidth >= 900 ? 440.0 : c.maxWidth;
             return Center(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 24,
+                ),
                 child: ConstrainedBox(
                   constraints: BoxConstraints(maxWidth: maxW),
                   child: body,

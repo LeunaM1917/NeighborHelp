@@ -20,7 +20,7 @@ void main() {
   });
   for (final width in [390.0, 1280.0]) {
     testWidgets(
-      'direct booking form supports hourly and fixed requests at $width',
+      'booking requests keep duration and price under provider control at $width',
       (tester) async {
         tester.view.physicalSize = Size(width, 1300);
         tester.view.devicePixelRatio = 1;
@@ -30,14 +30,11 @@ void main() {
           text: 'New Visayas, Panabo City',
         );
         final notes = TextEditingController();
-        final fixed = TextEditingController(text: '500');
         addTearDown(location.dispose);
         addTearDown(notes.dispose);
-        addTearDown(fixed.dispose);
-        var mode = BookingPricingMode.hourly;
-        var hours = 2.0;
+        const mode = BookingPricingMode.hourly;
+        const hours = 2.0;
         var sent = 0;
-        var fixedChanged = 0;
         await tester.pumpWidget(
           MaterialApp(
             home: Scaffold(
@@ -52,7 +49,6 @@ void main() {
                       location: location,
                       locationPicker: const Text('Service location confirmed'),
                       notes: notes,
-                      fixedPrice: fixed,
                       preferredDate: DateTime(2026, 12, 1),
                       preferredTime: const TimeOfDay(hour: 9, minute: 0),
                       pricingMode: mode,
@@ -60,13 +56,9 @@ void main() {
                       hourlyRate: 100,
                       estimatedTotal: mode == BookingPricingMode.hourly
                           ? 100 * hours
-                          : double.parse(fixed.text),
+                          : 500,
                       onPickDate: () {},
                       onPickTime: () {},
-                      onPricingModeChanged: (value) =>
-                          update(() => mode = value),
-                      onDurationChanged: (value) => update(() => hours = value),
-                      onFixedPriceChanged: () => fixedChanged++,
                       onSubmit: () => sent++,
                     ),
                   ),
@@ -86,19 +78,13 @@ void main() {
         await tester.ensureVisible(send);
         await tester.tap(send);
         expect(sent, 1);
-        await tester.ensureVisible(find.text('Fixed rate'));
-        await tester.tap(find.text('Fixed rate'));
-        await tester.pumpAndSettle();
-        expect(mode, BookingPricingMode.fixed);
-        final price = find.byWidgetPredicate(
-          (w) => w is TextField && w.controller == fixed,
+        expect(find.byType(DropdownButtonFormField<double>), findsNothing);
+        expect(
+          find.textContaining('provider sets the final duration'),
+          findsOneWidget,
         );
-        await tester.ensureVisible(price);
-        await tester.enterText(price, '750.25');
-        expect(fixedChanged, 1);
-        await tester.ensureVisible(send);
-        await tester.tap(send);
-        expect(sent, 2);
+        expect(find.text('Your offered price'), findsNothing);
+        expect(find.byType(TextField), findsNWidgets(2));
         expect(tester.takeException(), isNull);
       },
     );

@@ -38,6 +38,8 @@ class ProviderCertificationEntry {
     this.rejectionReason = '',
     this.verificationSource = '',
     this.verificationNotes = '',
+    this.credentialType = 'tesda',
+    this.issuerVerified = false,
   });
 
   static const maxDescriptionLength = 4000;
@@ -60,6 +62,8 @@ class ProviderCertificationEntry {
   final String rejectionReason;
   final String verificationSource;
   final String verificationNotes;
+  final String credentialType;
+  final bool issuerVerified;
 
   bool get isEmpty => name.trim().isEmpty;
   bool get isPending => status == CertificationVerificationStatus.pending;
@@ -107,6 +111,8 @@ class ProviderCertificationEntry {
           : (rejectionReason ?? this.rejectionReason),
       verificationSource: clearReview ? '' : verificationSource,
       verificationNotes: clearReview ? '' : verificationNotes,
+      credentialType: credentialType,
+      issuerVerified: !clearReview && issuerVerified,
     );
   }
 
@@ -131,6 +137,8 @@ class ProviderCertificationEntry {
       rejectionReason: data['rejectionReason'] as String? ?? '',
       verificationSource: data['verificationSource'] as String? ?? '',
       verificationNotes: data['verificationNotes'] as String? ?? '',
+      credentialType: data['credentialType'] as String? ?? 'tesda',
+      issuerVerified: data['issuerVerified'] == true,
     );
   }
 
@@ -138,6 +146,8 @@ class ProviderCertificationEntry {
     return {
       if (id.isNotEmpty) 'id': id,
       'name': name.trim(),
+      'credentialType': credentialType,
+      if (issuerVerified) 'issuerVerified': true,
       if (provider.isNotEmpty) 'provider': provider.trim(),
       if (issueDate.isNotEmpty) 'issueDate': issueDate,
       if (expirationDate.isNotEmpty) 'expirationDate': expirationDate,

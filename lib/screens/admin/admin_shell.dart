@@ -1,3 +1,5 @@
+import '../../services/notification_navigation.dart';
+import '../shared/notifications_popover.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -67,11 +69,13 @@ class _AdminShellState extends State<AdminShell> {
 
   @override
   void dispose() {
+    NotificationsPopover.hide();
     _tabScroll.dispose();
     super.dispose();
   }
 
   void _selectTab(int index) {
+    NotificationsPopover.hide();
     if (index == _tab) {
       _tabScroll.scrollToTop(index);
       return;
@@ -94,99 +98,130 @@ class _AdminShellState extends State<AdminShell> {
         MediaQuery.sizeOf(context).width >= 900;
     final auth = widget.auth;
 
-    return RoleThemeScope(
-      palette: RoleTheme.admin,
-      child: Scaffold(
-        body: WorkspacePageFrame(
-          wide: wide,
-          scrollController: _tabScroll.controllerFor(_tab),
-          rail: AdminNavigation(currentIndex: _tab, onSelect: _selectTab,
-            bottomActions: AdminAccountActions(appUser: widget.appUser, vertical: true,
-              onAdminNotificationSelected: auth.isLocalAdminOnly ? null : _selectTab,
-              onNotificationsTap: () => _selectTab(10), onSignOut: () => auth.signOut()),
-          ),
-          header: _AdminTopBar(
-            title: _tabs[_tab].label,
-            appUser: widget.appUser,
-            firestoreConnected: !auth.isLocalAdminOnly,
-            showAccountActions: !wide,
-            onAdminNotificationSelected: auth.isLocalAdminOnly ? null : _selectTab,
-            onSignOut: () => auth.signOut(),
-            onNotificationsTap: () => _selectTab(10),
-          ),
-          footer: const AppFooter(roleLabel: 'Admin'),
-          bottomNavigation: AdminNavigation(
-            currentIndex: _tab,
-            onSelect: _selectTab,
-            compact: true,
-          ),
-          child: AppScrollChrome(
-            showBackToTop: true,
-            footerClearance: 0,
+    return NotificationNavigationScope(
+      onSelectTab: _selectTab,
+      child: RoleThemeScope(
+        palette: RoleTheme.admin,
+        child: Scaffold(
+          body: WorkspacePageFrame(
+            wide: wide,
             scrollController: _tabScroll.controllerFor(_tab),
-            child: ClipRect(
-              child: IndexedStack(
-                index: _tab,
-                sizing: StackFit.expand,
-                children: [
-                  _adminTabScope(
-                    0,
-                    AdminOverviewPage(auth: auth, onNavigateToTab: _selectTab),
-                  ),
-                  _adminTabScope(
-                    1,
-                    AdminCustomersPage(auth: auth, onNavigateToTab: _selectTab),
-                  ),
-                  _adminTabScope(
-                    2,
-                    AdminProvidersPage(auth: auth, onNavigateToTab: _selectTab),
-                  ),
-                  _adminTabScope(
-                    3,
-                    AdminUserReportsPage(
-                      auth: auth,
-                      onNavigateToTab: _selectTab,
+            rail: AdminNavigation(
+              currentIndex: _tab,
+              onSelect: _selectTab,
+              bottomActions: AdminAccountActions(
+                appUser: widget.appUser,
+                vertical: true,
+                onAdminNotificationSelected: auth.isLocalAdminOnly
+                    ? null
+                    : _selectTab,
+                onNotificationsTap: () => _selectTab(10),
+                onSignOut: () => auth.signOut(),
+              ),
+            ),
+            header: _AdminTopBar(
+              title: _tabs[_tab].label,
+              appUser: widget.appUser,
+              firestoreConnected: !auth.isLocalAdminOnly,
+              showAccountActions: !wide,
+              onAdminNotificationSelected: auth.isLocalAdminOnly
+                  ? null
+                  : _selectTab,
+              onSignOut: () => auth.signOut(),
+              onNotificationsTap: () => _selectTab(10),
+            ),
+            footer: const AppFooter(roleLabel: 'Admin'),
+            bottomNavigation: AdminNavigation(
+              currentIndex: _tab,
+              onSelect: _selectTab,
+              compact: true,
+            ),
+            child: AppScrollChrome(
+              showBackToTop: true,
+              footerClearance: 0,
+              scrollController: _tabScroll.controllerFor(_tab),
+              child: ClipRect(
+                child: IndexedStack(
+                  index: _tab,
+                  sizing: StackFit.expand,
+                  children: [
+                    _adminTabScope(
+                      0,
+                      AdminOverviewPage(
+                        auth: auth,
+                        onNavigateToTab: _selectTab,
+                      ),
                     ),
-                  ),
-                  _adminTabScope(
-                    4,
-                    AdminVerificationPage(
-                      auth: auth,
-                      reviewerUserId: widget.appUser.userId,
+                    _adminTabScope(
+                      1,
+                      AdminCustomersPage(
+                        auth: auth,
+                        onNavigateToTab: _selectTab,
+                      ),
                     ),
-                  ),
-                  _adminTabScope(5, const AdminCertificateReviewPage()),
-                  _adminTabScope(
-                    6,
-                    AdminServicesPage(auth: auth, onNavigateToTab: _selectTab),
-                  ),
-                  _adminTabScope(
-                    7,
-                    AdminBookingsPage(auth: auth, onNavigateToTab: _selectTab),
-                  ),
-                  _adminTabScope(
-                    8,
-                    AdminReportsPage(auth: auth, onNavigateToTab: _selectTab),
-                  ),
-                  _adminTabScope(
-                    9,
-                    AdminActivityPage(auth: auth, onNavigateToTab: _selectTab),
-                  ),
-                  _adminTabScope(10, AdminNotificationsPage(auth: auth)),
-                  _adminTabScope(
-                    11,
-                    AdminRecommendationRankingPage(auth: auth),
-                  ),
-                  _adminTabScope(
-                    12,
-                    AdminSettingsPage(
-                      auth: auth,
-                      appUser: widget.appUser,
-                      onNavigateToTab: _selectTab,
+                    _adminTabScope(
+                      2,
+                      AdminProvidersPage(
+                        auth: auth,
+                        onNavigateToTab: _selectTab,
+                      ),
                     ),
-                  ),
-                  _adminTabScope(13,const AdminWorkCasesPage()),
-                ],
+                    _adminTabScope(
+                      3,
+                      AdminUserReportsPage(
+                        auth: auth,
+                        onNavigateToTab: _selectTab,
+                      ),
+                    ),
+                    _adminTabScope(
+                      4,
+                      AdminVerificationPage(
+                        auth: auth,
+                        reviewerUserId: widget.appUser.userId,
+                      ),
+                    ),
+                    _adminTabScope(5, const AdminCertificateReviewPage()),
+                    _adminTabScope(
+                      6,
+                      AdminServicesPage(
+                        auth: auth,
+                        onNavigateToTab: _selectTab,
+                      ),
+                    ),
+                    _adminTabScope(
+                      7,
+                      AdminBookingsPage(
+                        auth: auth,
+                        onNavigateToTab: _selectTab,
+                      ),
+                    ),
+                    _adminTabScope(
+                      8,
+                      AdminReportsPage(auth: auth, onNavigateToTab: _selectTab),
+                    ),
+                    _adminTabScope(
+                      9,
+                      AdminActivityPage(
+                        auth: auth,
+                        onNavigateToTab: _selectTab,
+                      ),
+                    ),
+                    _adminTabScope(10, AdminNotificationsPage(auth: auth)),
+                    _adminTabScope(
+                      11,
+                      AdminRecommendationRankingPage(auth: auth),
+                    ),
+                    _adminTabScope(
+                      12,
+                      AdminSettingsPage(
+                        auth: auth,
+                        appUser: widget.appUser,
+                        onNavigateToTab: _selectTab,
+                      ),
+                    ),
+                    _adminTabScope(13, const AdminWorkCasesPage()),
+                  ],
+                ),
               ),
             ),
           ),
@@ -253,8 +288,12 @@ class _AdminTopBar extends StatelessWidget {
               ),
             ),
           if (showAccountActions)
-            AdminAccountActions(appUser: appUser, onNotificationsTap: onNotificationsTap, onSignOut: onSignOut,
-              onAdminNotificationSelected: onAdminNotificationSelected),
+            AdminAccountActions(
+              appUser: appUser,
+              onNotificationsTap: onNotificationsTap,
+              onSignOut: onSignOut,
+              onAdminNotificationSelected: onAdminNotificationSelected,
+            ),
         ],
       ),
     ),

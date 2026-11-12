@@ -21,6 +21,29 @@ bool isCurrentTesdaCertificate(
       !expires.isBefore(now ?? DateTime.now());
 }
 
+bool isCurrentReviewedCredential(
+  ServiceProviderProfile profile,
+  ProviderCertificationEntry c, {
+  DateTime? now,
+}) {
+  if (c.credentialType != 'equivalent') {
+    return isCurrentTesdaCertificate(profile, c, now: now);
+  }
+  final expires = DateTime.tryParse('${c.expirationDate}T23:59:59.999+08:00');
+  return profile.approvedCertificationIds.contains(c.id) &&
+      c.isApproved &&
+      c.verificationSource == 'Issuing authority verification' &&
+      c.issuerVerified &&
+      c.reviewedBy.isNotEmpty &&
+      c.reviewedAt != null &&
+      c.url.isNotEmpty &&
+      c.certificationId.isNotEmpty &&
+      c.name.isNotEmpty &&
+      c.provider.isNotEmpty &&
+      expires != null &&
+      !expires.isBefore(now ?? DateTime.now());
+}
+
 enum ServiceCertificateStatus {
   approved,
   missing,
@@ -46,17 +69,21 @@ ServiceCertificateStatus serviceCertificateStatus(
     return ServiceCertificateStatus.approved;
   }
   final family = approvedServiceFamily(category, serviceTitle);
-  final customNames = profile.approvedServiceProposals.values
-      .whereType<Map>()
-      .where(
-        (g) =>
-            g['status'] == 'Approved' &&
-            normalizeCredential('${g['category']}') ==
-                normalizeCredential(category) &&
-            normalizeCredential('${g['serviceTitle']}') ==
-                normalizeCredential(serviceTitle),
-      )
-      .map((g) => '${g['qualificationName']}');
+  final customNames =
+      [
+            ...profile.approvedServiceProposals.values,
+            ...profile.approvedServiceListings.values,
+          ]
+          .whereType<Map>()
+          .where(
+            (g) =>
+                g['status'] == 'Approved' &&
+                normalizeCredential('${g['category']}') ==
+                    normalizeCredential(category) &&
+                normalizeCredential('${g['serviceTitle']}') ==
+                    normalizeCredential(serviceTitle),
+          )
+          .map((g) => '${g['qualificationName']}');
   final accepted = [
     ...(approvedQualifications[family] ?? <String>[]),
     ...customNames,
@@ -94,7 +121,7 @@ String certificationRequirementMessage({
 }) {
   final family = approvedServiceFamily(category, serviceTitle);
   if (family == null) {
-    return 'Choose a supported service from the catalog. Custom services and services requiring unsupported professional licences cannot be published.';
+    return 'Select a relevant TESDA NC or accepted equivalent credential. The administrator must confirm its alignment with this service and category.';
   }
   return 'Requires ${approvedQualifications[family]!.join(' or ')}, checked by the System Administrator through the TESDA registry.';
 }
@@ -106,20 +133,24 @@ bool hasMatchingServiceCertificate(
   DateTime? now,
 }) {
   final family = approvedServiceFamily(category, serviceTitle);
-  final grants = profile.approvedServiceProposals.values
-      .whereType<Map>()
-      .where(
-        (g) =>
-            g['status'] == 'Approved' &&
-            g['reviewedBy'] is String &&
-            (g['reviewedBy'] as String).isNotEmpty &&
-            g['reviewedAt'] != null &&
-            normalizeCredential('${g['category']}') ==
-                normalizeCredential(category) &&
-            normalizeCredential('${g['serviceTitle']}') ==
-                normalizeCredential(serviceTitle),
-      )
-      .toList();
+  final grants =
+      [
+            ...profile.approvedServiceProposals.values,
+            ...profile.approvedServiceListings.values,
+          ]
+          .whereType<Map>()
+          .where(
+            (g) =>
+                g['status'] == 'Approved' &&
+                g['reviewedBy'] is String &&
+                (g['reviewedBy'] as String).isNotEmpty &&
+                g['reviewedAt'] != null &&
+                normalizeCredential('${g['category']}') ==
+                    normalizeCredential(category) &&
+                normalizeCredential('${g['serviceTitle']}') ==
+                    normalizeCredential(serviceTitle),
+          )
+          .toList();
   if (family == null && grants.isEmpty) return false;
   final accepted = (approvedQualifications[family] ?? <String>[])
       .map(normalizeCredential)
@@ -127,23 +158,15 @@ bool hasMatchingServiceCertificate(
   // Match the backend: both the approved ID and the stored review decision
   // must agree. Presentation fallbacks must not grant publishing permission.
   return profile.certificationHistory.any((c) {
-    final expires = DateTime.tryParse('${c.expirationDate}T23:59:59.999+08:00');
-    return profile.approvedCertificationIds.contains(c.id) &&
-        c.isApproved &&
-        c.url.isNotEmpty &&
-        c.certificationId.isNotEmpty &&
-        normalizeCredential(c.provider) == 'tesda' &&
-        (accepted.contains(normalizeCredential(c.name)) ||
-            (family == null &&
-                grants.any(
-                  (g) =>
-                      normalizeCredential('${g['qualificationName']}') ==
+    return (isCurrentTesdaCertificate(profile, c, now: now) &&
+            accepted.contains(normalizeCredential(c.name))) ||
+        (isCurrentReviewedCredential(profile, c, now: now) &&
+            grants.any(
+              (g) =>
+                  (g['reviewType'] != 'directListing' ||
+                      g['certificationEntryId'] == c.id) &&
+                  normalizeCredential('${g['qualificationName']}') ==
                       normalizeCredential(c.name),
-                ))) &&
-        c.verificationSource == 'TESDA Registry of Certified Workers' &&
-        c.reviewedBy.isNotEmpty &&
-        c.reviewedAt != null &&
-        expires != null &&
-        !expires.isBefore(now ?? DateTime.now());
+            ));
   });
 }

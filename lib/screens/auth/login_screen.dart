@@ -44,7 +44,9 @@ class _LoginScreenState extends State<LoginScreen> {
       await _auth.signIn(email: username, password: _password.text);
       if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
     } on FirebaseAuthMultiFactorException catch (e) {
-      if(mounted && await finishMfaSignIn(context,e) && mounted)Navigator.of(context).popUntil((r)=>r.isFirst);
+      if (mounted && await finishMfaSignIn(context, e) && mounted) {
+        Navigator.of(context).popUntil((r) => r.isFirst);
+      }
     } on FirebaseAuthException catch (e) {
       setState(() => _error = AuthService.messageForUser(e));
     } catch (e) {
@@ -70,14 +72,18 @@ class _LoginScreenState extends State<LoginScreen> {
               children: [
                 Text(
                   'Enter your account email and we\'ll send you a link to reset your password.',
-                  style: GoogleFonts.inter(fontSize: 13, color: ProviderTokens.inkSecondary, height: 1.4),
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    color: ProviderTokens.inkSecondary,
+                    height: 1.4,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: controller,
                   keyboardType: TextInputType.emailAddress,
                   autofocus: true,
-                  decoration:  InputDecoration(labelText: context.tr('Email')),
+                  decoration: InputDecoration(labelText: context.tr('Email')),
                   validator: (v) {
                     final value = v?.trim() ?? '';
                     if (value.isEmpty) return 'Enter your email';
@@ -127,7 +133,8 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _signInWithGoogle() async {
     if (!isGoogleOAuthConfigured) {
       setState(
-        () => _error = 'Add your Web client ID in lib/config/google_oauth.dart '
+        () => _error =
+            'Add your Web client ID in lib/config/google_oauth.dart '
             '(Firebase → Authentication → Google → Web client ID).',
       );
       return;
@@ -140,7 +147,9 @@ class _LoginScreenState extends State<LoginScreen> {
       await _auth.signInWithGoogle();
       if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
     } on FirebaseAuthMultiFactorException catch (e) {
-      if(mounted && await finishMfaSignIn(context,e) && mounted)Navigator.of(context).popUntil((r)=>r.isFirst);
+      if (mounted && await finishMfaSignIn(context, e) && mounted) {
+        Navigator.of(context).popUntil((r) => r.isFirst);
+      }
     } on FirebaseAuthException catch (e) {
       if (e.code != 'aborted-by-user') {
         setState(() => _error = AuthService.messageForUser(e));
@@ -164,7 +173,8 @@ class _LoginScreenState extends State<LoginScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const BrandLockup(
-                subtitle: 'Hire local service providers for home, errands, and personal services — simple, trusted, and neighborhood-first.',
+                subtitle:
+                    'Hire local service providers for home, errands, and personal services — simple, trusted, and neighborhood-first.',
               ),
               const SizedBox(height: 28),
               Text(
@@ -178,7 +188,11 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 6),
               Text(
                 'Welcome back. Use your email and password to continue.',
-                style: GoogleFonts.inter(fontSize: 14, color: ProviderTokens.inkSecondary, height: 1.4),
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  color: ProviderTokens.inkSecondary,
+                  height: 1.4,
+                ),
               ),
               const SizedBox(height: 24),
               TextFormField(
@@ -186,7 +200,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 keyboardType: TextInputType.emailAddress,
                 textInputAction: TextInputAction.next,
                 autofillHints: const [AutofillHints.email],
-                decoration:  InputDecoration(labelText: context.tr('Email')),
+                decoration: InputDecoration(labelText: context.tr('Email')),
                 validator: (v) {
                   final value = v?.trim() ?? '';
                   if (value.isEmpty) return 'Enter your email';
@@ -206,12 +220,18 @@ class _LoginScreenState extends State<LoginScreen> {
                   suffixIcon: IconButton(
                     onPressed: _busy
                         ? null
-                        : () => setState(() => _obscurePassword = !_obscurePassword),
+                        : () => setState(
+                            () => _obscurePassword = !_obscurePassword,
+                          ),
                     icon: Icon(
-                      _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                      _obscurePassword
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
                       color: ProviderTokens.inkSecondary,
                     ),
-                    tooltip: _obscurePassword ? 'Show password' : 'Hide password',
+                    tooltip: _obscurePassword
+                        ? 'Show password'
+                        : 'Hide password',
                   ),
                 ),
                 validator: (v) {
@@ -226,14 +246,20 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: TextButton(
                   onPressed: _busy ? null : _forgotPassword,
                   style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 4,
+                    ),
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     foregroundColor: ProviderTokens.green,
                   ),
                   child: Text(
                     'Forgot password?',
-                    style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600),
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),
@@ -243,13 +269,19 @@ class _LoginScreenState extends State<LoginScreen> {
                   decoration: BoxDecoration(
                     color: ProviderTokens.danger.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: ProviderTokens.danger.withValues(alpha: 0.35)),
+                    border: Border.all(
+                      color: ProviderTokens.danger.withValues(alpha: 0.35),
+                    ),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(12),
                     child: Text(
                       _error!,
-                      style: GoogleFonts.inter(fontSize: 13, color: ProviderTokens.danger, height: 1.35),
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: ProviderTokens.danger,
+                        height: 1.35,
+                      ),
                     ),
                   ),
                 ),
@@ -261,7 +293,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     ? const SizedBox(
                         height: 22,
                         width: 22,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
                       )
                     : const Text('Log in'),
               ),
@@ -271,7 +306,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   const Expanded(child: Divider(color: ProviderTokens.border)),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Text('or', style: GoogleFonts.inter(fontSize: 13, color: ProviderTokens.inkSecondary)),
+                    child: Text(
+                      'or',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: ProviderTokens.inkSecondary,
+                      ),
+                    ),
                   ),
                   const Expanded(child: Divider(color: ProviderTokens.border)),
                 ],
@@ -285,27 +326,54 @@ class _LoginScreenState extends State<LoginScreen> {
                   icon: Container(
                     width: 22,
                     height: 22,
-                    decoration: const BoxDecoration(color: Color(0xFF4285F4), shape: BoxShape.circle),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF4285F4),
+                      shape: BoxShape.circle,
+                    ),
                     alignment: Alignment.center,
-                    child: Text('G', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white)),
+                    child: Text(
+                      'G',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
                   ),
-                  label: Text('Continue with Google', style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 14)),
+                  label: Text(
+                    'Continue with Google',
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: ProviderTokens.ink,
                     side: const BorderSide(color: ProviderTokens.border),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                 ),
               ),
               const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Text('New to NeighborHelp? ', style: GoogleFonts.inter(color: ProviderTokens.inkSecondary, fontSize: 14)),
+                  Text(
+                    'New to NeighborHelp? ',
+                    style: GoogleFonts.inter(
+                      color: ProviderTokens.inkSecondary,
+                      fontSize: 14,
+                    ),
+                  ),
                   TextButton(
                     onPressed: () {
                       Navigator.of(context).push<void>(
-                        MaterialPageRoute<void>(builder: (_) => const FigmaSignUpLandingPage()),
+                        MaterialPageRoute<void>(
+                          builder: (_) => const FigmaSignUpLandingPage(),
+                        ),
                       );
                     },
                     child: const Text('Sign up'),

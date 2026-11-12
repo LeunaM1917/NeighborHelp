@@ -9,16 +9,19 @@ Rect anchoredPopoverRect({
   required double preferredWidth,
   required double maxHeight,
   bool openBesideAnchor = false,
+  bool fitToAnchorSpace = false,
 }) {
   const margin = 12.0;
   final width = math.min(
     preferredWidth,
     math.max(0.0, viewport.width - margin * 2),
   );
-  final height = math.min(
-    maxHeight,
-    math.max(0.0, viewport.height - margin * 2),
-  );
+  var height = math.min(maxHeight, math.max(0.0, viewport.height - margin * 2));
+  final below = math.max(0.0, viewport.height - margin - anchor.bottom - 10);
+  final above = math.max(0.0, anchor.top - margin - 10);
+  if (fitToAnchorSpace && !openBesideAnchor) {
+    height = math.min(height, math.max(below, above));
+  }
   final desiredLeft = openBesideAnchor
       ? anchor.right + margin
       : anchor.right - width;

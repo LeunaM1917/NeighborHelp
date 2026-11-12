@@ -22,9 +22,9 @@ import '../models/service_approval_status.dart';
 import '../models/user_role.dart';
 import '../constants/functions_config.dart';
 import '../utils/message_thread.dart';
-import '../utils/service_certification_policy.dart';
 import '../utils/session_data_cache.dart';
 import 'marketplace_service.dart';
+import '../models/provider_certification.dart';
 
 /// Shared Firestore access for the app session.
 ///
@@ -571,9 +571,13 @@ class FirestoreService {
 
   /// Listing review and draft recovery must see current server state.
   Future<ServiceListing?> getServiceForListing(String serviceId) async {
-    final snap = await _db.collection(FirestoreCollections.services).doc(serviceId)
-      .get(const GetOptions(source: Source.server));
-    return snap.exists ? ServiceListing.fromFirestore(snap.id, snap.data()!) : null;
+    final snap = await _db
+        .collection(FirestoreCollections.services)
+        .doc(serviceId)
+        .get(const GetOptions(source: Source.server));
+    return snap.exists
+        ? ServiceListing.fromFirestore(snap.id, snap.data()!)
+        : null;
   }
 
   /// Service titles keyed by listing id (for review job labels on profiles).
@@ -603,7 +607,9 @@ class FirestoreService {
       _read('provider:$userId', () => providerProfileForUser(userId).first);
 
   Future<AppUser?> getUserForAccountSetup(String userId) async {
-    final snap = await userDoc(userId).get(const GetOptions(source: Source.server));
+    final snap = await userDoc(
+      userId,
+    ).get(const GetOptions(source: Source.server));
     return snap.exists ? AppUser.fromFirestore(snap.id, snap.data()!) : null;
   }
 
@@ -620,6 +626,25 @@ class FirestoreService {
         : null;
   }
 
+  String newServiceId() =>
+      _db.collection(FirestoreCollections.services).doc().id;
+
+  Future<List<Map<String, dynamic>>> approvedServiceOptions() async =>
+      (await _db.collection('serviceCatalog').get()).docs
+          .map((d) => d.data())
+          .toList();
+
+  Future<void> submitProviderCertificate({
+    required String providerId,
+    required ProviderCertificationEntry entry,
+  }) async {
+    await MarketplaceService.command('certificateCommand', {
+      'action': 'submit',
+      'providerId': providerId,
+      'entry': entry.toMap(),
+    });
+  }
+
   Future<String> createServiceListing({
     required String providerId,
     required String serviceTitle,
@@ -632,105 +657,84 @@ class FirestoreService {
     bool isActive = false,
     ServiceApprovalStatus approvalStatus = ServiceApprovalStatus.draft,
     String rejectionReason = '',
+    String? serviceId,
+    String certificationEntryId = '',
   }) async {
-    final ref = _db.collection(FirestoreCollections.services).doc();
-    await ref.set({
-      'providerId': providerId,
-      'serviceTitle': serviceTitle,
-      'category': category,
-      'description': description,
-      'estimatedPrice': estimatedPrice,
-      'priceType': priceType,
-      'estimatedDuration': estimatedDuration,
-      'availability': <String, dynamic>{},
-      'serviceImages': serviceImages ?? <String>[],
-      'isActive': isActive,
-      'approvalStatus': approvalStatus.firestoreValue,
-      'rejectionReason': rejectionReason,
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
+    final id = serviceId ?? newServiceId();
+    await MarketplaceService.command('serviceListingCommand', {
+      'action': approvalStatus.isPending ? 'submit' : 'saveDraft',
+      'serviceId': id,
+      'fields': {
+        'serviceTitle': serviceTitle,
+        'category': category,
+        'description': description,
+        'estimatedPrice': estimatedPrice,
+        'priceType': priceType,
+        'estimatedDuration': estimatedDuration,
+        'serviceImages': serviceImages ?? <String>[],
+        'certificationEntryId': certificationEntryId,
+      },
     });
-    return ref.id;
+    return id;
   }
 
   Future<DocumentReference<Map<String, dynamic>>> createService(
     ServiceListing listing,
-  ) {
-    final ref = _db.collection(FirestoreCollections.services).doc();
-    return ref
-        .set({
-          ...listing.toMap(),
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        })
-        .then((_) => ref);
+  ) async {
+    final id = await createServiceListing(
+      providerId: listing.providerId,
+      serviceTitle: listing.serviceTitle,
+      category: listing.category,
+      description: listing.description,
+      estimatedPrice: listing.estimatedPrice,
+      priceType: listing.priceType,
+      estimatedDuration: listing.estimatedDuration,
+      serviceImages: listing.serviceImages,
+      approvalStatus: listing.approvalStatus,
+      certificationEntryId: listing.certificationEntryId,
+    );
+    return _db.collection(FirestoreCollections.services).doc(id);
   }
 
-  Future<void> updateService(String serviceId, Map<String, dynamic> data) {
-    return _db.collection(FirestoreCollections.services).doc(serviceId).update({
-      ...data,
-      'updatedBy': FirebaseAuth.instance.currentUser?.uid,
-      'updatedAt': FieldValue.serverTimestamp(),
+  Future<void> updateService(
+    String serviceId,
+    Map<String, dynamic> data,
+  ) async {
+    if (data.keys.every(
+      (k) => ['isActive', 'updatedAt', 'updatedBy'].contains(k),
+    )) {
+      await setServiceActive(serviceId, data['isActive'] == true);
+      return;
+    }
+    await MarketplaceService.command('serviceListingCommand', {
+      'action': data['approvalStatus'] == 'Pending' ? 'submit' : 'saveDraft',
+      'serviceId': serviceId,
+      'fields': data,
     });
   }
 
-  Future<void> setServiceActive(String serviceId, bool isActive) {
-    return updateService(serviceId, {'isActive': isActive});
+  Future<void> setServiceActive(String serviceId, bool isActive) async {
+    await MarketplaceService.command('serviceListingCommand', {
+      'action': 'setActive',
+      'serviceId': serviceId,
+      'isActive': isActive,
+    });
   }
 
   Future<void> adminSetServiceApproval({
     required String serviceId,
     required ServiceApprovalStatus status,
     String? rejectionReason,
+    bool alignmentConfirmed = false,
+    String notes = '',
   }) async {
-    if (status.isApproved) {
-      final listing = await getServiceForListing(serviceId);
-      if (listing == null) throw StateError('Service not found.');
-      if (listing.serviceProposalId.isNotEmpty && !listing.approvalStatus.isPending) {
-        throw StateError('The provider must finish and submit this proposed service draft before listing approval.');
-      }
-      final profile = await getProviderProfileForListing(listing.providerId);
-      final owner = await getUser(listing.providerId);
-      if (profile == null ||
-          !profile.isVerifiedProvider ||
-          owner == null ||
-          owner.accountStatus.isBlocked ||
-          profile.serviceArea.trim().isEmpty) {
-        throw StateError(
-          'The provider needs a verified identity, active account, and service area.',
-        );
-      }
-      if (!hasMatchingServiceCertificate(
-        profile,
-        category: listing.category,
-        serviceTitle: listing.serviceTitle,
-      )) {
-        throw StateError(
-          'A valid certificate matching this service is required.',
-        );
-      }
-    }
-    final data = <String, dynamic>{
-      'approvalStatus': status.firestoreValue,
-      'updatedAt': FieldValue.serverTimestamp(),
-      'updatedBy': FirebaseAuth.instance.currentUser?.uid,
-      'updatedByRole': 'Administrator',
-    };
-    switch (status) {
-      case ServiceApprovalStatus.approved:
-        data['isActive'] = true;
-        data['rejectionReason'] = '';
-      case ServiceApprovalStatus.rejected:
-        data['isActive'] = false;
-        if (rejectionReason != null && rejectionReason.trim().isNotEmpty) {
-          data['rejectionReason'] = rejectionReason.trim();
-        }
-      case ServiceApprovalStatus.pending:
-        data['isActive'] = false;
-      case ServiceApprovalStatus.draft:
-        data['isActive'] = false;
-    }
-    return updateService(serviceId, data);
+    await MarketplaceService.command('serviceListingCommand', {
+      'action': status.isApproved ? 'approve' : 'reject',
+      'serviceId': serviceId,
+      'reason': rejectionReason ?? '',
+      'alignmentConfirmed': alignmentConfirmed,
+      'notes': notes,
+    });
   }
 
   Future<void> _bookingCommand(
@@ -752,6 +756,7 @@ class FirestoreService {
   Future<void> createBooking(Booking booking) =>
       _bookingCommand('create', booking.bookingId, {
         'serviceId': booking.serviceId,
+        'requestVersion': booking.requestVersion,
         'serviceLocation': booking.serviceLocation,
         'location': {
           'latitude': booking.location.latitude,
@@ -1109,6 +1114,7 @@ class FirestoreService {
       return _db
           .collection(FirestoreCollections.notifications)
           .where('userId', isEqualTo: userId)
+          .orderBy('createdAt', descending: true)
           .limit(50)
           .snapshots()
           .map((s) {
@@ -1121,10 +1127,20 @@ class FirestoreService {
     });
   }
 
-  Stream<List<n.AppNotification>> adminNotificationsForUser(String userId) => _cache('admin-notifications:$userId', () =>
-    _db.collection(FirestoreCollections.notifications).where('userId', isEqualTo: userId)
-      .orderBy('createdAt', descending: true).limit(50).snapshots()
-      .map((s) => s.docs.map((d) => n.AppNotification.fromFirestore(d.id, d.data())).toList()));
+  Stream<List<n.AppNotification>> adminNotificationsForUser(String userId) =>
+      notificationsForUser(userId);
+
+  /// Keep the badge accurate even when older unread records are outside the
+  /// recent 50-item menu. This listener is shared by the bell and open panel.
+  Stream<int> unreadNotificationsCountForUser(String userId) => _cache(
+    'unread-notifications:$userId',
+    () => _db
+        .collection(FirestoreCollections.notifications)
+        .where('userId', isEqualTo: userId)
+        .where('isRead', isEqualTo: false)
+        .snapshots()
+        .map((snapshot) => snapshot.size),
+  );
 
   Stream<List<ChatMessage>> messagesForBooking(String bookingId) {
     return _cache('messages:$bookingId', () {
@@ -1563,11 +1579,13 @@ class FirestoreService {
   Future<void> updateProviderAvailability({
     required String providerId,
     required Map<String, dynamic> weeklyAvailability,
-  }) {
-    return updateServiceProvider(
-      providerId: providerId,
-      data: {'weeklyAvailability': weeklyAvailability},
-    );
+  }) async {
+    await MarketplaceService.command('providerAvailability', {
+      'action': 'saveSchedule',
+      'providerIds': [providerId],
+      'weeklyAvailability': weeklyAvailability,
+    });
+    _reads.clear();
   }
 
   Stream<List<n.AppNotification>> allNotificationsStream() {
@@ -1782,6 +1800,33 @@ class FirestoreService {
         .collection(FirestoreCollections.notifications)
         .doc(notificationId)
         .update({'isRead': true});
+  }
+
+  /// Include older unread records beyond the recent dropdown window. Paginate
+  /// by document ID because changing isRead must not move the page cursor.
+  Future<void> markAllNotificationsRead(String userId) async {
+    QueryDocumentSnapshot<Map<String, dynamic>>? last;
+    while (true) {
+      Query<Map<String, dynamic>> query = _db
+          .collection(FirestoreCollections.notifications)
+          .where('userId', isEqualTo: userId)
+          .orderBy(FieldPath.documentId)
+          .limit(450);
+      if (last != null) query = query.startAfterDocument(last);
+      final page = await query.get(const GetOptions(source: Source.server));
+      final unread = page.docs
+          .where((doc) => doc.data()['isRead'] != true)
+          .toList();
+      if (unread.isNotEmpty) {
+        final batch = _db.batch();
+        for (final doc in unread) {
+          batch.update(doc.reference, {'isRead': true});
+        }
+        await batch.commit();
+      }
+      if (page.docs.length < 450) return;
+      last = page.docs.last;
+    }
   }
 
   Future<AppUser?> getUser(String userId) =>

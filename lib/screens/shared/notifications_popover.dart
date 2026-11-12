@@ -1,401 +1,614 @@
+import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
-
+import 'package:flutter/scheduler.dart';
+import 'package:intl/intl.dart' show DateFormat;
 import '../../figma_ui/figma_colors.dart';
-import '../../theme/mobile_layout.dart';
-import '../../widgets/anchored_popover_geometry.dart';
 import '../../models/app_user.dart';
-import '../../models/notification.dart' as n;
+import '../../models/notification.dart';
 import '../../services/firestore_service.dart';
-import '../../widgets/stream_snapshot.dart';
-import '../../widgets/managed_scrollbar.dart';
-import '../../widgets/data_stream_builder.dart';
-import 'inquiry_screen.dart';
+import '../../services/notification_navigation.dart';
+import '../../theme/role_theme.dart';
+import '../../widgets/anchored_popover_geometry.dart';
+import 'help_support_popover.dart';
 
-/// Notification dropdown (web) or bottom sheet (mobile / compact).
+/// One anchored menu for every role, including phones. PopupRoute supplies
+/// outside-click, Escape and back dismissal without a centered dialog.
 class NotificationsPopover {
   NotificationsPopover._();
-
-  static OverlayEntry? _entry;
-
+  static _NotificationsRoute? _route;
+  static GlobalKey? _anchor;
   static void toggle(
     BuildContext context, {
     required GlobalKey anchorKey,
     required AppUser appUser,
     bool openBesideAnchor = false,
+    Stream<List<AppNotification>>? stream,
+    Stream<int>? unreadCount,
+    int? initialUnread,
+    List<AppNotification>? initialItems,
+    Future<void> Function(AppNotification)? onRead,
+    Future<void> Function()? onReadAll,
+    Future<void> Function(AppNotification)? onOpen,
+    Future<void> Function()? onRetry,
+    ValueChanged<int>? onSelectTab,
   }) {
-    if (_entry != null) {
-      hide();
-      return;
-    }
-
-    if (MobileLayout.useBottomSheets(context)) {
-      final native = MobileLayout.isNativeApp(context);
-      showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        useSafeArea: true,
-        backgroundColor: Colors.transparent,
-        builder: (ctx) => DraggableScrollableSheet(
-          initialChildSize: native ? 0.88 : 0.65,
-          minChildSize: native ? 0.45 : 0.35,
-          maxChildSize: 0.95,
-          builder: (_, scrollController) => _NotificationSheet(
-            appUser: appUser,
-            scrollController: scrollController,
-            onClose: () => Navigator.of(ctx).pop(),
-          ),
-        ),
-      );
-      return;
-    }
-
-    final anchorContext = anchorKey.currentContext;
-    if (anchorContext == null) return;
-    final box = anchorContext.findRenderObject() as RenderBox?;
-    if (box == null || !box.hasSize) return;
-
-    final overlay = Overlay.of(context);
-    final screen = MediaQuery.sizeOf(context);
-    const popupWidth = 400.0;
-    const maxHeight = 480.0;
-
-    final popup = anchoredPopoverRect(
-      viewport: screen,
-      anchor: box.localToGlobal(Offset.zero) & box.size,
-      preferredWidth: popupWidth,
-      maxHeight: maxHeight,
+    HelpSupportPopover.hide();
+    final same = _route != null && _anchor == anchorKey;
+    hide();
+    if (same || anchorKey.currentContext == null) return;
+    final select = onSelectTab ?? NotificationNavigationScope.maybeOf(context);
+    final route = _NotificationsRoute(
+      anchorKey: anchorKey,
       openBesideAnchor: openBesideAnchor,
-    );
-
-    _entry = OverlayEntry(
-      builder: (ctx) => Stack(
-        children: [
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onTap: hide,
-              child: const ColoredBox(color: Colors.transparent),
-            ),
+      palette: RoleTheme.forBadge(appUser.role.firestoreValue),
+      stream: stream ?? FirestoreService().notificationsForUser(appUser.userId),
+      unreadCount: unreadCount,
+      initialUnread: initialUnread,
+      initialItems: initialItems,
+      onRead:
+          onRead ??
+          (note) =>
+              FirestoreService().markNotificationRead(note.notificationId),
+      onReadAll:
+          onReadAll ??
+          () => FirestoreService().markAllNotificationsRead(appUser.userId),
+      onRetry: onRetry ?? () => FirestoreService().retryDataLoads(),
+      onOpen:
+          onOpen ??
+          (note) => NotificationNavigator().open(
+            context,
+            user: appUser,
+            note: note,
+            onSelectTab: select,
           ),
-          Positioned(
-            left: popup.left,
-            top: popup.top,
-            width: popup.width,
-            child: Material(
-              color: Colors.transparent,
-              child: _NotificationDropdown(
-                appUser: appUser,
-                maxHeight: popup.height,
-                onClose: hide,
+      onReadError: () {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Could not mark this notification as read. Open the bell to retry.',
               ),
             ),
-          ),
-        ],
-      ),
+          );
+        }
+      },
     );
-    overlay.insert(_entry!);
+    _route = route;
+    _anchor = anchorKey;
+    Navigator.of(context, rootNavigator: true).push<void>(route).whenComplete(
+      () {
+        if (identical(_route, route)) {
+          _route = null;
+          _anchor = null;
+        }
+      },
+    );
   }
 
   static void hide() {
-    _entry?.remove();
-    _entry = null;
+    final route = _route;
+    _route = null;
+    _anchor = null;
+    void remove() {
+      if (route?.navigator != null) route!.navigator!.removeRoute(route);
+    }
+
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => remove());
+    } else {
+      remove();
+    }
   }
 }
 
-class _NotificationDropdown extends StatelessWidget {
-  const _NotificationDropdown({
-    required this.appUser,
-    required this.maxHeight,
-    required this.onClose,
-    this.scrollController,
-    this.useCardLayout = false,
+class _NotificationsRoute extends PopupRoute<void> {
+  _NotificationsRoute({
+    required this.anchorKey,
+    required this.openBesideAnchor,
+    required this.palette,
+    required this.stream,
+    this.unreadCount,
+    this.initialUnread,
+    required this.initialItems,
+    required this.onRead,
+    required this.onReadAll,
+    required this.onOpen,
+    required this.onRetry,
+    required this.onReadError,
   });
-
-  final AppUser appUser;
-  final double maxHeight;
-  final VoidCallback onClose;
-  final ScrollController? scrollController;
-  final bool useCardLayout;
+  final GlobalKey anchorKey;
+  final bool openBesideAnchor;
+  final RolePalette palette;
+  final Stream<List<AppNotification>> stream;
+  final Stream<int>? unreadCount;
+  final int? initialUnread;
+  final List<AppNotification>? initialItems;
+  final Future<void> Function(AppNotification) onRead, onOpen;
+  final Future<void> Function() onReadAll, onRetry;
+  final VoidCallback onReadError;
+  @override
+  Color? get barrierColor => Colors.transparent;
+  @override
+  bool get barrierDismissible => true;
+  @override
+  String get barrierLabel => 'Close notifications';
+  @override
+  Duration get transitionDuration => const Duration(milliseconds: 120);
+  @override
+  void didChangeNext(Route<dynamic>? nextRoute) {
+    super.didChangeNext(nextRoute);
+    if (nextRoute != null) {
+      scheduleMicrotask(() {
+        if (identical(NotificationsPopover._route, this)) {
+          NotificationsPopover.hide();
+        }
+      });
+    }
+  }
 
   @override
-  Widget build(BuildContext context) {
-    final firestore = FirestoreService();
-
-    final shell = Container(
-      constraints: BoxConstraints(maxHeight: maxHeight),
-      decoration: useCardLayout
-          ? null
-          : BoxDecoration(
-              color: FigmaColors.white,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: FigmaColors.gray200),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.12),
-                  blurRadius: 24,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-      child: ClipRRect(
-        borderRadius: useCardLayout
-            ? BorderRadius.zero
-            : BorderRadius.circular(10),
-        child: Stack(
-          children: [
-            DataStreamBuilder<List<n.AppNotification>>(
-              label: 'notifications',
-              onRetry: () => firestore.retryDataLoads(),
-              stream: firestore.notificationsForUser(appUser.userId),
-              builder: (context, snap) {
-                if (isStreamWaiting(snap)) {
-                  return SizedBox(
-                    height: useCardLayout ? 160 : 120,
-                    child: const Center(
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  );
-                }
-                final items = snap.data ?? [];
-                if (items.isEmpty) {
-                  return _NotificationsEmptyState(compact: !useCardLayout);
-                }
-                Widget buildList(ScrollController? controller) =>
-                    ListView.separated(
-                      controller: controller,
-                      shrinkWrap: scrollController == null,
-                      padding: EdgeInsets.fromLTRB(
-                        useCardLayout ? 16 : 0,
-                        useCardLayout ? 8 : (scrollController == null ? 40 : 8),
-                        useCardLayout ? 16 : 0,
-                        useCardLayout ? 20 : 8,
-                      ),
-                      itemCount: items.length,
-                      separatorBuilder: (_, __) => useCardLayout
-                          ? const SizedBox(height: 10)
-                          : const Divider(
-                              height: 1,
-                              color: FigmaColors.gray200,
-                            ),
-                      itemBuilder: (context, index) {
-                        final note = items[index];
-                        return _NotificationRow(
-                          note: note,
-                          timeLabel: _formatNotificationTime(
-                            note.createdAt.toDate(),
-                          ),
-                          useCardLayout: useCardLayout,
-                          onTap: () async {
-                            await firestore.markNotificationRead(
-                              note.notificationId,
-                            );
-                            if (context.mounted &&
-                                note.notificationType == 'Report Update' &&
-                                (note.relatedInquiryId?.isNotEmpty ?? false)) {
-                              NotificationsPopover.hide();
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute<void>(
-                                  builder: (_) => InquiryScreen(
-                                    appUser: appUser,
-                                    inquiryId: note.relatedInquiryId!,
-                                  ),
-                                ),
-                              );
-                            }
-                          },
-                        );
-                      },
-                    );
-
-                if (scrollController != null) {
-                  return buildList(scrollController);
-                }
-
-                return ConstrainedBox(
-                  constraints: BoxConstraints(maxHeight: maxHeight),
-                  child: ManagedScrollbar(
-                    thumbVisibility: items.length > 5,
-                    builder: buildList,
-                  ),
-                );
-              },
-            ),
-            if (scrollController == null)
-              Positioned(
-                top: 2,
-                right: 2,
-                child: IconButton(
-                  onPressed: onClose,
-                  icon: const Icon(Icons.close, size: 20),
-                  visualDensity: VisualDensity.compact,
-                  padding: const EdgeInsets.all(10),
-                  constraints: const BoxConstraints(
-                    minWidth: 36,
-                    minHeight: 36,
-                  ),
-                  style: IconButton.styleFrom(
-                    foregroundColor: FigmaColors.gray600,
-                    hoverColor: FigmaColors.gray100,
-                  ),
-                ),
-              ),
-          ],
-        ),
+  Widget buildPage(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+  ) {
+    final media = MediaQuery.of(context), insets = media.padding;
+    final safeSize = Size(
+      media.size.width - insets.horizontal,
+      math.max(
+        0,
+        media.size.height -
+            insets.top -
+            math.max(insets.bottom, media.viewInsets.bottom),
       ),
     );
-
-    return shell;
-  }
-}
-
-class _NotificationSheet extends StatelessWidget {
-  const _NotificationSheet({
-    required this.appUser,
-    required this.scrollController,
-    required this.onClose,
-  });
-
-  final AppUser appUser;
-  final ScrollController scrollController;
-  final VoidCallback onClose;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: FigmaColors.gray50,
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const SizedBox(height: 10),
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: FigmaColors.gray300,
-                borderRadius: BorderRadius.circular(2),
+    final box = anchorKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.attached || !box.hasSize) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (isActive) NotificationsPopover.hide();
+      });
+      return const SizedBox.shrink();
+    }
+    final origin = Offset(insets.left, insets.top);
+    final popup = anchoredPopoverRect(
+      viewport: safeSize,
+      anchor: (box.localToGlobal(Offset.zero) - origin) & box.size,
+      preferredWidth: 420,
+      maxHeight: 560,
+      openBesideAnchor: openBesideAnchor,
+      fitToAnchorSpace: true,
+    );
+    return Stack(
+      children: [
+        Positioned(
+          left: popup.left + origin.dx,
+          top: popup.top + origin.dy,
+          width: popup.width,
+          height: popup.height,
+          child: RoleThemeScope(
+            palette: palette,
+            child: Material(
+              color: Colors.transparent,
+              child: NotificationsPanel(
+                stream: stream,
+                unreadCount: unreadCount,
+                initialUnread: initialUnread,
+                initialItems: initialItems,
+                onClose: NotificationsPopover.hide,
+                onRead: onRead,
+                onReadAll: onReadAll,
+                onOpen: onOpen,
+                onRetry: onRetry,
+                onReadError: onReadError,
               ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 8, 4),
-            child: Row(
-              children: [
-                Expanded(
-                  child: StreamBuilder<List<n.AppNotification>>(
-                    stream: FirestoreService().notificationsForUser(
-                      appUser.userId,
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget buildTransitions(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) => FadeTransition(opacity: animation, child: child);
+}
+
+class NotificationBell extends StatefulWidget {
+  const NotificationBell({
+    super.key,
+    required this.appUser,
+    this.openBesideAnchor = false,
+    this.onSelectTab,
+    this.compact = false,
+    this.stream,
+    this.unreadCount,
+    this.onRead,
+    this.onReadAll,
+    this.onOpen,
+  });
+  final AppUser appUser;
+  final bool openBesideAnchor, compact;
+  final ValueChanged<int>? onSelectTab;
+  final Stream<List<AppNotification>>? stream;
+  final Stream<int>? unreadCount;
+  final Future<void> Function(AppNotification)? onRead, onOpen;
+  final Future<void> Function()? onReadAll;
+  @override
+  State<NotificationBell> createState() => _NotificationBellState();
+}
+
+class _NotificationBellState extends State<NotificationBell> {
+  final _anchor = GlobalKey();
+  late Stream<List<AppNotification>> _stream;
+  late Stream<int> _unreadCount;
+  @override
+  void initState() {
+    super.initState();
+    _bind();
+  }
+
+  void _bind() {
+    _stream =
+        widget.stream?.asBroadcastStream() ??
+        FirestoreService().notificationsForUser(widget.appUser.userId);
+    _unreadCount =
+        widget.unreadCount?.asBroadcastStream() ??
+        (widget.stream == null
+            ? FirestoreService().unreadNotificationsCountForUser(
+                widget.appUser.userId,
+              )
+            : _stream.map((notes) => notes.where((n) => !n.isRead).length));
+  }
+
+  @override
+  void didUpdateWidget(NotificationBell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.appUser.userId != widget.appUser.userId ||
+        oldWidget.stream != widget.stream ||
+        oldWidget.unreadCount != widget.unreadCount) {
+      NotificationsPopover.hide();
+      _bind();
+    }
+  }
+
+  @override
+  void dispose() {
+    NotificationsPopover.hide();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final role = RoleTheme.forBadge(widget.appUser.role.firestoreValue);
+    return StreamBuilder<List<AppNotification>>(
+      stream: _stream,
+      builder: (context, snapshot) {
+        final recentUnread = (snapshot.data ?? const <AppNotification>[])
+            .where((n) => !n.isRead)
+            .length;
+        return StreamBuilder<int>(
+          stream: _unreadCount,
+          initialData: recentUnread,
+          builder: (context, countSnapshot) {
+            final unread = countSnapshot.data ?? recentUnread;
+            return IconButton(
+              key: _anchor,
+              tooltip: 'Notifications',
+              visualDensity: widget.compact
+                  ? VisualDensity.compact
+                  : VisualDensity.standard,
+              constraints: BoxConstraints(
+                minWidth: widget.compact ? 36 : 44,
+                minHeight: widget.compact ? 36 : 44,
+              ),
+              onPressed: () => NotificationsPopover.toggle(
+                context,
+                anchorKey: _anchor,
+                appUser: widget.appUser,
+                openBesideAnchor: widget.openBesideAnchor,
+                stream: _stream,
+                unreadCount: _unreadCount,
+                initialUnread: unread,
+                initialItems: snapshot.data,
+                onSelectTab: widget.onSelectTab,
+                onRead: widget.onRead,
+                onReadAll: widget.onReadAll,
+                onOpen: widget.onOpen,
+              ),
+              icon: Badge(
+                isLabelVisible: unread > 0,
+                label: Text(unread > 99 ? '99+' : '$unread'),
+                backgroundColor: role.primary,
+                child: Icon(
+                  unread > 0
+                      ? Icons.notifications_active_outlined
+                      : Icons.notifications_outlined,
+                  size: 22,
+                  color: unread > 0 ? role.primary : FigmaColors.gray700,
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class NotificationsPanel extends StatefulWidget {
+  const NotificationsPanel({
+    super.key,
+    required this.stream,
+    this.unreadCount,
+    this.initialUnread,
+    required this.onClose,
+    required this.onRead,
+    required this.onReadAll,
+    required this.onOpen,
+    this.initialItems,
+    this.onRetry,
+    this.onReadError,
+  });
+  final Stream<List<AppNotification>> stream;
+  final Stream<int>? unreadCount;
+  final int? initialUnread;
+  final List<AppNotification>? initialItems;
+  final VoidCallback onClose;
+  final Future<void> Function(AppNotification) onRead, onOpen;
+  final Future<void> Function() onReadAll;
+  final Future<void> Function()? onRetry;
+  final VoidCallback? onReadError;
+  @override
+  State<NotificationsPanel> createState() => _NotificationsPanelState();
+}
+
+class _NotificationsPanelState extends State<NotificationsPanel> {
+  final _scroll = ScrollController();
+  final _read = <String>{};
+  bool _busy = false;
+  String? _error;
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  Future<void> _all(List<AppNotification> notes) async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await widget.onReadAll();
+      if (mounted) {
+        setState(() => _read.addAll(notes.map((n) => n.notificationId)));
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _error =
+              'Could not mark all notifications as read. Please retry.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _open(AppNotification note) {
+    // A slow/offline receipt must not stop a member from opening the record.
+    if (!note.isRead) {
+      unawaited(
+        Future.sync(() => widget.onRead(note)).catchError((Object _) {
+          widget.onReadError?.call();
+        }),
+      );
+    }
+    widget.onClose();
+    unawaited(
+      Future.sync(() => widget.onOpen(note)).catchError((Object _) {
+        /* Router reports unavailable records. */
+      }),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final role = context.roleColors;
+    return Container(
+      key: const ValueKey('notifications-dropdown'),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: FigmaColors.gray200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: .15),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: StreamBuilder<List<AppNotification>>(
+        stream: widget.stream,
+        initialData: widget.initialItems,
+        builder: (context, snapshot) {
+          final items = {
+            for (final n in snapshot.data ?? const <AppNotification>[])
+              n.notificationId: n,
+          }.values.toList()..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          final unread = items
+              .where((n) => !n.isRead && !_read.contains(n.notificationId))
+              .length;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 10, 8, 0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Notifications',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: role.primary,
+                        ),
+                      ),
                     ),
-                    builder: (context, snap) {
-                      final unread = (snap.data ?? [])
-                          .where((note) => !note.isRead)
-                          .length;
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Notifications',
-                            style: GoogleFonts.inter(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w700,
-                              color: FigmaColors.gray900,
-                            ),
+                    IconButton(
+                      tooltip: 'Close notifications',
+                      onPressed: widget.onClose,
+                      icon: const Icon(Icons.close, size: 20),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 0, 12, 8),
+                child: Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  children: [
+                    StreamBuilder<int>(
+                      stream: widget.unreadCount,
+                      initialData: widget.initialUnread ?? unread,
+                      builder: (context, count) => Text(
+                        '${count.data ?? unread} unread',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: FigmaColors.gray600,
+                        ),
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: _busy || snapshot.hasError || items.isEmpty
+                          ? null
+                          : () => _all(items),
+                      icon: _busy
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.done_all, size: 16),
+                      label: const Text('Mark all as read'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: role.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1, color: FigmaColors.gray200),
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Text(
+                    _error!,
+                    style: const TextStyle(
+                      color: FigmaColors.red600,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              Expanded(
+                child: snapshot.hasError
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(18),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text(
+                                'Could not load notifications. Check your connection and try again.',
+                                textAlign: TextAlign.center,
+                              ),
+                              if (widget.onRetry != null)
+                                TextButton(
+                                  onPressed: () async {
+                                    try {
+                                      await widget.onRetry!();
+                                    } catch (_) {
+                                      /* Stream exposes retry failures. */
+                                    }
+                                  },
+                                  child: const Text('Retry'),
+                                ),
+                            ],
                           ),
-                          if (unread > 0)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 2),
-                              child: Text(
-                                unread == 1 ? '1 unread' : '$unread unread',
-                                style: GoogleFonts.inter(
-                                  fontSize: 13,
+                        ),
+                      )
+                    : !snapshot.hasData
+                    ? const Center(
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : items.isEmpty
+                    ? const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.notifications_none_outlined,
+                                size: 36,
+                                color: FigmaColors.gray400,
+                              ),
+                              SizedBox(height: 12),
+                              Text(
+                                'No notifications yet',
+                                style: TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              SizedBox(height: 8),
+                              Text(
+                                'Updates about bookings, messages, and your account will show up here.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
                                   color: FigmaColors.gray600,
+                                  fontSize: 13,
                                 ),
                               ),
-                            ),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-                IconButton(
-                  onPressed: onClose,
-                  icon: const Icon(Icons.close_rounded),
-                  style: IconButton.styleFrom(
-                    foregroundColor: FigmaColors.gray700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: _NotificationDropdown(
-              appUser: appUser,
-              maxHeight: MediaQuery.sizeOf(context).height,
-              onClose: onClose,
-              scrollController: scrollController,
-              useCardLayout: true,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _NotificationsEmptyState extends StatelessWidget {
-  const _NotificationsEmptyState({this.compact = false});
-
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: 24,
-        vertical: compact ? 36 : 48,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: FigmaColors.tintBlue,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.notifications_none_rounded,
-              size: 28,
-              color: FigmaColors.navy,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No notifications yet',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: FigmaColors.gray900,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Updates about bookings, messages, and your account will show up here.',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
-              fontSize: 14,
-              color: FigmaColors.gray500,
-              height: 1.45,
-            ),
-          ),
-        ],
+                            ],
+                          ),
+                        ),
+                      )
+                    : Scrollbar(
+                        controller: _scroll,
+                        thumbVisibility: items.length > 3,
+                        child: ListView.separated(
+                          controller: _scroll,
+                          padding: EdgeInsets.zero,
+                          itemCount: items.length,
+                          separatorBuilder: (_, __) => const Divider(
+                            height: 1,
+                            color: FigmaColors.gray200,
+                          ),
+                          itemBuilder: (context, index) {
+                            final note = items[index];
+                            return _NotificationRow(
+                              note: note,
+                              unread:
+                                  !note.isRead &&
+                                  !_read.contains(note.notificationId),
+                              onTap: () => _open(note),
+                            );
+                          },
+                        ),
+                      ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -404,188 +617,124 @@ class _NotificationsEmptyState extends StatelessWidget {
 class _NotificationRow extends StatelessWidget {
   const _NotificationRow({
     required this.note,
-    required this.timeLabel,
+    required this.unread,
     required this.onTap,
-    this.useCardLayout = false,
   });
-
-  final n.AppNotification note;
-  final String timeLabel;
+  final AppNotification note;
+  final bool unread;
   final VoidCallback onTap;
-  final bool useCardLayout;
-
-  ({IconData icon, Color bg, Color fg}) _visualForType() {
+  IconData get icon {
     final type = note.notificationType.toLowerCase();
-    if (type.contains('booking')) {
-      return (
-        icon: Icons.event_available_outlined,
-        bg: FigmaColors.tintBlue,
-        fg: FigmaColors.navy,
-      );
+    if (note.relatedCertificationId != null || type.contains('certificate')) {
+      return Icons.workspace_premium_outlined;
     }
-    if (type.contains('message') || type.contains('chat')) {
-      return (
-        icon: Icons.chat_bubble_outline_rounded,
-        bg: FigmaColors.tintGreen,
-        fg: FigmaColors.green,
-      );
+    if (note.relatedReportId != null || type.contains('report')) {
+      return Icons.flag_outlined;
     }
-    if (type.contains('payment') || type.contains('fee')) {
-      return (
-        icon: Icons.payments_outlined,
-        bg: const Color(0xFFFFF4E5),
-        fg: const Color(0xFFB45309),
-      );
+    if (type.contains('message') ||
+        type.contains('inquiry') ||
+        type.contains('chat')) {
+      return Icons.chat_bubble_outline;
     }
-    if (type.contains('security') || type.contains('account')) {
-      return (
-        icon: Icons.shield_outlined,
-        bg: FigmaColors.gray100,
-        fg: FigmaColors.gray800,
-      );
+    if (note.relatedServiceId != null || type.contains('service')) {
+      return Icons.home_repair_service_outlined;
     }
-    if (type.contains('announce')) {
-      return (
-        icon: Icons.campaign_outlined,
-        bg: FigmaColors.tintGreen2,
-        fg: FigmaColors.green,
-      );
+    if (type.contains('verif') || type.contains('security')) {
+      return Icons.verified_user_outlined;
     }
-    return (
-      icon: Icons.notifications_outlined,
-      bg: FigmaColors.gray100,
-      fg: FigmaColors.gray800,
-    );
+    if (type.contains('review')) return Icons.star_outline;
+    if (type.contains('payment')) return Icons.payments_outlined;
+    if (note.relatedBookingId != null || type.contains('booking')) {
+      return Icons.event_note_outlined;
+    }
+    return Icons.notifications_outlined;
   }
 
   @override
   Widget build(BuildContext context) {
-    final isUnread = !note.isRead;
-    final visual = _visualForType();
-
-    final content = InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(useCardLayout ? 12 : 0),
-      hoverColor: FigmaColors.gray50,
-      child: Padding(
-        padding: EdgeInsets.all(useCardLayout ? 14 : 16),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: visual.bg,
-                borderRadius: BorderRadius.circular(12),
+    final role = context.roleColors;
+    final date = note.createdAt.toDate().toUtc().add(const Duration(hours: 8));
+    final time = note.createdAt.seconds == 0
+        ? 'Time unavailable'
+        : '${DateFormat('MMM d, h:mm a').format(date)} · Manila';
+    return Material(
+      color: unread ? role.tint.withValues(alpha: .55) : Colors.white,
+      child: InkWell(
+        key: ValueKey('notification-${note.notificationId}'),
+        onTap: onTap,
+        hoverColor: role.tint,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: role.tint,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 20, color: role.primary),
               ),
-              child: Icon(visual.icon, size: 22, color: visual.fg),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          note.title,
-                          style: GoogleFonts.inter(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: FigmaColors.gray900,
-                            height: 1.3,
-                          ),
-                        ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      note.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 14,
+                        height: 1.35,
+                        fontWeight: unread ? FontWeight.w700 : FontWeight.w500,
+                        color: FigmaColors.gray900,
                       ),
-                      const SizedBox(width: 8),
+                    ),
+                    if (note.message.isNotEmpty) ...[
+                      const SizedBox(height: 4),
                       Text(
-                        timeLabel,
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: FigmaColors.gray500,
+                        note.message,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          height: 1.45,
+                          color: FigmaColors.gray600,
                         ),
                       ),
                     ],
-                  ),
-                  if (note.message.isNotEmpty) ...[
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
                     Text(
-                      note.message,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
-                        color: FigmaColors.gray600,
-                        height: 1.4,
+                      time,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: FigmaColors.gray500,
                       ),
                     ),
                   ],
-                ],
-              ),
-            ),
-            if (isUnread) ...[
-              const SizedBox(width: 8),
-              Container(
-                width: 8,
-                height: 8,
-                margin: const EdgeInsets.only(top: 6),
-                decoration: const BoxDecoration(
-                  color: FigmaColors.navy,
-                  shape: BoxShape.circle,
                 ),
               ),
+              if (unread) ...[
+                const SizedBox(width: 10),
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Container(
+                    width: 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color: role.primary,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+              ],
             ],
-          ],
-        ),
-      ),
-    );
-
-    if (!useCardLayout) {
-      return Material(
-        color: isUnread ? const Color(0xFFE8EDF2) : FigmaColors.white,
-        child: content,
-      );
-    }
-
-    return Material(
-      color: FigmaColors.white,
-      borderRadius: BorderRadius.circular(12),
-      elevation: 0,
-      shadowColor: Colors.transparent,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isUnread
-                ? FigmaColors.navy.withValues(alpha: 0.2)
-                : FigmaColors.gray200,
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
         ),
-        child: content,
       ),
     );
   }
-}
-
-String _formatNotificationTime(DateTime date) {
-  final now = DateTime.now();
-  final today = DateTime(now.year, now.month, now.day);
-  final day = DateTime(date.year, date.month, date.day);
-  if (day == today) {
-    return DateFormat.jm().format(date);
-  }
-  if (now.difference(date).inDays < 7) {
-    return DateFormat('EEE').format(date);
-  }
-  return DateFormat('MMM d').format(date);
 }

@@ -13,6 +13,7 @@ module.exports=({db,functions})=>async(data,context)=>{
   return db.runTransaction(async tx=>{
     const actor=(await tx.get(db.doc(`users/${uid}`))).data(),b=(await tx.get(ref)).data();
     if(actor?.accountStatus!=='Active' || !b || ![b.customerId,b.providerId].includes(uid)) fail('permission-denied','Only active participants may change this agreement.');
+    if(!b.agreement)return require('./booking_estimates').apply({tx,db,data,uid,actor,b,ref,revisionRef,id,revisionId,fail});
     if(!b.agreement || !['Accepted','In Progress'].includes(b.status)) fail('failed-precondition','Amendments are available for accepted or ongoing work. Resolve completion first.');
     const contractRef=db.doc(`contracts/${b.contractId || id}`),contract=(await tx.get(contractRef)).data();
     if(contract?.status!=='active') fail('failed-precondition','This contract has ended.');

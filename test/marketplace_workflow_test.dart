@@ -50,7 +50,7 @@ void main() {
         'durationHours': 2,
         'totalFee': 246,
       });
-      expect(old.pricingSummary, contains('123/hr'));
+      expect(old.pricingSummary, contains('123.00/hr'));
       expect(old.totalFee, 246);
     },
   );

@@ -1,3 +1,4 @@
+import '../../widgets/contract_records_card.dart';
 import '../../widgets/booking_reschedule_card.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -46,193 +47,262 @@ class CustomerBookingDetailScreen extends StatelessWidget {
       body: SafeArea(
         child: AppScrollChrome(
           child: SingleChildScrollView(
-          child: FigmaWideContainer(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  AppPageHeader(
-                    title: 'Booking details',
-                    subtitle: 'Track status and service information',
-                    onBack: () => Navigator.pop(context),
-                  ),
-                  FutureBuilder<ServiceListing?>(
-                    future: firestore.getService(booking.serviceId),
-                    builder: (context, serviceSnap) {
-                      return StreamBuilder<AppUser?>(
-                        stream: firestore.userStream(booking.providerId),
-                        builder: (context, providerSnap) {
-                          if (serviceSnap.connectionState == ConnectionState.waiting) {
-                            return const LoadingIndicator(message: 'Loading…');
-                          }
-                          final service = serviceSnap.data;
-                          final provider = providerSnap.data;
+            child: FigmaWideContainer(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    AppPageHeader(
+                      title: 'Booking details',
+                      subtitle: 'Track status and service information',
+                      onBack: () => Navigator.pop(context),
+                    ),
+                    FutureBuilder<ServiceListing?>(
+                      future: firestore.getService(booking.serviceId),
+                      builder: (context, serviceSnap) {
+                        return StreamBuilder<AppUser?>(
+                          stream: firestore.userStream(booking.providerId),
+                          builder: (context, providerSnap) {
+                            if (serviceSnap.connectionState ==
+                                ConnectionState.waiting) {
+                              return const LoadingIndicator(
+                                message: 'Loading…',
+                              );
+                            }
+                            final service = serviceSnap.data;
+                            final provider = providerSnap.data;
 
-                          return StreamBuilder<Booking?>(
-                            stream: firestore.bookingStream(booking.bookingId),
-                            builder: (context, bookingSnap) {
-                              final b = bookingSnap.data ?? booking;
-                              return StreamBuilder<ServiceProviderProfile?>(
-                                stream: firestore.providerProfileForUser(b.providerId),
-                                builder: (context, profileSnap) {
-                                  final profile = profileSnap.data;
+                            return StreamBuilder<Booking?>(
+                              stream: firestore.bookingStream(
+                                booking.bookingId,
+                              ),
+                              builder: (context, bookingSnap) {
+                                final b = bookingSnap.data ?? booking;
+                                return StreamBuilder<ServiceProviderProfile?>(
+                                  stream: firestore.providerProfileForUser(
+                                    b.providerId,
+                                  ),
+                                  builder: (context, profileSnap) {
+                                    final profile = profileSnap.data;
 
-                                  final mainChildren = <Widget>[
-                                    BookingRescheduleCard(booking: b, asCustomer: true),
-                                    _headerCard(context, service, dateFmt, b),
-                                    const SizedBox(height: 20),
-                                    BookingStatusTracker(
-                                      status: b.status,
-                                      completionLabel: 'Completed',
-                                      pendingAt: b.createdAt.toDate(),
-                                      acceptedAt: b.acceptedAt?.toDate(),
-                                      inProgressAt: b.startedAt?.toDate(),
-                                      completedAt: b.completedAt?.toDate(),
-                                    ),
-                                    const SizedBox(height: 20),
-                                    AppSection(
-                                      title: 'Service details',
-                                      child: AppSurfaceCard(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            _detail(Icons.place_outlined, 'Location', b.serviceLocation),
-                                            if (b.notes != null && b.notes!.isNotEmpty)
-                                              _detail(Icons.notes_outlined, 'Notes', b.notes!),
-                                            if (b.totalFee != null)
-                                              _detail(
-                                                Icons.payments_outlined,
-                                                'Estimated fee',
-                                                b.pricingSummary != null
-                                                    ? '₱${b.totalFee!.toStringAsFixed(0)} (${b.pricingSummary})'
-                                                    : '₱${b.totalFee!.toStringAsFixed(0)}',
-                                              ),
-                                            if (b.isMilestoneComplete) ...[
-                                              const Padding(
-                                                padding: EdgeInsets.only(top: 6, bottom: 16),
-                                                child: Divider(height: 1, color: FigmaColors.gray200),
-                                              ),
-                                              Text(
-                                                'Booking feedback',
-                                                style: GoogleFonts.inter(
-                                                  fontSize: 13,
-                                                  fontWeight: FontWeight.w700,
-                                                  color: FigmaColors.gray800,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 12),
-                                              MilestoneFeedbackDetails(
-                                                booking: b,
-                                                viewerRole: 'customer',
-                                                customerName: appUser.fullName.isNotEmpty ? appUser.fullName : 'You',
-                                                providerName: provider?.fullName ?? 'Provider',
-                                                compact: true,
-                                              ),
-                                            ],
-                                          ],
+                                    final mainChildren = <Widget>[
+                                      BookingRescheduleCard(
+                                        booking: b,
+                                        asCustomer: true,
+                                      ),
+                                      if (b.agreement == null ||
+                                          b.contractId != null)
+                                        ContractRecordsCard(
+                                          booking: b,
+                                          viewerId: appUser.userId,
                                         ),
-                                      ),
-                                    ),
-
-                                    const SizedBox(height: 20),
-                                    BookingReviewSection(appUser: appUser, booking: b),
-                                  ];
-
-                                  final sideChildren = <Widget>[
-                                    _bookingSummaryCard(context, service, dateFmt, b),
-                                    const SizedBox(height: 20),
-                                    _providerCard(context, firestore, provider, profile),
-                                    if (b.canCustomerCancel ||
-                                        (b.isCancelled &&
-                                            (b.wasCancelledByCustomer || b.wasCancelledByProvider))) ...[
+                                      _headerCard(context, service, dateFmt, b),
                                       const SizedBox(height: 20),
-                                      BookingCancellationCard(
-                                        appUser: appUser,
-                                        booking: b,
-                                        viewerRole: 'customer',
-                                        onCancelled: () => Navigator.pop(context),
+                                      BookingStatusTracker(
+                                        status: b.status,
+                                        completionLabel: 'Completed',
+                                        pendingAt: b.createdAt.toDate(),
+                                        acceptedAt: b.acceptedAt?.toDate(),
+                                        inProgressAt: b.startedAt?.toDate(),
+                                        completedAt: b.completedAt?.toDate(),
                                       ),
-                                    ],
-                                    if (!b.isPending) ...[
                                       const SizedBox(height: 20),
-                                      BookingUserReportCard(
-                                        appUser: appUser,
-                                        booking: b,
-                                        viewerRole: 'customer',
-                                        reportedUserId: b.providerId,
-                                        reportedRole: 'provider',
-                                      ),
-                                    ],
-                                  ];
-
-                                  final bookingCompletion = WorkCompletionCard(
-                                    booking: b,
-                                    asCustomer: true,
-                                  );
-
-                                  return LayoutBuilder(
-                                    builder: (context, c) {
-                                      final wide = c.maxWidth >= 900;
-                                      if (wide) {
-                                        return Column(
-                                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                                          children: [
-                                            Row(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Expanded(
-                                                  child: Column(
-                                                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                                                    children: mainChildren,
+                                      AppSection(
+                                        title: 'Service details',
+                                        child: AppSurfaceCard(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              _detail(
+                                                Icons.place_outlined,
+                                                'Location',
+                                                b.serviceLocation,
+                                              ),
+                                              if (b.notes != null &&
+                                                  b.notes!.isNotEmpty)
+                                                _detail(
+                                                  Icons.notes_outlined,
+                                                  'Notes',
+                                                  b.notes!,
+                                                ),
+                                              if (b.totalFee != null)
+                                                _detail(
+                                                  Icons.payments_outlined,
+                                                  b.requiresProviderEstimate
+                                                      ? 'Listing estimate'
+                                                      : 'Agreed fee',
+                                                  b.pricingSummary != null
+                                                      ? '₱${b.totalFee!.toStringAsFixed(2)} (${b.pricingSummary})'
+                                                      : '₱${b.totalFee!.toStringAsFixed(2)}',
+                                                ),
+                                              if (b.isMilestoneComplete) ...[
+                                                const Padding(
+                                                  padding: EdgeInsets.only(
+                                                    top: 6,
+                                                    bottom: 16,
+                                                  ),
+                                                  child: Divider(
+                                                    height: 1,
+                                                    color: FigmaColors.gray200,
                                                   ),
                                                 ),
-                                                const SizedBox(width: 24),
-                                                SizedBox(
-                                                  width: 340,
-                                                  child: Column(
-                                                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                                                    children: sideChildren,
+                                                Text(
+                                                  'Booking feedback',
+                                                  style: GoogleFonts.inter(
+                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: FigmaColors.gray800,
                                                   ),
+                                                ),
+                                                const SizedBox(height: 12),
+                                                MilestoneFeedbackDetails(
+                                                  booking: b,
+                                                  viewerRole: 'customer',
+                                                  customerName:
+                                                      appUser
+                                                          .fullName
+                                                          .isNotEmpty
+                                                      ? appUser.fullName
+                                                      : 'You',
+                                                  providerName:
+                                                      provider?.fullName ??
+                                                      'Provider',
+                                                  compact: true,
                                                 ),
                                               ],
-                                            ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+
+                                      const SizedBox(height: 20),
+                                      BookingReviewSection(
+                                        appUser: appUser,
+                                        booking: b,
+                                      ),
+                                    ];
+
+                                    final sideChildren = <Widget>[
+                                      _bookingSummaryCard(
+                                        context,
+                                        service,
+                                        dateFmt,
+                                        b,
+                                      ),
+                                      const SizedBox(height: 20),
+                                      _providerCard(
+                                        context,
+                                        firestore,
+                                        provider,
+                                        profile,
+                                      ),
+                                      if (b.canCustomerCancel ||
+                                          (b.isCancelled &&
+                                              (b.wasCancelledByCustomer ||
+                                                  b.wasCancelledByProvider))) ...[
+                                        const SizedBox(height: 20),
+                                        BookingCancellationCard(
+                                          appUser: appUser,
+                                          booking: b,
+                                          viewerRole: 'customer',
+                                          onCancelled: () =>
+                                              Navigator.pop(context),
+                                        ),
+                                      ],
+                                      if (!b.isPending) ...[
+                                        const SizedBox(height: 20),
+                                        BookingUserReportCard(
+                                          appUser: appUser,
+                                          booking: b,
+                                          viewerRole: 'customer',
+                                          reportedUserId: b.providerId,
+                                          reportedRole: 'provider',
+                                        ),
+                                      ],
+                                    ];
+
+                                    final bookingCompletion =
+                                        WorkCompletionCard(
+                                          booking: b,
+                                          asCustomer: true,
+                                        );
+
+                                    return LayoutBuilder(
+                                      builder: (context, c) {
+                                        final wide = c.maxWidth >= 900;
+                                        if (wide) {
+                                          return Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.stretch,
+                                            children: [
+                                              Row(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Expanded(
+                                                    child: Column(
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .stretch,
+                                                      children: mainChildren,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 24),
+                                                  SizedBox(
+                                                    width: 340,
+                                                    child: Column(
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .stretch,
+                                                      children: sideChildren,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 20),
+                                              bookingCompletion,
+                                            ],
+                                          );
+                                        }
+                                        return Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.stretch,
+                                          children: [
+                                            ...mainChildren,
+                                            const SizedBox(height: 20),
+                                            ...sideChildren,
                                             const SizedBox(height: 20),
                                             bookingCompletion,
                                           ],
                                         );
-                                      }
-                                      return Column(
-                                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                                        children: [
-                                          ...mainChildren,
-                                          const SizedBox(height: 20),
-                                          ...sideChildren,
-                                          const SizedBox(height: 20),
-                                          bookingCompletion,
-                                        ],
-                                      );
-                                    },
-                                  );
-                                },
-                              );
-                            },
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ],
+                                      },
+                                    );
+                                  },
+                                );
+                              },
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
-        ),
         ),
       ),
     );
   }
 
-  Widget _headerCard(BuildContext context, ServiceListing? service, DateFormat dateFmt, Booking b) {
+  Widget _headerCard(
+    BuildContext context,
+    ServiceListing? service,
+    DateFormat dateFmt,
+    Booking b,
+  ) {
     final rc = context.roleColors;
     return AppSurfaceCard(
       child: Column(
@@ -244,10 +314,16 @@ class CustomerBookingDetailScreen extends StatelessWidget {
               Container(
                 width: 56,
                 height: 56,
-                decoration: BoxDecoration(color: rc.tint, shape: BoxShape.circle),
+                decoration: BoxDecoration(
+                  color: rc.tint,
+                  shape: BoxShape.circle,
+                ),
                 child: Icon(
                   service != null
-                      ? serviceCategoryIcon(service.category, service.serviceTitle)
+                      ? serviceCategoryIcon(
+                          service.category,
+                          service.serviceTitle,
+                        )
                       : Icons.home_repair_service_outlined,
                   color: rc.primary,
                   size: 28,
@@ -260,18 +336,24 @@ class CustomerBookingDetailScreen extends StatelessWidget {
                   children: [
                     Text(
                       service?.serviceTitle ?? 'Service',
-                      style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700),
+                      style: GoogleFonts.inter(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       b.scheduledWindowLabel,
-                      style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray600),
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: FigmaColors.gray600,
+                      ),
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 12),
-              FigmaStatusChip(status: b.isCompleted ? 'Completed' : b.status),
+              FigmaStatusChip(status: b.isCompleted ? 'Completed' : b.statusLabel),
             ],
           ),
           const SizedBox(height: 16),
@@ -281,7 +363,10 @@ class CustomerBookingDetailScreen extends StatelessWidget {
             children: [
               _chip(Icons.place_outlined, b.serviceLocation),
               if (b.totalFee != null)
-                _chip(Icons.payments_outlined, 'Estimated fee ₱${b.totalFee!.toStringAsFixed(0)}'),
+                _chip(
+                  Icons.payments_outlined,
+                  'Estimated fee ₱${b.totalFee!.toStringAsFixed(2)}',
+                ),
             ],
           ),
         ],
@@ -302,13 +387,21 @@ class CustomerBookingDetailScreen extends StatelessWidget {
         children: [
           Icon(icon, size: 16, color: FigmaColors.gray500),
           const SizedBox(width: 6),
-          Text(text, style: GoogleFonts.inter(fontSize: 12, color: FigmaColors.gray700)),
+          Text(
+            text,
+            style: GoogleFonts.inter(fontSize: 12, color: FigmaColors.gray700),
+          ),
         ],
       ),
     );
   }
 
-  Widget _bookingSummaryCard(BuildContext context, ServiceListing? service, DateFormat dateFmt, Booking b) {
+  Widget _bookingSummaryCard(
+    BuildContext context,
+    ServiceListing? service,
+    DateFormat dateFmt,
+    Booking b,
+  ) {
     return AppSection(
       title: 'Booking summary',
       child: AppSurfaceCard(
@@ -322,16 +415,27 @@ class CustomerBookingDetailScreen extends StatelessWidget {
             _summaryRow('Location', b.serviceLocation),
             if (b.totalFee != null) ...[
               const Divider(height: 1, color: FigmaColors.gray100),
-              _summaryRow('Estimated fee', '₱${b.totalFee!.toStringAsFixed(0)}'),
+              _summaryRow(
+                b.hasConfirmedSchedule ? 'Agreed fee' : 'Listing estimate',
+                '₱${b.totalFee!.toStringAsFixed(2)}',
+              ),
             ],
             const Divider(height: 1, color: FigmaColors.gray100),
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 10),
               child: Row(
                 children: [
-                  Text('Status', style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray500)),
+                  Text(
+                    'Status',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      color: FigmaColors.gray500,
+                    ),
+                  ),
                   const Spacer(),
-                  FigmaStatusChip(status: b.isCompleted ? 'Completed' : b.status),
+                  FigmaStatusChip(
+                    status: b.isCompleted ? 'Completed' : b.statusLabel,
+                  ),
                 ],
               ),
             ),
@@ -347,13 +451,20 @@ class CustomerBookingDetailScreen extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray500)),
+          Text(
+            label,
+            style: GoogleFonts.inter(fontSize: 13, color: FigmaColors.gray500),
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               value,
               textAlign: TextAlign.right,
-              style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: FigmaColors.gray900),
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: FigmaColors.gray900,
+              ),
             ),
           ),
         ],
@@ -361,7 +472,11 @@ class CustomerBookingDetailScreen extends StatelessWidget {
     );
   }
 
-  void _openProfile(BuildContext context, AppUser? provider, ServiceProviderProfile? profile) {
+  void _openProfile(
+    BuildContext context,
+    AppUser? provider,
+    ServiceProviderProfile? profile,
+  ) {
     showCustomerProviderProfileDialog(
       context,
       appUser: appUser,
@@ -397,8 +512,14 @@ class CustomerBookingDetailScreen extends StatelessWidget {
                       : null,
                   child: provider?.profilePhotoUrl == null
                       ? Text(
-                          (provider?.fullName.isNotEmpty == true ? provider!.fullName[0] : 'P').toUpperCase(),
-                          style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: rc.primary),
+                          (provider?.fullName.isNotEmpty == true
+                                  ? provider!.fullName[0]
+                                  : 'P')
+                              .toUpperCase(),
+                          style: GoogleFonts.inter(
+                            fontWeight: FontWeight.w700,
+                            color: rc.primary,
+                          ),
                         )
                       : null,
                 ),
@@ -409,25 +530,38 @@ class CustomerBookingDetailScreen extends StatelessWidget {
                     children: [
                       Text(
                         provider?.fullName ?? 'Provider',
-                        style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700),
+                        style: GoogleFonts.inter(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                       if (verified) ...[
                         const SizedBox(height: 4),
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.verified, size: 15, color: FigmaColors.green),
+                            const Icon(
+                              Icons.verified,
+                              size: 15,
+                              color: FigmaColors.green,
+                            ),
                             const SizedBox(width: 4),
                             Text(
                               'Verified provider',
-                              style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: FigmaColors.green),
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: FigmaColors.green,
+                              ),
                             ),
                           ],
                         ),
                       ],
                       const SizedBox(height: 4),
                       StreamBuilder<List<Review>>(
-                        stream: firestore.reviewsForProviderStream(booking.providerId),
+                        stream: firestore.reviewsForProviderStream(
+                          booking.providerId,
+                        ),
                         builder: (context, reviewSnap) {
                           final reviews = reviewSnap.data ?? const <Review>[];
                           final rating = effectiveProviderRating(
@@ -437,17 +571,28 @@ class CustomerBookingDetailScreen extends StatelessWidget {
                           return Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.star_rounded, size: 16, color: Color(0xFFEAB308)),
+                              const Icon(
+                                Icons.star_rounded,
+                                size: 16,
+                                color: Color(0xFFEAB308),
+                              ),
                               const SizedBox(width: 4),
                               Text(
                                 rating > 0 ? rating.toStringAsFixed(1) : 'New',
-                                style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: FigmaColors.gray900),
+                                style: GoogleFonts.inter(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: FigmaColors.gray900,
+                                ),
                               ),
                               if (reviews.isNotEmpty) ...[
                                 const SizedBox(width: 4),
                                 Text(
                                   '(${reviews.length} review${reviews.length == 1 ? '' : 's'})',
-                                  style: GoogleFonts.inter(fontSize: 12, color: FigmaColors.gray500),
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12,
+                                    color: FigmaColors.gray500,
+                                  ),
                                 ),
                               ],
                             ],
@@ -466,12 +611,20 @@ class CustomerBookingDetailScreen extends StatelessWidget {
                 foregroundColor: rc.primary,
                 minimumSize: const Size.fromHeight(46),
                 side: BorderSide(color: rc.primary),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text('View profile', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)),
+                  Text(
+                    'View profile',
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                   const SizedBox(width: 6),
                   const Icon(Icons.chevron_right, size: 18),
                 ],
@@ -491,10 +644,18 @@ class CustomerBookingDetailScreen extends StatelessWidget {
                 foregroundColor: FigmaColors.gray800,
                 minimumSize: const Size.fromHeight(46),
                 side: const BorderSide(color: FigmaColors.gray200),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
               icon: const Icon(Icons.chat_bubble_outline, size: 18),
-              label: Text('Message provider', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)),
+              label: Text(
+                'Message provider',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
           ],
         ),
@@ -514,9 +675,22 @@ class CustomerBookingDetailScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: GoogleFonts.inter(fontSize: 12, color: FigmaColors.gray500)),
+                Text(
+                  label,
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: FigmaColors.gray500,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text(value, style: GoogleFonts.inter(fontSize: 14, color: FigmaColors.gray900, height: 1.4)),
+                Text(
+                  value,
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    color: FigmaColors.gray900,
+                    height: 1.4,
+                  ),
+                ),
               ],
             ),
           ),
