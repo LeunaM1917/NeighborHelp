@@ -1,3 +1,4 @@
+import '../ui/app_notification_dialog.dart';
 import '../ui/workflow_ui.dart';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -209,7 +210,7 @@ class _ContractRecordsCardState extends State<ContractRecordsCard> {
     if (action == 'confirm') {
       final ok = await showDialog<bool>(
         context: context,
-        builder: (ctx) => WorkflowDialog(
+        builder: (ctx) => AppNotificationDialog(
           title: Text(context.tr('Acknowledge actual receipt?')),
           content: Text(
             'Confirm only if you received PHP ${((data['amountCents'] as num) / 100).toStringAsFixed(2)} by ${data['method']}. Check your own cash or account records.',

@@ -1,3 +1,4 @@
+import '../ui/app_notification_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -166,7 +167,7 @@ class AppFooter extends StatelessWidget {
   }) {
     showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => AppNotificationDialog(
         title: Text(
           title,
           style: GoogleFonts.inter(fontWeight: FontWeight.w600),

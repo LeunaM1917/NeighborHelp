@@ -1,3 +1,4 @@
+import '../../ui/app_notification_dialog.dart';
 import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart';
@@ -122,7 +123,7 @@ class _SelfProviderProfileBodyState extends State<SelfProviderProfileBody> {
     if (index < 0 || index >= entries.length) return;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => AppNotificationDialog(
         title: const Text('Delete certification?'),
         content: Text('Remove "${entries[index].name}" from your profile?'),
         actions: [

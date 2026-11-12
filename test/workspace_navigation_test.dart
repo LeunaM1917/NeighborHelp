@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:neighbor_help/ui/app_notification_dialog.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neighbor_help/screens/admin/widgets/admin_navigation.dart';
@@ -233,7 +234,7 @@ void main() {
         ]) {
           await tester.tap(find.widgetWithText(TextButton, label));
           await tester.pumpAndSettle();
-          expect(find.byType(AlertDialog), findsOneWidget);
+          expect(find.byType(AppNotificationDialog), findsOneWidget);
           if (label == 'Contact') {
             expect(
               find.textContaining('support@neighborhelp.com'),

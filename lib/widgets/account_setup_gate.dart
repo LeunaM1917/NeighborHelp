@@ -1,3 +1,4 @@
+import '../ui/app_notification_dialog.dart';
 import 'package:flutter/material.dart';
 import '../models/app_user.dart';
 import '../models/provider.dart';
@@ -60,7 +61,7 @@ Future<bool> requireAccountSetup(
     if (context.mounted) {
       await showDialog<void>(
         context: context,
-        builder: (ctx) => WorkflowDialog(
+        builder: (ctx) => AppNotificationDialog(
           title: const Text('Could not check account setup'),
           content: const Text(
             'Check your connection and try again. You can keep browsing, but booking and listing require a completed profile and approved identity verification.',
@@ -187,8 +188,7 @@ class _AccountSetupDialogState extends State<AccountSetupDialog> {
       verificationMessage =
           'Complete the government ID and face check on ID Analyzer before you can ${widget.action}.';
     }
-    return WorkflowDialog(
-      scrollable: true,
+    return AppNotificationDialog(
       title: const Text('Complete your profile and verification'),
       content: SizedBox(
         width: 520,

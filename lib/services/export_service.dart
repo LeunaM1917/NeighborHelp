@@ -1,3 +1,4 @@
+import '../ui/app_notification_dialog.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -28,7 +29,7 @@ class ExportService {
   }) async {
     final format = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => AppNotificationDialog(
         title: Text(label ?? 'Export $collection'),
         content: Text(
           rows == null

@@ -1,3 +1,4 @@
+import '../../../ui/app_notification_dialog.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../models/review.dart';
 import '../../../utils/report_analytics.dart';
@@ -310,7 +311,7 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
                             onViewBookings: () => widget.onNavigateToTab?.call(7),
                             onReviewProviders: () => widget.onNavigateToTab?.call(2),
                             onGenerateSummary: () {
-                              showDialog<void>(context: context, builder: (ctx) => AlertDialog(title: Text('Summary for $_dateRange'), content: Text('$total requested bookings, $completed completed, ${(completionRate * 100).toStringAsFixed(1)}% completion. Most requested category: ${topCategory.isEmpty ? 'None' : topCategory}. Current average provider rating: ${avgRating.toStringAsFixed(2)} / 5.'), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))]));
+                              showDialog<void>(context: context, builder: (ctx) => AppNotificationDialog(title: Text('Summary for $_dateRange'), content: Text('$total requested bookings, $completed completed, ${(completionRate * 100).toStringAsFixed(1)}% completion. Most requested category: ${topCategory.isEmpty ? 'None' : topCategory}. Current average provider rating: ${avgRating.toStringAsFixed(2)} / 5.'), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))]));
                             },
                           );
 

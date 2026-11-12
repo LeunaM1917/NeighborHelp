@@ -9,6 +9,7 @@ import 'package:neighbor_help/screens/provider/provider_certification_dialog.dar
 import 'package:neighbor_help/screens/provider/provider_service_form_screen.dart';
 import 'package:neighbor_help/services/firestore_service.dart';
 import 'package:neighbor_help/utils/service_certification_policy.dart';
+import 'package:neighbor_help/ui/app_notification_dialog.dart';
 
 import 'support/ui_test_support.dart';
 
@@ -211,6 +212,27 @@ void main() {
   );
 
   for (final width in [390.0, 1280.0]) {
+    testOnPlatform(
+      'closing a listing notice keeps the service form unchanged at $width',
+      (tester) async {
+        final store = ListingStore(profile());
+        await openForm(tester, store, width);
+        final before = tester.getSize(find.byType(ProviderServiceFormScreen));
+        await tester.tap(find.text('Save changes'));
+        await tester.pumpAndSettle();
+        final popup = find.byType(AppNotificationDialog);
+        expect(popup, findsOneWidget);
+        await tester.tap(
+          find.descendant(of: popup, matching: find.byTooltip('Close')),
+        );
+        await tester.pumpAndSettle();
+        expect(popup, findsNothing);
+        expect(tester.getSize(find.byType(ProviderServiceFormScreen)), before);
+        expect(find.text('Masonry service description'), findsWidgets);
+        expect(store.writes, isEmpty);
+        expect(tester.takeException(), isNull);
+      },
+    );
     testOnPlatform(
       'missing certificate opens matching upload and preserves listing at $width',
       (tester) async {

@@ -1,3 +1,4 @@
+import '../ui/app_notification_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -6,7 +7,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../figma_ui/figma_colors.dart';
 import '../models/booking.dart';
 import '../ui/app_ui_kit.dart';
-import '../ui/workflow_ui.dart';
 import '../utils/geo_location.dart';
 
 /// Uses only the location saved with this private booking, never a profile pin.
@@ -58,8 +58,7 @@ class _BookingWorkLocationCardState extends State<BookingWorkLocationCard> {
       final point = geoPointOrNull(widget.booking.location);
       await showDialog<void>(
         context: context,
-        builder: (ctx) => WorkflowDialog(
-          scrollable: true,
+        builder: (ctx) => AppNotificationDialog(
           title: const Text('Could not open Google Maps'),
           content: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

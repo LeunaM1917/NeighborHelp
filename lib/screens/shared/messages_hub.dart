@@ -1,3 +1,4 @@
+import '../../ui/app_notification_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -952,7 +953,7 @@ class _ChatPaneState extends State<_ChatPane> {
     if (action == 'report') {
       final share = await showDialog<bool>(
         context: context,
-        builder: (context) => AlertDialog(
+        builder: (context) => AppNotificationDialog(
           title: const Text('Report this inquiry?'),
           content: const Text(
             'Your explanation and the latest 10 messages will be shared with the system administrator as evidence. Use blocking separately to stop messages and new offers.',

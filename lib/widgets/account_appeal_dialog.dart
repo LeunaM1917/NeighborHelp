@@ -1,3 +1,4 @@
+import '../ui/app_notification_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -59,7 +60,7 @@ class _AccountAppealDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return AlertDialog(
+    return AppNotificationDialog(
       icon: Icon(Icons.lock_outline, color: colorScheme.error, size: 32),
       title: Text(
         status.blockedTitle,

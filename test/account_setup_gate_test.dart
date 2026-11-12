@@ -161,6 +161,7 @@ void main() {
           find.text(provider ? 'Add your service' : 'Book service'),
         );
         await tester.pumpAndSettle();
+        await tester.ensureVisible(find.text('Complete profile'));
         await tester.tap(find.text('Complete profile'));
         await tester.pumpAndSettle();
         expect(find.byType(ProviderVerifyIdentityButton), findsOneWidget);

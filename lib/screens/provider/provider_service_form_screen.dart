@@ -1,3 +1,4 @@
+import '../../ui/app_notification_dialog.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -16,7 +17,6 @@ import '../../services/storage_service.dart';
 import '../../theme/mobile_layout.dart';
 import '../../theme/provider_theme.dart';
 import '../../utils/service_certification_policy.dart';
-import '../../ui/workflow_ui.dart';
 import '../../widgets/account_setup_gate.dart';
 import '../../models/user_role.dart';
 import 'provider_certification_dialog.dart';
@@ -386,8 +386,7 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
   Future<void> _showListingNotice(String title, String message) =>
       _listingDialog<void>(
         context: context,
-        builder: (ctx) => WorkflowDialog(
-          scrollable: true,
+        builder: (ctx) => AppNotificationDialog(
           title: Text(title),
           content: Text(message),
           actions: [
@@ -444,8 +443,7 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
         status == ServiceCertificateStatus.expired;
     final upload = await _listingDialog<bool>(
       context: context,
-      builder: (ctx) => WorkflowDialog(
-        scrollable: true,
+      builder: (ctx) => AppNotificationDialog(
         title: Text(heading),
         content: Text(
           '$title requires ${qualifications.join(' or ')}.\n\n$guidance\n\nYour listing details will stay here.',

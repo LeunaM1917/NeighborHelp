@@ -1,3 +1,4 @@
+import '../ui/app_notification_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -43,7 +44,7 @@ class _ContractPanelState extends State<ContractPanel> {
   Future<void> _confirmEnd(ServiceContract contract) async {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => AppNotificationDialog(
         title: const Text('End contract?'),
         content: const Text(
           'You can still message each other, but future bookings will start a new contract unless you work together again under a new agreement.',

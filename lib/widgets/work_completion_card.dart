@@ -1,3 +1,4 @@
+import '../ui/app_notification_dialog.dart';
 import '../ui/workflow_ui.dart';
 import '../l10n/app_strings.dart';
 import 'package:flutter/material.dart';
@@ -59,7 +60,7 @@ class _WorkCompletionCardState extends State<WorkCompletionCard> {
     if (confirm) {
       final ok = await showDialog<bool>(
         context: context,
-        builder: (ctx) => WorkflowDialog(
+        builder: (ctx) => AppNotificationDialog(
           title: Text(context.tr('Confirm the work is complete?')),
           content: Text(
             context.tr(

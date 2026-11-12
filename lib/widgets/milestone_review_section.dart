@@ -1,3 +1,4 @@
+import '../ui/app_notification_dialog.dart';
 import '../l10n/app_strings.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -65,7 +66,7 @@ class _MilestoneReviewSectionState extends State<MilestoneReviewSection> {
         comment: _commentController.text.trim().isEmpty ? null : _commentController.text.trim(),
         onSentimentWarning: (warning) async {
           if (!mounted) return false;
-          return await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+          return await showDialog<bool>(context: context, builder: (ctx) => AppNotificationDialog(
             title: Text(context.tr('Review your feedback')), content: Text(warning), actions: [
               TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('Edit review'))),
               FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.tr('Post as written'))),

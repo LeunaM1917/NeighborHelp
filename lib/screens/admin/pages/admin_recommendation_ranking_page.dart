@@ -1,3 +1,4 @@
+import '../../../ui/app_notification_dialog.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -47,7 +48,7 @@ class _AdminRecommendationRankingPageState extends State<AdminRecommendationRank
   Future<void> _applyRatingToFirestore(ServiceProviderProfile profile, double rating) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => AppNotificationDialog(
         title: const Text('Apply rating to Firestore?'),
         content: Text(
           'This writes averageRating=${rating.toStringAsFixed(1)} on ${profile.providerId} '

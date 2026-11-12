@@ -1,3 +1,4 @@
+import '../ui/app_notification_dialog.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../figma_ui/figma_colors.dart';
@@ -70,7 +71,7 @@ class _ServiceProposalsSectionState extends State<ServiceProposalsSection> {
       )) {
         final upload = await showDialog<bool>(
           context: context,
-          builder: (ctx) => AlertDialog(
+          builder: (ctx) => AppNotificationDialog(
             title: const Text('Approved TESDA certificate required'),
             content: const Text(
               'Upload the TESDA certificate covering your proposed work and wait for administrator authentication before submitting a proposal.',

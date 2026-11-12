@@ -1,3 +1,4 @@
+import '../ui/app_notification_dialog.dart';
 import '../ui/workflow_ui.dart';
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -119,7 +120,7 @@ class _DisputeCasePanelState extends State<DisputeCasePanel> {
     final proposal = report.resolutionProposal!;
     final yes = await showDialog<bool>(
       context: context,
-      builder: (ctx) => WorkflowDialog(
+      builder: (ctx) => AppNotificationDialog(
         title: const Text('Confirm proposed resolution?'),
         content: SingleChildScrollView(
           child: Text(
