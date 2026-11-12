@@ -85,11 +85,16 @@ class _ProfileRecoveryGateState extends State<_ProfileRecoveryGate> {
   }
 
   Future<void> _recover() async {
-    final ok = await widget.auth.repairUserProfileIfMissing(
-      uid: widget.uid,
-      email: widget.email,
-      displayName: widget.displayName,
-    );
+    var ok = false;
+    try {
+      ok = await widget.auth.repairUserProfileIfMissing(
+        uid: widget.uid,
+        email: widget.email,
+        displayName: widget.displayName,
+      );
+    } catch (_) {
+      // Let the existing retry/sign-out controls handle a failed recovery.
+    }
     if (!mounted) return;
     setState(() {
       _busy = false;

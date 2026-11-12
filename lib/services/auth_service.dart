@@ -1,5 +1,6 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import '../constants/functions_config.dart';
+import 'account_setup_coordinator.dart';
 import 'firestore_service.dart';
 import 'push_notification_service.dart';
 
@@ -14,17 +15,17 @@ import '../models/account_status.dart';
 import '../models/user_role.dart';
 
 class AuthService {
-  AuthService({
-    FirebaseAuth? auth,
-    FirebaseFirestore? firestore,
-  })  : _auth = auth ?? FirebaseAuth.instance,
-        _firestore = firestore ?? FirebaseFirestore.instance;
+  AuthService({FirebaseAuth? auth, FirebaseFirestore? firestore})
+    : _auth = auth ?? FirebaseAuth.instance,
+      _firestore = firestore ?? FirebaseFirestore.instance;
 
   final FirebaseAuth _auth;
   final FirebaseFirestore _firestore;
 
   /// Shared across all `AuthService()` instances so Google sign-out works after any screen signs in.
   static GoogleSignIn? _sharedGoogleSignIn;
+  static final _accountSetup = AccountSetupCoordinator();
+
   /// Compatibility for legacy admin page constructors; local admin sessions no longer exist.
   bool get isLocalAdminOnly => false;
 
@@ -47,33 +48,55 @@ class AuthService {
     );
   }
 
-  Stream<User?> authStateChanges() => _auth.authStateChanges();
+  Stream<User?> authStateChanges() => _auth.authStateChanges().asyncMap((
+    user,
+  ) async {
+    await _accountSetup.waitUntilReady();
+    // A failed setup can sign out before its queued sign-in event is delivered.
+    return _auth.currentUser?.uid == user?.uid ? user : null;
+  });
 
   User? get currentUser => _auth.currentUser;
 
   Future<UserCredential> signIn({
     required String email,
     required String password,
-  }) async {
-    final cred = await _auth.signInWithEmailAndPassword(email: email, password: password);
+  }) => _accountSetup.run(() async {
+    final cred = await _auth.signInWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
     final user = cred.user;
     if (user != null) {
-      await repairUserProfileIfMissing(
+      await _repairUserProfileIfMissing(
         uid: user.uid,
         email: user.email,
         displayName: user.displayName,
       );
     }
     return cred;
-  }
+  });
 
   /// Creates `users/{uid}` when Firebase Auth exists but the user doc was never
-  /// written or was deleted. Uses `serviceProviders/{uid}` (or `userId` match)
-  /// to infer Provider role.
+  /// written or was deleted. Uses `serviceProviders/{uid}` to infer Provider role.
   ///
-  /// Returns `true` if a profile exists or was repaired; `false` if another
-  /// `users` document already uses this email under a different id.
+  /// Returns `true` if a profile exists or was repaired; `false` if this session
+  /// has already signed out or switched accounts.
   Future<bool> repairUserProfileIfMissing({
+    required String uid,
+    String? email,
+    String? displayName,
+  }) async {
+    await _accountSetup.waitUntilReady();
+    if (_auth.currentUser?.uid != uid) return false;
+    return _repairUserProfileIfMissing(
+      uid: uid,
+      email: email,
+      displayName: displayName,
+    );
+  }
+
+  Future<bool> _repairUserProfileIfMissing({
     required String uid,
     String? email,
     String? displayName,
@@ -82,8 +105,10 @@ class AuthService {
     final existing = await userRef.get();
     if (existing.exists && existing.data() != null) return true;
 
-    var providerSnap =
-        await _firestore.collection(FirestoreCollections.serviceProviders).doc(uid).get();
+    var providerSnap = await _firestore
+        .collection(FirestoreCollections.serviceProviders)
+        .doc(uid)
+        .get();
 
     final hasProvider = providerSnap.exists;
     final role = hasProvider ? UserRole.provider : UserRole.customer;
@@ -109,11 +134,14 @@ class AuthService {
       'lastActive': now,
     });
 
-    final providerAtUid =
-        _firestore.collection(FirestoreCollections.serviceProviders).doc(uid);
+    final providerAtUid = _firestore
+        .collection(FirestoreCollections.serviceProviders)
+        .doc(uid);
     final providerAtUidSnap = await providerAtUid.get();
 
-    if (hasProvider && !providerAtUidSnap.exists && providerSnap.data() != null) {
+    if (hasProvider &&
+        !providerAtUidSnap.exists &&
+        providerSnap.data() != null) {
       await providerAtUid.set({
         ...providerSnap.data()!,
         'userId': uid,
@@ -155,7 +183,12 @@ class AuthService {
   /// **Web:** uses [FirebaseAuth.signInWithPopup] so OAuth runs through Firebase’s handler
   /// (`*.firebaseapp.com`). That avoids `origin_mismatch` from `google_sign_in_web` / GIS when
   /// localhost origins are finicky. **Mobile:** uses `google_sign_in` + ID token as before.
-  Future<UserCredential> signInWithGoogle({UserRole? registrationRole}) async {
+  Future<UserCredential> signInWithGoogle({UserRole? registrationRole}) =>
+      _accountSetup.run(
+        () => _signInWithGoogle(registrationRole: registrationRole),
+      );
+
+  Future<UserCredential> _signInWithGoogle({UserRole? registrationRole}) async {
     if (kIsWeb) {
       final provider = GoogleAuthProvider();
       provider.addScope('email');
@@ -164,17 +197,26 @@ class AuthService {
         final userCred = await _auth.signInWithPopup(provider);
         final user = userCred.user;
         if (user == null) {
-          throw FirebaseAuthException(code: 'null-user', message: 'Sign-in failed.');
+          throw FirebaseAuthException(
+            code: 'null-user',
+            message: 'Sign-in failed.',
+          );
         }
-        await _ensureUserDocumentAfterGoogle(
-          user: user,
-          googleDisplayName: user.displayName,
-          googlePhotoUrl: user.photoURL,
-          registrationRole: registrationRole,
-        );
+        try {
+          await _ensureUserDocumentAfterGoogle(
+            user: user,
+            googleDisplayName: user.displayName,
+            googlePhotoUrl: user.photoURL,
+            registrationRole: registrationRole,
+          );
+        } catch (_) {
+          await _auth.signOut();
+          rethrow;
+        }
         return userCred;
       } on FirebaseAuthException catch (e) {
-        if (e.code == 'popup-closed-by-user' || e.code == 'cancelled-popup-request') {
+        if (e.code == 'popup-closed-by-user' ||
+            e.code == 'cancelled-popup-request') {
           throw FirebaseAuthException(
             code: 'aborted-by-user',
             message: 'Google sign-in was cancelled.',
@@ -201,7 +243,10 @@ class AuthService {
     final gsi = _gsi();
     final account = await gsi.signIn();
     if (account == null) {
-      throw FirebaseAuthException(code: 'aborted-by-user', message: 'Google sign-in was cancelled.');
+      throw FirebaseAuthException(
+        code: 'aborted-by-user',
+        message: 'Google sign-in was cancelled.',
+      );
     }
 
     final googleAuth = await account.authentication;
@@ -211,7 +256,8 @@ class AuthService {
     if (idToken == null) {
       throw FirebaseAuthException(
         code: 'missing-id-token',
-        message: 'Google did not return an ID token, which Firebase needs to sign you in. '
+        message:
+            'Google did not return an ID token, which Firebase needs to sign you in. '
             'Android: use the Web client ID in kGoogleWebOAuthClientId and add your app SHA-1 '
             'under Firebase project settings → Your apps.',
       );
@@ -225,15 +271,23 @@ class AuthService {
     final userCred = await _auth.signInWithCredential(credential);
     final user = userCred.user;
     if (user == null) {
-      throw FirebaseAuthException(code: 'null-user', message: 'Sign-in failed.');
+      throw FirebaseAuthException(
+        code: 'null-user',
+        message: 'Sign-in failed.',
+      );
     }
 
-    await _ensureUserDocumentAfterGoogle(
-      user: user,
-      googleDisplayName: account.displayName ?? user.displayName,
-      googlePhotoUrl: account.photoUrl ?? user.photoURL,
-      registrationRole: registrationRole,
-    );
+    try {
+      await _ensureUserDocumentAfterGoogle(
+        user: user,
+        googleDisplayName: account.displayName ?? user.displayName,
+        googlePhotoUrl: account.photoUrl ?? user.photoURL,
+        registrationRole: registrationRole,
+      );
+    } catch (_) {
+      await _auth.signOut();
+      rethrow;
+    }
 
     return userCred;
   }
@@ -249,8 +303,9 @@ class AuthService {
     if (snap.exists) {
       final data = snap.data() ?? {};
       final storedRole = UserRole.fromFirestore(data['role']?.toString());
-      final providerRef =
-          _firestore.collection(FirestoreCollections.serviceProviders).doc(user.uid);
+      final providerRef = _firestore
+          .collection(FirestoreCollections.serviceProviders)
+          .doc(user.uid);
       final providerSnap = await providerRef.get();
       final hasProviderProfile = providerSnap.exists;
 
@@ -323,25 +378,28 @@ class AuthService {
     });
 
     if (role == UserRole.provider) {
-      await _firestore.collection(FirestoreCollections.serviceProviders).doc(user.uid).set({
-        'userId': user.uid,
-        'bio': '',
-        'serviceArea': '',
-        'location': null,
-        'serviceRadiusKm': 5,
-        'averageRating': 0,
-        'completedBookings': 0,
-        'acceptedBookings': 0,
-        'isVerified': false,
-        'verificationStatus': 'Pending',
-        'diditStatus': '',
-        'diditSessionId': '',
-        'verificationProvider': '',
-        'governmentIdTypeCode': '',
-        'governmentIdTypeLabel': '',
-        'createdAt': now,
-        'updatedAt': now,
-      });
+      await _firestore
+          .collection(FirestoreCollections.serviceProviders)
+          .doc(user.uid)
+          .set({
+            'userId': user.uid,
+            'bio': '',
+            'serviceArea': '',
+            'location': null,
+            'serviceRadiusKm': 5,
+            'averageRating': 0,
+            'completedBookings': 0,
+            'acceptedBookings': 0,
+            'isVerified': false,
+            'verificationStatus': 'Pending',
+            'diditStatus': '',
+            'diditSessionId': '',
+            'verificationProvider': '',
+            'governmentIdTypeCode': '',
+            'governmentIdTypeLabel': '',
+            'createdAt': now,
+            'updatedAt': now,
+          });
     }
 
     if (user.displayName == null || user.displayName!.isEmpty) {
@@ -357,66 +415,111 @@ class AuthService {
     String? contactNumber,
     String? country,
     bool marketingOptIn = false,
-  }) async {
-    final credential = await _auth.createUserWithEmailAndPassword(
-      email: email,
-      password: password,
-    );
-    final uid = credential.user!.uid;
-    final now = Timestamp.now();
-
-    final userDoc = _firestore.collection(FirestoreCollections.users).doc(uid);
-    await userDoc.set({
-      'fullName': fullName,
-      'email': email,
-      'contactNumber': contactNumber,
-      'country': country,
-      'marketingOptIn': marketingOptIn,
-      'role': role.firestoreValue,
-      'profilePhotoUrl': null,
-      'address': null,
-      'location': null,
-      'accountStatus': AccountStatus.active.firestoreValue,
-      'createdAt': now,
-      'updatedAt': now,
-      'lastActive': now,
-    });
-
-    if (role == UserRole.provider) {
-      final providerId = uid;
-      await _firestore
-          .collection(FirestoreCollections.serviceProviders)
-          .doc(providerId)
-          .set({
-        'userId': uid,
-        'bio': '',
-        'serviceArea': '',
-        'location': null,
-        'serviceRadiusKm': 5,
-        'averageRating': 0,
-        'completedBookings': 0,
-        'acceptedBookings': 0,
-        'isVerified': false,
-        'verificationStatus': 'Pending',
-        'diditStatus': '',
-        'diditSessionId': '',
-        'verificationProvider': '',
-        'governmentIdTypeCode': '',
-        'governmentIdTypeLabel': '',
-        'createdAt': now,
-        'updatedAt': now,
-      });
+  }) => _accountSetup.run(() async {
+    if (role != UserRole.customer && role != UserRole.provider) {
+      throw ArgumentError.value(role, 'role');
     }
-
-    await credential.user!.updateDisplayName(fullName);
-    return credential;
-  }
+    UserCredential? credential;
+    FirebaseAuthException? existingAccountError;
+    try {
+      try {
+        credential = await _auth.createUserWithEmailAndPassword(
+          email: email.trim(),
+          password: password,
+        );
+      } on FirebaseAuthException catch (error) {
+        if (error.code != 'email-already-in-use') rethrow;
+        // A previous attempt may have created Auth but failed to save its profile.
+        // Prove ownership with the submitted password before resuming that attempt.
+        existingAccountError = error;
+        credential = await _auth.signInWithEmailAndPassword(
+          email: email.trim(),
+          password: password,
+        );
+      }
+      final uid = credential.user!.uid;
+      final now = Timestamp.now();
+      final userDoc = _firestore
+          .collection(FirestoreCollections.users)
+          .doc(uid);
+      final existing = await userDoc.get();
+      final providerDoc = _firestore
+          .collection(FirestoreCollections.serviceProviders)
+          .doc(uid);
+      if (existing.exists) {
+        // Registration must never overwrite an established role or private profile.
+        final data = existing.data()!;
+        final providerMissing =
+            role == UserRole.provider && !(await providerDoc.get()).exists;
+        if (data['role'] != role.firestoreValue ||
+            data['accountStatus'] != AccountStatus.active.firestoreValue ||
+            !providerMissing) {
+          throw existingAccountError ??
+              FirebaseAuthException(code: 'email-already-in-use');
+        }
+      } else {
+        await userDoc.set({
+          'fullName': fullName,
+          'email': email,
+          'contactNumber': contactNumber,
+          'country': country,
+          'marketingOptIn': marketingOptIn,
+          'role': role.firestoreValue,
+          'profilePhotoUrl': null,
+          'address': null,
+          'location': null,
+          'accountStatus': AccountStatus.active.firestoreValue,
+          'createdAt': now,
+          'updatedAt': now,
+          'lastActive': now,
+        });
+      }
+      if (role == UserRole.provider && !(await providerDoc.get()).exists) {
+        await providerDoc.set({
+          'userId': uid,
+          'bio': '',
+          'serviceArea': '',
+          'location': null,
+          'serviceRadiusKm': 5,
+          'averageRating': 0,
+          'completedBookings': 0,
+          'acceptedBookings': 0,
+          'isVerified': false,
+          'verificationStatus': 'Pending',
+          'diditStatus': '',
+          'diditSessionId': '',
+          'verificationProvider': '',
+          'governmentIdTypeCode': '',
+          'governmentIdTypeLabel': '',
+          'createdAt': now,
+          'updatedAt': now,
+        });
+      }
+      await credential.user!.updateDisplayName(fullName);
+      return credential;
+    } catch (_) {
+      // Keep RootGate from recovering a half-created provider as a customer.
+      if (credential != null) await _auth.signOut();
+      rethrow;
+    }
+  });
 
   Future<void> signOut() async {
     if (_auth.currentUser != null) {
-      try { await FirebaseFunctions.instanceFor(region: kNeighborHelpFunctionsRegion).httpsCallable('recordSessionEvent').call({'action': 'logout'}).timeout(const Duration(seconds: 3)); } catch (_) {}
+      try {
+        await FirebaseFunctions.instanceFor(
+              region: kNeighborHelpFunctionsRegion,
+            )
+            .httpsCallable('recordSessionEvent')
+            .call({'action': 'logout'})
+            .timeout(const Duration(seconds: 3));
+      } catch (_) {}
     }
-    try { await PushNotificationService().unregister().timeout(const Duration(seconds: 3)); } catch (_) {}
+    try {
+      await PushNotificationService().unregister().timeout(
+        const Duration(seconds: 3),
+      );
+    } catch (_) {}
     try {
       await _sharedGoogleSignIn?.signOut();
     } catch (_) {
