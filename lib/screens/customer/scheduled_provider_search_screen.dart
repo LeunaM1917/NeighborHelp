@@ -130,6 +130,7 @@ class _ScheduledProviderSearchScreenState
               id: r.profile.providerId,
               position: latLngFromGeoPoint(r.profile.location),
               label: users[r.profile.userId]?.fullName ?? 'Provider',
+              photoUrl: users[r.profile.userId]?.profilePhotoUrl,
               area: r.profile.serviceArea,
             ),
         ];

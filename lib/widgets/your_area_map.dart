@@ -8,6 +8,7 @@ import '../figma_ui/figma_colors.dart';
 import '../models/app_user.dart';
 import '../models/provider.dart';
 import '../services/firestore_service.dart';
+import '../services/provider_map_marker.dart';
 import '../ui/app_ui_kit.dart';
 import '../utils/geo_location.dart';
 import '../utils/customer_map_data.dart';
@@ -238,10 +239,49 @@ class _YourAreaMapViewState extends State<YourAreaMapView> {
   GoogleMapController? _controller;
   BitmapDescriptor? _customerIcon;
   static Future<BitmapDescriptor>? _icon;
+  static Future<BitmapDescriptor>? _providerFallback;
+  BitmapDescriptor? _providerFallbackIcon;
+  final _providerIcons = <String, BitmapDescriptor>{};
+  final _photoUrls = <String, String>{};
   @override
   void initState() {
     super.initState();
     unawaited(_loadIcon());
+    unawaited(_loadProviderFallback());
+    _syncProviderPhotos();
+  }
+
+  Future<void> _loadProviderFallback() async {
+    try {
+      final icon = await (_providerFallback ??= createProviderMapIcon());
+      if (mounted) setState(() => _providerFallbackIcon = icon);
+    } catch (_) {
+      _providerFallback = null;
+    }
+  }
+
+  void _syncProviderPhotos() {
+    final ids = widget.pins.map((p) => p.id).toSet();
+    _providerIcons.removeWhere((id, _) => !ids.contains(id));
+    _photoUrls.removeWhere((id, _) => !ids.contains(id));
+    for (final pin in widget.pins) {
+      final url = pin.photoUrl?.trim() ?? '';
+      if (_photoUrls[pin.id] == url) continue;
+      _photoUrls[pin.id] = url;
+      _providerIcons.remove(pin.id);
+      if (url.isNotEmpty) unawaited(_loadProviderPhoto(pin.id, url));
+    }
+  }
+
+  Future<void> _loadProviderPhoto(String id, String url) async {
+    try {
+      final icon = await createProviderMapIcon(photo: NetworkImage(url));
+      if (mounted && _photoUrls[id] == url) {
+        setState(() => _providerIcons[id] = icon);
+      }
+    } catch (_) {
+      // Keep the visible fallback marker if bitmap rendering fails.
+    }
   }
 
   Future<void> _loadIcon() async {
@@ -260,6 +300,7 @@ class _YourAreaMapViewState extends State<YourAreaMapView> {
   @override
   void didUpdateWidget(covariant YourAreaMapView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    _syncProviderPhotos();
     if (_geometry(oldWidget) != _geometry(widget)) unawaited(_fitCamera());
   }
 
@@ -301,6 +342,8 @@ class _YourAreaMapViewState extends State<YourAreaMapView> {
       customer: widget.userPosition,
       pins: widget.pins,
       customerIcon: _customerIcon,
+      providerIcons: _providerIcons,
+      providerFallbackIcon: _providerFallbackIcon,
     ),
     myLocationButtonEnabled: false,
     zoomControlsEnabled: widget.interactive,

@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/widgets.dart' show Offset;
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../models/app_user.dart';
 import '../models/provider.dart';
@@ -76,6 +77,8 @@ Set<Marker> customerAreaMarkers({
   required LatLng? customer,
   required List<NearbyMapPin> pins,
   BitmapDescriptor? customerIcon,
+  Map<String, BitmapDescriptor> providerIcons = const {},
+  BitmapDescriptor? providerFallbackIcon,
 }) => {
   if (customer != null)
     Marker(
@@ -92,7 +95,15 @@ Set<Marker> customerAreaMarkers({
     Marker(
       markerId: MarkerId(pin.id),
       position: pin.position,
-      infoWindow: InfoWindow(title: pin.label, snippet: 'Approximate barangay center; not a home location'),
+      icon:
+          providerIcons[pin.id] ??
+          providerFallbackIcon ??
+          BitmapDescriptor.defaultMarker,
+      anchor: const Offset(0.5, 0.5),
+      infoWindow: InfoWindow(
+        title: pin.label,
+        snippet: 'Approximate barangay center; not a home location',
+      ),
       zIndexInt: 1,
     ),
 };
