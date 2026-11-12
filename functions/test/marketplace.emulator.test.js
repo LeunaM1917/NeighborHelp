@@ -197,10 +197,12 @@ test('closing a contract requires resolving outstanding work and preserves accep
   await close({contractId:'offer'},auth('c'));
   const after=(await db.doc('contracts/offer').get()).data();assert.equal(after.status,'ended');assert.equal(after.agreement.hash,before.agreement.hash);
 });
-test('legacy hourly amounts remain unchanged and legacy pending requests cannot bypass new consent',async()=>{
-  const legacy={customerId:'c',providerId:'p',serviceId:'p',status:'Pending',pricingType:'hourly',hourlyRate:123,totalFee:246,durationHours:2,scheduledDate:Timestamp.fromMillis(Date.now()+86400000)};
-  await db.doc('bookings/legacy').set(legacy);await assert.rejects(booking({action:'accept',bookingId:'legacy'},auth('p')),/Legacy pending/);
+test('legacy hourly requests can be accepted without a contract and retain their price',async()=>{
+  const legacy={customerId:'c',providerId:'p',serviceId:'p',status:'Pending',pricingType:'hourly',hourlyRate:123,totalFee:246,durationHours:2,location:new GeoPoint(7.3,125.6),scheduledDate:Timestamp.fromMillis(futureWorkStart())};
+  await db.doc('bookings/legacy').set(legacy);await booking({action:'accept',bookingId:'legacy'},auth('p'));
   assert.equal((await db.doc('bookings/legacy').get()).data().totalFee,246);
+  assert.equal((await db.doc('bookings/legacy').get()).data().status,'Accepted');
+  assert.equal((await db.collection('contracts').get()).size,0);
 });
 test('only the System Administrator can review; opening TESDA alone never approves',async()=>{
   await db.doc('serviceProviders/p').update({certificationHistory:[{...certificate(),url:'gs://test/certificates/p/cert/proof.pdf',status:'Pending'}],approvedCertificationIds:[]});

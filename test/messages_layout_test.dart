@@ -7,6 +7,7 @@ import 'package:neighbor_help/models/app_user.dart';
 import 'package:neighbor_help/models/booking.dart';
 import 'package:neighbor_help/models/inquiry.dart';
 import 'package:neighbor_help/models/message.dart';
+import 'package:neighbor_help/models/service.dart';
 import 'package:neighbor_help/screens/shared/messages_hub.dart';
 import 'package:neighbor_help/theme/role_theme.dart';
 import 'support/fake_messaging_repository.dart';
@@ -183,7 +184,7 @@ void main() {
       isNull,
     );
     final offer = find.ancestor(
-      of: find.text('Prepare fixed or daily offer'),
+      of: find.text('Request booking'),
       matching: find.byWidgetPredicate((w) => w is TextButton),
     );
     expect(tester.widget<TextButton>(offer).onPressed, isNull);
@@ -243,29 +244,36 @@ void main() {
     expect(tester.takeException(), isNull);
   });
   testOnPlatform(
-    'inquiries without a booking still support pre-contract discussion',
+    'inquiries support messaging without a discussion prerequisite for booking',
     (tester) async {
       size(tester, 1440);
       final repo = repository()
         ..threads = [thread('first', 'First Provider', discussed: false)];
+      repo.servicesById['s-first'] = ServiceListing.fromFirestore('s-first', {
+        'providerId': 'p-first',
+        'serviceTitle': 'House Cleaning',
+        'category': 'Cleaning',
+        'isActive': true,
+        'approvalStatus': 'Approved',
+      });
       await tester.pumpWidget(app(repo));
       await tester.pumpAndSettle();
       expect(
         find.text(
           'Both parties must send a message before an offer can be sent.',
         ),
-        findsOneWidget,
+        findsNothing,
       );
       expect(
         tester
             .widget<TextButton>(
               find.ancestor(
-                of: find.text('Prepare fixed or daily offer'),
+                of: find.text('Request booking'),
                 matching: find.byWidgetPredicate((w) => w is TextButton),
               ),
             )
             .onPressed,
-        isNull,
+        isNotNull,
       );
       expect(tester.widget<TextField>(composer()).enabled, isTrue);
     },
@@ -278,7 +286,7 @@ void main() {
       await tester.pumpWidget(app(repo, asCustomer: false));
       await tester.pumpAndSettle();
       expect(find.byType(VerticalDivider), findsNWidgets(2));
-      expect(find.text('Prepare fixed or daily offer'), findsNothing);
+      expect(find.text('Request booking'), findsNothing);
       expect(find.text('Test Customer'), findsNWidgets(3));
       expect(tester.takeException(), isNull);
     },

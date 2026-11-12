@@ -118,9 +118,9 @@ class _CustomerBrowseTabState extends State<CustomerBrowseTab> {
       list = list
           .where(
             (s) =>
-                s.title.toLowerCase().contains(_query) ||
-                s.category.toLowerCase().contains(_query) ||
-                s.providerName.toLowerCase().contains(_query),
+                matchesServiceSearch(query: _query, title: s.title,
+                  category: s.category, providerName: s.providerName,
+                  area: s.serviceArea, profile: s.profile),
           )
           .toList();
     }

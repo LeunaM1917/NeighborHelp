@@ -114,7 +114,7 @@ service cloud.firestore {
         && grant.get('category', '') == s.category && grant.get('serviceTitle', '') == s.serviceTitle;
     }
     function supportedService(s, id) {
-      return s.get('priceType','') in ['fixed','daily','negotiable'] && (
+      return s.get('priceType','') in ['hourly','fixed','daily','negotiable'] && (
         (s.category == 'Home Repair' && s.serviceTitle in ['Basic Carpentry','Carpentry','Door Repair','Furniture Repair'])
         || (s.category == 'Cleaning' && s.serviceTitle in ['House Cleaning','Apartment Cleaning','Kitchen Cleaning','Bathroom Cleaning','Laundry Assistance','Ironing Service'])
         || (s.category == 'Repair and Technical Services' && s.serviceTitle in ['Computer Repair','Laptop Repair','Internet/Wi-Fi Setup','Aircon Cleaning','Aircon Repair','Refrigerator Repair'])

@@ -284,7 +284,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text('Admin Name · Administrator'), findsOneWidget);
         expect(find.text('Provider evidence'), findsOneWidget);
-        expect(find.text('Prepare fixed or daily offer'), findsNothing);
+        expect(find.text('Request booking'), findsNothing);
         expect(tester.takeException(), isNull);
       },
     );

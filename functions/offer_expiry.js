@@ -10,7 +10,10 @@ async function expire(db,id,now=Date.now()){
     const ref=db.doc(`bookings/${id}`),b=(await tx.get(ref)).data();
     if(!expired(b,now))return false;
     tx.update(ref,{status:'Expired',expiredAt:FieldValue.serverTimestamp(),updatedBy:'system',updatedByRole:'System',updatedAt:FieldValue.serverTimestamp()});
-    for(const userId of [b.customerId,b.providerId])tx.create(db.collection('notifications').doc(),{userId,title:'Contract offer expired',message:'This unanswered offer passed its response deadline. Discuss a new schedule and send a new offer if you still want the work.',relatedBookingId:id,notificationType:'Offer',isRead:false,createdAt:FieldValue.serverTimestamp()});
+    for(const userId of [b.customerId,b.providerId])tx.create(db.collection('notifications').doc(),{userId,
+      title:b.agreement ? 'Contract offer expired' : 'Booking request expired',
+      message:b.agreement ? 'This unanswered offer passed its response deadline. Discuss a new schedule and send a new offer if you still want the work.' : 'This unanswered booking passed its scheduled start. Send a new booking request with a future schedule if you still need the service.',
+      relatedBookingId:id,notificationType:b.agreement ? 'Offer' : 'Booking',isRead:false,createdAt:FieldValue.serverTimestamp()});
     tx.create(db.collection('auditLogs').doc(),{actorId:'system',actorRole:'System',action:'booking.expire',collection:'bookings',referenceId:id,createdAt:FieldValue.serverTimestamp()});
     return true;
   });

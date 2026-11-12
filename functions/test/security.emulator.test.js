@@ -167,11 +167,12 @@ test('blocks revoke an issued upload permit and private contract records cannot 
   await assertFails(getDoc(doc(env.authenticatedContext('customer').firestore(),'rateLimits','private')));
 });
 
-test('providers cannot publish custom services or reintroduce hourly listings',async()=>{
+test('hourly listings require review and providers cannot publish unsupported services',async()=>{
   const db=env.authenticatedContext('provider').firestore();
   const data={providerId:'provider',category:'Cleaning',serviceTitle:'House Cleaning',priceType:'fixed',approvalStatus:'Pending',isActive:false};
   await assertSucceeds(setDoc(doc(db,'services','valid'),data));
-  await assertFails(setDoc(doc(db,'services','hourly'),{...data,priceType:'hourly'}));
+  await assertSucceeds(setDoc(doc(db,'services','hourly'),{...data,priceType:'hourly'}));
+  await assertFails(updateDoc(doc(db,'services','hourly'),{approvalStatus:'Approved',isActive:true}));
   await assertFails(setDoc(doc(db,'services','custom'),{...data,category:'Custom Services',serviceTitle:'Anything'}));
   await assertFails(setDoc(doc(db,'services','electric'),{...data,category:'Repair and Technical Services',serviceTitle:'Electrical Repair'}));
 });

@@ -177,6 +177,31 @@ void main() {
     expect(camera.last, lessThanOrEqualTo(17));
   });
   test(
+    'a map center is not used as a customer address when no location is saved',
+    () {
+      final area = panaboBarangays.firstWhere(
+        (b) => !barangaysCover([b['id'] as String], origin),
+      );
+      final p = provider(
+        'covered-elsewhere',
+        point: GeoPoint(
+          (area['latitude'] as num).toDouble(),
+          (area['longitude'] as num).toDouble(),
+        ),
+        barangays: [area['id'] as String],
+      );
+      expect(buildNearbyMapPins(providers: [p], users: {}), hasLength(1));
+      expect(
+        CustomerProviderDiscovery(providers: [p]).nearby.single.distanceKm,
+        isNull,
+      );
+      expect(
+        buildNearbyMapPins(providers: [p], users: {}, origin: origin),
+        isEmpty,
+      );
+    },
+  );
+  test(
     'unknown provider coordinates never produce a misleading nearby label',
     () async {
       final customer = AppUser.fromFirestore('c', {'location': origin});

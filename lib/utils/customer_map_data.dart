@@ -32,12 +32,7 @@ class CustomerProviderDiscovery {
       providers: providers
           .where((p) => geoPointOrNull(p.location) != null)
           .toList(),
-      customerOrigin:
-          geoPointOrNull(origin) ??
-          GeoPoint(
-            kDefaultPanaboLatLng.latitude,
-            kDefaultPanaboLatLng.longitude,
-          ),
+      customerOrigin: geoPointOrNull(origin),
     );
     awaitingLocation = rankProvidersByRecommendation(
       providers: providers

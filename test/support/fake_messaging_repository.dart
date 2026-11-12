@@ -9,6 +9,7 @@ import 'package:neighbor_help/services/messaging_repository.dart';
 class FakeMessagingRepository extends MessagingRepository {
   List<Inquiry> threads = [];
   List<Booking> bookingRows = [];
+  final servicesById = <String, ServiceListing>{};
   final reportsById = <String, BookingUserReport>{};
   @override
   Stream<BookingUserReport?> report(String id) => Stream.value(reportsById[id]);
@@ -38,7 +39,7 @@ class FakeMessagingRepository extends MessagingRepository {
   @override
   Future<AppUser?> user(String id) async => null;
   @override
-  Future<ServiceListing?> service(String id) async => null;
+  Future<ServiceListing?> service(String id) async => servicesById[id];
   @override
   String newId() => 'message-${++_id}';
   @override

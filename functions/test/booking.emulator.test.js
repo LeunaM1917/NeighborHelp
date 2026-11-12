@@ -103,3 +103,67 @@ test('a missing or unrelated certificate blocks technical service bookings', asy
   await db.doc('services/cleaning').update({category:'Home Repair',serviceTitle:'Carpentry'});
   await assert.rejects(create('one'),/certificate/);
 });
+
+async function direct(id, extra = {}, uid = 'customer') {
+  const at = start();
+  return command({action: 'create', bookingId: id, serviceId: 'cleaning',
+    serviceLocation: 'Panabo City, test address', location: {latitude: 7.3, longitude: 125.6},
+    scheduledDate: at, scheduledEndDate: at + 3600000, pricingType: 'hourly', ...extra}, auth(uid));
+}
+test('direct booking works without chat or contracts through completion', async () => {
+  await direct('direct', {pricingType: 'fixed', totalFee: 350.25});
+  await command({action: 'accept', bookingId: 'direct'}, auth('provider'));
+  let b = (await db.doc('bookings/direct').get()).data();
+  assert.equal(b.status, 'Accepted');
+  assert.equal(b.totalFee, 350.25);
+  for (const field of ['agreement', 'contractId', 'inquiryId', 'milestoneNumber']) assert.equal(b[field], undefined);
+  assert.equal((await db.collection('contracts').get()).size, 0);
+  assert.equal((await db.doc('bookings/direct').collection('agreementVersions').get()).size, 0);
+  // Advance the appointment to exercise real start/report/confirmation commands.
+  const {Timestamp} = require('firebase-admin/firestore');
+  await db.doc('bookings/direct').update({scheduledDate: Timestamp.fromMillis(Date.now() - 3600000),
+    scheduledEndDate: Timestamp.fromMillis(Date.now() + 3600000)});
+  await command({action: 'start', bookingId: 'direct'}, auth('provider'));
+  await command({action: 'complete', bookingId: 'direct'}, auth('provider'));
+  await assert.rejects(command({action: 'confirmCompletion', bookingId: 'direct', confirmDeliverables: true}, auth('second')), /another account/);
+  await command({action: 'confirmCompletion', bookingId: 'direct', confirmDeliverables: true}, auth('customer'));
+  b = (await db.doc('bookings/direct').get()).data();
+  assert.equal(b.status, 'Completed');
+  const p = (await db.doc('serviceProviders/provider').get()).data();
+  assert.equal(p.acceptedBookings, 1); assert.equal(p.completedBookings, 1);
+  await assert.rejects(command({action: 'confirmCompletion', bookingId: 'direct', confirmDeliverables: true}, auth('customer')), /reported completion/);
+});
+test('direct requests retain server pricing, response permissions and conflict protection', async () => {
+  const at = start();
+  await direct('one', {totalFee: 1, hourlyRate: 1});
+  await direct('two', {}, 'second');
+  assert.equal((await db.doc('bookings/one').get()).data().totalFee, 100);
+  await assert.rejects(command({action: 'accept', bookingId: 'one'}, auth('customer')), /provider/);
+  const outcomes = await Promise.allSettled(['one', 'two'].map(bookingId => command({action: 'accept', bookingId}, auth('provider'))));
+  assert.equal(outcomes.filter(x => x.status === 'fulfilled').length, 1);
+  const pending = (await db.collection('bookings').where('status', '==', 'Pending').get()).docs[0];
+  await command({action: 'decline', bookingId: pending.id}, auth('provider'));
+  assert.equal((await pending.ref.get()).data().status, 'Declined');
+  assert.equal((await db.collection('contracts').get()).size, 0);
+  await direct('reschedule', {scheduledDate: at + 4 * 3600000, scheduledEndDate: at + 5 * 3600000});
+  await command({action: 'requestReschedule', bookingId: 'reschedule', scheduledDate: at + 6 * 3600000}, auth('customer'));
+  assert.equal((await db.doc('bookings/reschedule').get()).data().scheduledDate.toMillis(), at + 4 * 3600000);
+  await command({action: 'approveReschedule', bookingId: 'reschedule'}, auth('provider'));
+  assert.equal((await db.doc('bookings/reschedule').get()).data().scheduledDate.toMillis(), at + 6 * 3600000);
+});
+test('direct requests cannot bypass coverage, verification or approval', async () => {
+  await assert.rejects(direct('outside', {location: {latitude: 14.6, longitude: 121}}), /barangays/);
+  await db.doc('users/customer').update({isVerified: false});
+  await assert.rejects(direct('unverified'), /government ID/);
+  await db.doc('users/customer').update({isVerified: true});
+  await db.doc('services/cleaning').update({approvalStatus: 'Pending'});
+  await assert.rejects(direct('unapproved'), /unavailable/);
+});
+test('direct bookings respect conversation blocks without requiring a chat', async () => {
+  await direct('pending');
+  const key = require('node:crypto').createHash('sha256').update(JSON.stringify(['customer', 'provider'])).digest('hex');
+  await db.doc(`inquiries/${key}`).set({blockedBy: ['provider']});
+  await assert.rejects(direct('blocked'), /blocked/);
+  await assert.rejects(command({action: 'accept', bookingId: 'pending'}, auth('provider')), /blocked/);
+  assert.equal((await db.doc('bookings/pending').get()).data().status, 'Pending');
+});

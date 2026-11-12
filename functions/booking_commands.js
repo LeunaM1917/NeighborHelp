@@ -6,6 +6,8 @@ const {validateOffer, makeAgreement} = require('./agreements');
 const {coversSchedule, conflicts} = require('./scheduling');
 const offerExpiry=require('./offer_expiry');
 const accountSetup = require('./account_setup');
+const inquiryKey = (customerId, providerId) => require('node:crypto').createHash('sha256')
+  .update(JSON.stringify([customerId, providerId])).digest('hex');
 
 module.exports = function bookingCommands({ db, admin, functions }) {
   const fail = (code, message) => { throw new functions.https.HttpsError(code, message); };
@@ -52,26 +54,37 @@ module.exports = function bookingCommands({ db, admin, functions }) {
         if (!hasMatchingCertificate(profile, service.category, service.serviceTitle)) fail('failed-precondition', 'The provider needs a valid certificate for this service.');
         const location = point(data.location);
         if (!require('./provider_area').covers(profile,location)) fail('failed-precondition', 'Choose a job address within the provider selected service barangays. Discuss boundary estimates in messages.');
-        const offer = validateOffer(data, fail);
-        const inquiryId = String(data.inquiryId || '');
-        if (!/^[a-f0-9]{64}$/.test(inquiryId)) fail('failed-precondition', 'Message the provider and discuss the requirements before sending an offer.');
-        const inquiry = (await tx.get(db.collection('inquiries').doc(inquiryId))).data();
-        if (inquiry?.customerId !== uid || inquiry?.providerId !== providerId || !(inquiry.customerMessageCount > 0 && inquiry.providerMessageCount > 0)) fail('failed-precondition', 'Both parties must discuss the work in this conversation before an offer.');
-        if ((inquiry.blockedBy || []).length) fail('failed-precondition','This conversation is blocked. New offers cannot be sent.');
-        const start = Number(data.scheduledDate), end = start + (offer.numberOfDays - 1) * 86400000 + offer.hoursPerDay * 3600000;
-        if (!Number.isFinite(start) || start <= Date.now() || start > Date.now() + 180 * 86400000) fail('invalid-argument', 'Choose a future start within 180 days.');
         const address = String(data.serviceLocation || '').trim();
         if (address.length < 5 || address.length > 500) fail('invalid-argument', 'Enter the complete service address.');
-        const hours = offer.hoursPerDay * offer.numberOfDays;
-        if(!coversSchedule(profile,{scheduledDate:start,scheduledEndDate:end,...offer})) fail('failed-precondition','The requested work periods are outside the provider\'s working hours. Discuss a different schedule first.');
-        const agreement = makeAgreement({id,offer,customer:{id:uid,fullName:actor.fullName || 'Customer'},provider:{id:providerId,fullName:provider.fullName || 'Provider'},service:service.serviceTitle,address,start,end});
-        patch = { customerId: uid, providerId, serviceId: serviceSnap.id, serviceLocation: address, location,
-          scheduledDate: timestamp(start), scheduledEndDate: timestamp(end), durationHours: hours,
-          ...offer, inquiryId, agreement, customerAcceptedAt: stamp(), customerAcceptedHash:agreement.hash,
-          notes: String(data.notes || '').trim().slice(0, 3000), status: 'Pending',offerExpiresAt:timestamp(offerExpiry.deadline(start)),createdAt: stamp() };
-        if (action === 'preview') return {agreement, totalFee:offer.totalFee};
-        if (data.agreementHash !== agreement.hash) fail('failed-precondition','The agreement changed. Preview and accept its current version again.');
-        // An offer does not reserve time. The provider's acceptance takes the lock.
+        if (action === 'create' && !data.inquiryId && !data.agreementHash) {
+          const thread = (await tx.get(db.doc(`inquiries/${inquiryKey(uid, providerId)}`))).data();
+          if ((thread?.blockedBy || []).length) fail('failed-precondition', 'This conversation is blocked. New bookings cannot be sent.');
+          const {start, end, ...details} = require('./direct_booking')(data, service, profile, fail);
+          patch = {customerId: uid, providerId, serviceId: serviceSnap.id,
+            serviceLocation: address, location, scheduledDate: timestamp(start),
+            scheduledEndDate: timestamp(end), ...details, status: 'Pending',
+            notes: String(data.notes || '').trim().slice(0, 3000), createdAt: stamp()};
+        } else {
+          // Keep existing contract clients/records compatible during the rollout.
+          const offer = validateOffer(data, fail);
+          const inquiryId = String(data.inquiryId || '');
+          if (!/^[a-f0-9]{64}$/.test(inquiryId)) fail('failed-precondition', 'Message the provider and discuss the requirements before sending an offer.');
+          const inquiry = (await tx.get(db.collection('inquiries').doc(inquiryId))).data();
+          if (inquiry?.customerId !== uid || inquiry?.providerId !== providerId || !(inquiry.customerMessageCount > 0 && inquiry.providerMessageCount > 0)) fail('failed-precondition', 'Both parties must discuss the work in this conversation before an offer.');
+          if ((inquiry.blockedBy || []).length) fail('failed-precondition','This conversation is blocked. New offers cannot be sent.');
+          const start = Number(data.scheduledDate), end = start + (offer.numberOfDays - 1) * 86400000 + offer.hoursPerDay * 3600000;
+          if (!Number.isFinite(start) || start <= Date.now() || start > Date.now() + 180 * 86400000) fail('invalid-argument', 'Choose a future start within 180 days.');
+          const hours = offer.hoursPerDay * offer.numberOfDays;
+          if(!coversSchedule(profile,{scheduledDate:start,scheduledEndDate:end,...offer})) fail('failed-precondition','The requested work periods are outside the provider\'s working hours. Discuss a different schedule first.');
+          const agreement = makeAgreement({id,offer,customer:{id:uid,fullName:actor.fullName || 'Customer'},provider:{id:providerId,fullName:provider.fullName || 'Provider'},service:service.serviceTitle,address,start,end});
+          patch = { customerId: uid, providerId, serviceId: serviceSnap.id, serviceLocation: address, location,
+            scheduledDate: timestamp(start), scheduledEndDate: timestamp(end), durationHours: hours,
+            ...offer, inquiryId, agreement, customerAcceptedAt: stamp(), customerAcceptedHash:agreement.hash,
+            notes: String(data.notes || '').trim().slice(0, 3000), status: 'Pending',offerExpiresAt:timestamp(offerExpiry.deadline(start)),createdAt: stamp() };
+          if (action === 'preview') return {agreement, totalFee:offer.totalFee};
+          if (data.agreementHash !== agreement.hash) fail('failed-precondition','The agreement changed. Preview and accept its current version again.');
+          // An offer does not reserve time. The provider's acceptance takes the lock.
+        }
       } else {
         if (!b) fail('not-found', 'Booking not found.');
         providerId = b.providerId;
@@ -84,13 +97,14 @@ module.exports = function bookingCommands({ db, admin, functions }) {
           case 'decline': {
             if (!provider || status !== 'pending') fail('failed-precondition', 'Only the provider can respond to a pending booking.');
             if(offerExpiry.expired(b))fail('failed-precondition','This offer expired. Ask the customer to discuss and send a new offer.');
-            if (action === 'accept' && (!b.agreement || data.acceptAgreement !== true || data.agreementHash !== b.agreement.hash)) fail('failed-precondition', 'Review and accept the current contract. Legacy pending requests must be replaced with a fixed or daily offer.');
+            if (action === 'accept' && b.agreement && (data.acceptAgreement !== true || data.agreementHash !== b.agreement.hash)) fail('failed-precondition', 'Review and accept the current contract.');
             if (action === 'accept' && windowFor(b).start <= Date.now()) fail('failed-precondition','This offer has passed its start time. Ask the customer for a new offer.');
-            if(action==='accept' && b.inquiryId) {
-              const thread=(await tx.get(db.doc(`inquiries/${b.inquiryId}`))).data();
-              if(!thread || (thread.blockedBy || []).length) fail('failed-precondition','The inquiry is unavailable or blocked. Resolve that before accepting a new contract.');
+            if(action==='accept') {
+              const thread=(await tx.get(db.doc(`inquiries/${b.inquiryId || inquiryKey(b.customerId, providerId)}`))).data();
+              if((b.inquiryId && !thread) || (thread?.blockedBy || []).length) fail('failed-precondition','The conversation is unavailable or blocked. Resolve that before accepting a booking.');
             }
-            patch = action === 'accept' ? { status: 'Accepted', acceptedAt: stamp(),providerAcceptedAt:stamp(),providerAcceptedHash:b.agreement.hash } : { status: 'Declined' };
+            patch = action === 'accept' ? { status: 'Accepted', acceptedAt: stamp(),
+              ...(b.agreement ? {providerAcceptedAt:stamp(),providerAcceptedHash:b.agreement.hash} : {}) } : { status: 'Declined' };
             if (action === 'accept') newWindow = b;
             break;
           }
@@ -127,7 +141,7 @@ module.exports = function bookingCommands({ db, admin, functions }) {
           case 'confirmCompletion':
             if(!customer || status !== 'awaiting confirmation') fail('failed-precondition','Only the customer can confirm reported completion.');
             if(data.confirmDeliverables !== true) fail('failed-precondition','Inspect the agreed deliverables and confirm they are complete.');
-            patch = {status:'Milestone Complete',completedAt:stamp(),completionConfirmedBy:uid};
+            patch = {status:b.agreement ? 'Milestone Complete' : 'Completed',completedAt:stamp(),completionConfirmedBy:uid};
             break;
           case 'requestCorrections':
             if(!customer || status !== 'awaiting confirmation') fail('failed-precondition','Only the customer can request corrections to reported work.');
@@ -177,7 +191,7 @@ module.exports = function bookingCommands({ db, admin, functions }) {
       await tx.get(lockRef);
       if (newWindow) {
         const profile=(await tx.get(db.doc(`serviceProviders/${providerId}`))).data();
-        if(newWindow.agreement && !coversSchedule(profile || {},newWindow)) fail('failed-precondition','The provider\'s working hours no longer cover every requested work period.');
+        if(!coversSchedule(profile || {},newWindow)) fail('failed-precondition','The provider\'s working hours no longer cover every requested work period.');
         const other = await tx.get(db.collection('bookings').where('providerId', '==', providerId));
         if (other.docs.some(d => d.id !== id && active(d.data()) && conflicts(newWindow, d.data()))) fail('already-exists', 'The provider already has an accepted booking or a 15-minute travel buffer during this time.');
       }
@@ -198,12 +212,14 @@ module.exports = function bookingCommands({ db, admin, functions }) {
           || !accountSetup.detailsComplete(actor, profile)) fail('failed-precondition', 'Both parties must complete account setup and the customer must have approved identity verification before this offer can be accepted.');
         if (!profile?.isVerified || customer?.accountStatus !== 'Active' || !service?.isActive || service.approvalStatus !== 'Approved'
           || !hasMatchingCertificate(profile, service.category, service.serviceTitle)) fail('failed-precondition', 'The service or one of its participants is no longer eligible for booking.');
-        if(!require('./provider_area').covers(profile,b.location)) fail('failed-precondition','The provider no longer serves this barangay. Discuss coverage before sending a new offer.');
-        // Each accepted offer has its own immutable agreement; never overwrite a past contract.
-        contractRef = db.collection('contracts').doc(id);
-        contract = (await tx.get(contractRef)).data();
-        patch.contractId = contractRef.id;
-        patch.milestoneNumber = (contract?.milestoneCount || 0) + 1;
+        if(!require('./provider_area').covers(profile,point(b.location))) fail('failed-precondition','The provider no longer serves this barangay. Discuss coverage before sending a new offer.');
+        if (b.agreement) {
+          // Preserve acceptance evidence for existing contract bookings.
+          contractRef = db.collection('contracts').doc(id);
+          contract = (await tx.get(contractRef)).data();
+          patch.contractId = contractRef.id;
+          patch.milestoneNumber = (contract?.milestoneCount || 0) + 1;
+        }
       }
       const who = { updatedBy: uid, updatedByRole: actor.role, updatedAt: stamp() };
       if (action === 'create') tx.create(ref, { ...patch, ...who });
@@ -212,14 +228,16 @@ module.exports = function bookingCommands({ db, admin, functions }) {
       if(['complete','confirmCompletion','requestCorrections'].includes(action)) tx.create(ref.collection('workEvents').doc(),{action,actorId:uid,reason:patch.correctionRequest && typeof patch.correctionRequest==='string' ? patch.correctionRequest : '',createdAt:stamp()});
       tx.set(lockRef, { version: FieldValue.increment(1), updatedAt: stamp() }, { merge: true });
       if (patch.status === 'Accepted') {
-        tx.set(contractRef, { customerId: b.customerId, providerId, status: 'active', milestoneCount: patch.milestoneNumber,
-          agreement:b.agreement, customerAcceptedAt:b.customerAcceptedAt,customerAcceptedHash:b.customerAcceptedHash,
-          providerAcceptedAt:stamp(),providerAcceptedHash:b.agreement.hash,
-          createdAt: contract?.createdAt || stamp(), updatedAt: stamp() }, { merge: true });
+        if (contractRef) {
+          tx.set(contractRef, { customerId: b.customerId, providerId, status: 'active', milestoneCount: patch.milestoneNumber,
+            agreement:b.agreement, customerAcceptedAt:b.customerAcceptedAt,customerAcceptedHash:b.customerAcceptedHash,
+            providerAcceptedAt:stamp(),providerAcceptedHash:b.agreement.hash,
+            createdAt: contract?.createdAt || stamp(), updatedAt: stamp() }, { merge: true });
+          tx.create(ref.collection('agreementVersions').doc('0'),{agreement:b.agreement,revision:0,customerAcceptedAt:b.customerAcceptedAt,providerAcceptedAt:stamp()});
+        }
         tx.update(profileRef, { acceptedBookings: FieldValue.increment(1) });
-        tx.create(ref.collection('agreementVersions').doc('0'),{agreement:b.agreement,revision:0,customerAcceptedAt:b.customerAcceptedAt,providerAcceptedAt:stamp()});
       }
-      if (patch.status === 'Milestone Complete') tx.update(db.collection('serviceProviders').doc(providerId), { completedBookings: FieldValue.increment(1) });
+      if (['Milestone Complete', 'Completed'].includes(patch.status)) tx.update(db.collection('serviceProviders').doc(providerId), { completedBookings: FieldValue.increment(1) });
       tx.create(auditRef, { actorId: uid, actorRole: actor.role, action: `booking.${action}`, collection: 'bookings', referenceId: id,
         beforeStatus: b?.status || '', afterStatus: patch.status || b?.status || '', createdAt: stamp() });
       return { bookingId: id };

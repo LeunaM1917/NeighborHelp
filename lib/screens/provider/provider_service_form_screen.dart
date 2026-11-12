@@ -108,7 +108,7 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
   final List<_LocalServiceImage> _localImages = [];
   final _picker = ImagePicker();
 
-  static const _priceTypes = ['fixed', 'daily', 'negotiable'];
+  static const _priceTypes = ['hourly', 'fixed', 'daily', 'negotiable'];
   static const _durations = [
     '30 minutes',
     '1 hour',
@@ -133,8 +133,8 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
       _category = (_isProposedService || ServiceCategories.categoryNames.contains(e.category))
           ? e.category
           : null;
-      _priceType = _priceTypes.contains(e.priceType)
-          ? e.priceType
+      _priceType = _priceTypes.contains(e.priceType.toLowerCase())
+          ? e.priceType.toLowerCase()
           : 'negotiable';
       _isActive = e.isActive;
       _duration = _durations.contains(e.estimatedDuration)
@@ -577,7 +577,7 @@ class _ProviderServiceFormScreenState extends State<ProviderServiceFormScreen> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'List a certified service so customers can message you and propose a fixed or daily contract.',
+                  'List a certified service so customers can message you and send a booking request.',
                   style: GoogleFonts.inter(
                     fontSize: 14,
                     color: FigmaColors.gray600,

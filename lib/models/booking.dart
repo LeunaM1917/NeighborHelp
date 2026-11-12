@@ -67,7 +67,7 @@ class Booking {
   String get status => isExpired ? 'Expired' : _status;
   final double? totalFee;
 
-  /// New offers use `fixed` or `daily`; `hourly` remains for historical records.
+  /// Direct bookings use `hourly` or `fixed`; historical contracts may be daily.
   final String? pricingType;
   final double? hourlyRate;
   final double? durationHours;

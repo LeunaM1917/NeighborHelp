@@ -23,7 +23,7 @@ import '../../widgets/data_stream_builder.dart';
 import '../../widgets/loading_indicator.dart';
 import '../../widgets/stream_snapshot.dart';
 import '../../widgets/work_completion_card.dart';
-import '../customer/contract_offer_screen.dart';
+import '../customer/customer_service_detail_screen.dart';
 import '../customer/customer_booking_detail_screen.dart';
 import '../provider/provider_booking_detail_screen.dart';
 import '../provider/provider_booking_request_review.dart';
@@ -1762,25 +1762,27 @@ class _InfoPaneState extends State<_InfoPane> {
                   if (widget.asCustomer)
                     TextButton.icon(
                       onPressed:
-                          widget.thread.inquiry.hasDiscussion &&
+                          widget.service?.isMarketplaceVisible == true &&
                               !widget.thread.inquiry.isBlocked
-                          ? () => ContractOfferScreen.open(context, appUser: widget.appUser, inquiry: widget.thread.inquiry)
+                          ? () => Navigator.push<void>(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => CustomerServiceDetailScreen(
+                                  appUser: widget.appUser,
+                                  listing: widget.service!,
+                                ),
+                              ),
+                            )
                           : null,
                       icon: const Icon(Icons.description_outlined),
-                      label: const Text('Prepare fixed or daily offer'),
-                    ),
-                  if (widget.asCustomer && !widget.thread.inquiry.hasDiscussion)
-                    const Text(
-                      'Both parties must send a message before an offer can be sent.',
+                      label: const Text('Request booking'),
                     ),
                   const SizedBox(height: 20),
                   _InfoExpansion(
                     icon: Icons.timeline_outlined,
                     title: 'Activity timeline',
                     child: widget.booking == null
-                        ? const Text(
-                            'Discuss the work before starting a contract.',
-                          )
+                        ? const Text('Booking activity will appear here.')
                         : BookingStatusTracker(status: widget.booking!.status),
                   ),
                   if (widget.thread.bookings.length > 1)

@@ -1,5 +1,24 @@
 import '../models/provider.dart';
 
+bool matchesServiceSearch({
+  required String query,
+  required String title,
+  required String category,
+  required String providerName,
+  required String area,
+  ServiceProviderProfile? profile,
+}) {
+  final term = query.trim().toLowerCase();
+  return term.isEmpty ||
+      [
+        title,
+        category,
+        providerName,
+        area,
+        profile?.serviceCoverageLabel ?? '',
+      ].any((s) => s.toLowerCase().contains(term));
+}
+
 bool matchesServiceFilters({
   required double price,
   required double rating,
@@ -13,7 +32,9 @@ bool matchesServiceFilters({
 }) {
   if (location != null &&
       location != 'All locations' &&
-      !area.toLowerCase().contains(location.toLowerCase())) {
+      !('$area ${profile?.serviceCoverageLabel ?? ''}').toLowerCase().contains(
+        location.toLowerCase(),
+      )) {
     return false;
   }
   if (priceFilter != null) {
@@ -25,7 +46,8 @@ bool matchesServiceFilters({
         price >= numbers.first) {
       return false;
     }
-    if (numbers.length == 2 && (price < numbers.first || price >= numbers.last)) {
+    if (numbers.length == 2 &&
+        (price < numbers.first || price >= numbers.last)) {
       return false;
     }
     if (priceFilter.endsWith('+') &&

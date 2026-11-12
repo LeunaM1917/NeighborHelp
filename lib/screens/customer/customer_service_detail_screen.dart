@@ -1,5 +1,10 @@
-import '../shared/inquiry_screen.dart';
-import '../../services/marketplace_service.dart';
+import '../../widgets/service_location_picker.dart';
+import '../../widgets/account_setup_gate.dart';
+import '../../models/user_role.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
+import '../../constants/collections.dart';
+import '../../models/booking.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -36,35 +41,62 @@ class CustomerServiceDetailScreen extends StatefulWidget {
       _CustomerServiceDetailScreenState();
 }
 
+enum BookingPricingMode { hourly, fixed }
+
+const _bookingDurationOptions = [1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 6.0, 8.0];
+
 class _CustomerServiceDetailScreenState
     extends State<CustomerServiceDetailScreen> {
+  final _location = TextEditingController();
+  final _notes = TextEditingController();
+  final _fixedPrice = TextEditingController();
+  GeoPoint? _bookingLocation;
+  String? _resolvedAddress;
+  DateTime? _preferredDate;
+  TimeOfDay? _preferredTime;
+  BookingPricingMode _pricingMode = BookingPricingMode.hourly;
+  double _durationHours = 1;
   bool _submitting = false;
-  Future<void> _messageProvider() async {
-    setState(() => _submitting = true);
-    try {
-      final id = await MarketplaceService.openInquiry(widget.listing.serviceId);
-      if (!mounted) return;
-      await Navigator.push(
-        context,
-        MaterialPageRoute<void>(
-          builder: (_) => InquiryScreen(appUser: widget.appUser, inquiryId: id),
-        ),
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              e is StateError
-                  ? e.message.toString()
-                  : 'Could not open the conversation. Please retry.',
-            ),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _submitting = false);
+
+  @override
+  void initState() {
+    super.initState();
+    final pt = widget.listing.priceType.toLowerCase();
+    _pricingMode = pt.contains('hour')
+        ? BookingPricingMode.hourly
+        : BookingPricingMode.fixed;
+    _fixedPrice.text = widget.listing.estimatedPrice.toStringAsFixed(0);
+    _durationHours = _parseDefaultDuration(widget.listing.estimatedDuration);
+    _preferredTime = const TimeOfDay(hour: 9, minute: 0);
+  }
+
+  double get _hourlyRate => widget.listing.estimatedPrice;
+
+  double get _estimatedTotal {
+    if (_pricingMode == BookingPricingMode.hourly) {
+      return _hourlyRate * _durationHours;
     }
+    return double.tryParse(_fixedPrice.text.trim()) ?? 0;
+  }
+
+  static double _parseDefaultDuration(String raw) {
+    final match = RegExp(r'(\d+(?:\.\d+)?)').firstMatch(raw);
+    if (match == null) return 1;
+    final value = double.tryParse(match.group(1)!);
+    if (value == null || value <= 0) return 1;
+    final hours = raw.toLowerCase().contains('min') ? value / 60 : value;
+    return _bookingDurationOptions.firstWhere(
+      (option) => option >= hours,
+      orElse: () => _bookingDurationOptions.last,
+    );
+  }
+
+  @override
+  void dispose() {
+    _location.dispose();
+    _notes.dispose();
+    _fixedPrice.dispose();
+    super.dispose();
   }
 
   @override
@@ -117,31 +149,43 @@ class _CustomerServiceDetailScreenState
                   providerUser: providerUserSnap.data,
                   providerProfile: providerSnap.data,
                 );
-                final right = Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          'Discuss your job first',
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        const SizedBox(height: 12),
+                final right = BookingRequestPanel(
+                  listing: widget.listing,
+                  location: _location,
+                  locationPicker: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ServiceLocationPicker(
+                        address: _location,
+                        origin: widget.appUser.location,
+                        onSelected: (point) => setState(() {
+                          _bookingLocation = point;
+                          _resolvedAddress = _location.text.trim();
+                        }),
+                      ),
+                      if (_bookingLocation != null &&
+                          _resolvedAddress == _location.text.trim())
                         const Text(
-                          'Message this provider about the work, materials, schedule and price. You may contact several providers to compare before sending a fixed or daily contract offer.',
+                          'Service location confirmed',
+                          style: TextStyle(fontSize: 12),
                         ),
-                        const SizedBox(height: 16),
-                        FilledButton.icon(
-                          onPressed: _submitting ? null : _messageProvider,
-                          icon: const Icon(Icons.chat_bubble_outline),
-                          label: Text(
-                            _submitting ? 'Opening...' : 'Message Provider',
-                          ),
-                        ),
-                      ],
-                    ),
+                    ],
                   ),
+                  notes: _notes,
+                  fixedPrice: _fixedPrice,
+                  preferredDate: _preferredDate,
+                  preferredTime: _preferredTime,
+                  pricingMode: _pricingMode,
+                  durationHours: _durationHours,
+                  hourlyRate: _hourlyRate,
+                  estimatedTotal: _estimatedTotal,
+                  onPickDate: _pickDate,
+                  onPickTime: _pickTime,
+                  onPricingModeChanged: (m) => setState(() => _pricingMode = m),
+                  onDurationChanged: (h) => setState(() => _durationHours = h),
+                  onFixedPriceChanged: () => setState(() {}),
+                  submitting: _submitting,
+                  onSubmit: _submitBooking,
                 );
 
                 final nativeMobile = MobileLayout.isNativeApp(context);
@@ -227,6 +271,142 @@ class _CustomerServiceDetailScreenState
         ),
       ),
     );
+  }
+
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _preferredDate ?? now.add(const Duration(days: 1)),
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 90)),
+    );
+    if (picked != null && mounted) setState(() => _preferredDate = picked);
+  }
+
+  Future<void> _pickTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _preferredTime ?? const TimeOfDay(hour: 9, minute: 0),
+    );
+    if (picked != null && mounted) setState(() => _preferredTime = picked);
+  }
+
+  Future<void> _submitBooking() async {
+    if (_submitting) return;
+    if (!await requireAccountSetup(
+      context,
+      appUser: widget.appUser,
+      role: UserRole.customer,
+      action: 'send a booking request',
+    )) {
+      return;
+    }
+    if (!mounted) return;
+    if (_preferredDate == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Choose a preferred date')));
+      return;
+    }
+    if (_preferredTime == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Choose a preferred time')));
+      return;
+    }
+    if (_location.text.trim().isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Enter a service location')));
+      return;
+    }
+    if (_pricingMode == BookingPricingMode.fixed) {
+      final fixed = double.tryParse(_fixedPrice.text.trim());
+      if (fixed == null || !fixed.isFinite || fixed <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Enter a valid fixed price')),
+        );
+        return;
+      }
+    }
+
+    if (_bookingLocation == null || _resolvedAddress != _location.text.trim()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Locate the service address or choose a map pin before booking.',
+          ),
+        ),
+      );
+      return;
+    }
+    setState(() => _submitting = true);
+    final firestore = FirestoreService();
+    final ref = FirebaseFirestore.instance
+        .collection(FirestoreCollections.bookings)
+        .doc();
+    final now = Timestamp.now();
+    final startDt = DateTime(
+      _preferredDate!.year,
+      _preferredDate!.month,
+      _preferredDate!.day,
+      _preferredTime!.hour,
+      _preferredTime!.minute,
+    );
+    if (!startDt.isAfter(DateTime.now())) {
+      setState(() => _submitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Choose a future booking time')),
+      );
+      return;
+    }
+    final endDt = startDt.add(
+      Duration(milliseconds: (_durationHours * 3600000).round()),
+    );
+
+    final isHourly = _pricingMode == BookingPricingMode.hourly;
+    final booking = Booking(
+      bookingId: ref.id,
+      customerId: widget.appUser.userId,
+      providerId: widget.listing.providerId,
+      serviceId: widget.listing.serviceId,
+      serviceLocation: _location.text.trim(),
+      location: _bookingLocation!,
+      scheduledDate: Timestamp.fromDate(startDt),
+      scheduledEndDate: Timestamp.fromDate(endDt),
+      status: 'Pending',
+      totalFee: _estimatedTotal,
+      pricingType: isHourly ? 'hourly' : 'fixed',
+      hourlyRate: isHourly ? _hourlyRate : null,
+      durationHours: _durationHours,
+      notes: _notes.text.trim().isEmpty ? null : _notes.text.trim(),
+      createdAt: now,
+      updatedAt: now,
+    );
+
+    try {
+      await firestore.createBooking(booking);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Booking request sent to the provider')),
+      );
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              e is StateError
+                  ? e.message.toString()
+                  : 'Could not send booking request. Try again.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 }
 
@@ -689,6 +869,451 @@ class _ServiceAndProviderSection extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class BookingRequestPanel extends StatelessWidget {
+  const BookingRequestPanel({
+    super.key,
+    required this.listing,
+    required this.location,
+    required this.locationPicker,
+    required this.notes,
+    required this.fixedPrice,
+    required this.preferredDate,
+    required this.preferredTime,
+    required this.pricingMode,
+    required this.durationHours,
+    required this.hourlyRate,
+    required this.estimatedTotal,
+    required this.onPickDate,
+    required this.onPickTime,
+    required this.onPricingModeChanged,
+    required this.onDurationChanged,
+    required this.onFixedPriceChanged,
+    required this.onSubmit,
+    this.submitting = false,
+  });
+
+  final ServiceListing listing;
+  final TextEditingController location;
+  final Widget locationPicker;
+  final TextEditingController notes;
+  final TextEditingController fixedPrice;
+  final DateTime? preferredDate;
+  final TimeOfDay? preferredTime;
+  final BookingPricingMode pricingMode;
+  final double durationHours;
+  final double hourlyRate;
+  final double estimatedTotal;
+  final VoidCallback onPickDate;
+  final VoidCallback onPickTime;
+  final ValueChanged<BookingPricingMode> onPricingModeChanged;
+  final ValueChanged<double> onDurationChanged;
+  final VoidCallback onFixedPriceChanged;
+  final VoidCallback onSubmit;
+  final bool submitting;
+
+  String _durationLabel(double hours) {
+    if (hours == hours.roundToDouble()) {
+      return '${hours.toInt()} hr${hours == 1 ? '' : 's'}';
+    }
+    return '${hours.toStringAsFixed(1)} hrs';
+  }
+
+  static String _formatEndTime(
+    BuildContext context,
+    DateTime? date,
+    TimeOfDay? start,
+    double hours,
+  ) {
+    if (date == null || start == null) return '—';
+    final startDt = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      start.hour,
+      start.minute,
+    );
+    final endDt = startDt.add(
+      Duration(milliseconds: (hours * 3600000).round()),
+    );
+    return TimeOfDay.fromDateTime(endDt).format(context);
+  }
+
+  static String _formatWindowSummary(
+    BuildContext context,
+    DateTime date,
+    TimeOfDay start,
+    double hours,
+    String Function(double) durationLabel,
+  ) {
+    final startDt = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      start.hour,
+      start.minute,
+    );
+    final endDt = startDt.add(
+      Duration(milliseconds: (hours * 3600000).round()),
+    );
+    final dateFmt = DateFormat('MMM d, yyyy');
+    return 'Provider sees: ${dateFmt.format(startDt)} • ${start.format(context)} – ${TimeOfDay.fromDateTime(endDt).format(context)} (${durationLabel(hours)})';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final rc = context.roleColors;
+    final dateLabel = preferredDate == null
+        ? 'Choose preferred date'
+        : DateFormat.yMMMMd().format(preferredDate!);
+    final startTimeLabel = preferredTime == null
+        ? 'Choose start time'
+        : preferredTime!.format(context);
+    final endTimeLabel = BookingRequestPanel._formatEndTime(
+      context,
+      preferredDate,
+      preferredTime,
+      durationHours,
+    );
+    final isHourly = pricingMode == BookingPricingMode.hourly;
+
+    return _InfoPanel(
+      title: 'Booking request',
+      icon: Icons.calendar_month_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Send a request to confirm availability before booking.',
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              color: FigmaColors.gray600,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 18),
+          TextField(
+            controller: location,
+            decoration: const InputDecoration(
+              labelText: 'Service location',
+              hintText: 'Street, barangay, city',
+              prefixIcon: Icon(Icons.place_outlined),
+            ),
+          ),
+          locationPicker,
+          const SizedBox(height: 14),
+          OutlinedButton.icon(
+            onPressed: onPickDate,
+            icon: const Icon(Icons.event_outlined),
+            label: Text(dateLabel),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Service window',
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: FigmaColors.gray800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<double>(
+            // ignore: deprecated_member_use
+            value: _bookingDurationOptions.contains(durationHours)
+                ? durationHours
+                : _bookingDurationOptions.first,
+            decoration: InputDecoration(
+              labelText: isHourly ? 'Estimated duration' : 'Expected duration',
+              helperText: isHourly
+                  ? null
+                  : 'Fixed-rate jobs need a clear start and end so providers know the scope.',
+              helperMaxLines: 2,
+              prefixIcon: const Icon(Icons.timelapse_outlined),
+            ),
+            items: [
+              for (final h in _bookingDurationOptions)
+                DropdownMenuItem(value: h, child: Text(_durationLabel(h))),
+            ],
+            onChanged: (v) {
+              if (v != null) onDurationChanged(v);
+            },
+          ),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onPickTime,
+                  icon: const Icon(Icons.schedule_outlined),
+                  label: Text(startTimeLabel),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(child: _EndTimeDisplay(label: endTimeLabel)),
+            ],
+          ),
+          if (preferredDate != null && preferredTime != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              BookingRequestPanel._formatWindowSummary(
+                context,
+                preferredDate!,
+                preferredTime!,
+                durationHours,
+                _durationLabel,
+              ),
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: FigmaColors.gray600,
+                height: 1.35,
+              ),
+            ),
+          ],
+          const SizedBox(height: 18),
+          Text(
+            'How do you want to pay?',
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: FigmaColors.gray800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _PricingModeChip(
+                  label: 'Hourly rate',
+                  subtitle: '₱${hourlyRate.toStringAsFixed(0)}/hr',
+                  selected: isHourly,
+                  onTap: () => onPricingModeChanged(BookingPricingMode.hourly),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _PricingModeChip(
+                  label: 'Fixed rate',
+                  subtitle: 'You set the price',
+                  selected: !isHourly,
+                  onTap: () => onPricingModeChanged(BookingPricingMode.fixed),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (isHourly) ...[
+            Text(
+              '₱${hourlyRate.toStringAsFixed(0)} × ${_durationLabel(durationHours)} = ₱${estimatedTotal.toStringAsFixed(0)}',
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: FigmaColors.gray600,
+              ),
+            ),
+          ] else ...[
+            TextField(
+              controller: fixedPrice,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              onChanged: (_) => onFixedPriceChanged(),
+              decoration: const InputDecoration(
+                labelText: 'Your offered price (₱)',
+                hintText: 'e.g. 500',
+                prefixIcon: Icon(Icons.payments_outlined),
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          TextField(
+            controller: notes,
+            maxLines: 4,
+            decoration: const InputDecoration(
+              labelText: 'Request notes',
+              hintText: 'Describe the work needed or special instructions',
+              alignLabelWithHint: true,
+            ),
+          ),
+          const SizedBox(height: 18),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: FigmaColors.gray50,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: FigmaColors.gray200),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Estimated service fee',
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: FigmaColors.gray600,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '₱${estimatedTotal.toStringAsFixed(0)}',
+                      style: GoogleFonts.inter(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: rc.primary,
+                      ),
+                    ),
+                  ],
+                ),
+                if (isHourly) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Based on ₱${hourlyRate.toStringAsFixed(0)}/hr for ${_durationLabel(durationHours)}',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: FigmaColors.gray500,
+                    ),
+                  ),
+                ] else ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Fixed rate • ${_durationLabel(durationHours)} window',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: FigmaColors.gray500,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+          FilledButton.icon(
+            onPressed: submitting ? null : onSubmit,
+            icon: submitting
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: FigmaColors.white,
+                    ),
+                  )
+                : const Icon(Icons.send_outlined),
+            label: Text(submitting ? 'Sending…' : 'Send booking request'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EndTimeDisplay extends StatelessWidget {
+  const _EndTimeDisplay({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      decoration: BoxDecoration(
+        color: FigmaColors.gray50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: FigmaColors.gray200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'End time',
+            style: GoogleFonts.inter(fontSize: 11, color: FigmaColors.gray500),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              const Icon(
+                Icons.flag_outlined,
+                size: 18,
+                color: FigmaColors.gray600,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  label,
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: FigmaColors.gray800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PricingModeChip extends StatelessWidget {
+  const _PricingModeChip({
+    required this.label,
+    required this.subtitle,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final String subtitle;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final rc = context.roleColors;
+    return Material(
+      color: selected ? rc.tint : FigmaColors.white,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: selected ? rc.primary : FigmaColors.gray200,
+              width: selected ? 2 : 1,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: selected ? rc.primary : FigmaColors.gray900,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  color: FigmaColors.gray600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

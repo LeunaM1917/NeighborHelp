@@ -57,10 +57,15 @@ class ServiceListing {
       category: data['category'] as String? ?? '',
       description: data['description'] as String? ?? '',
       estimatedPrice: (data['estimatedPrice'] as num?)?.toDouble() ?? 0,
-      // Old listing rates are indicative only; historical booking fees stay intact.
+      // Preserve hourly listings as well as existing fixed/daily estimates.
       priceType:
-          const ['fixed', 'daily', 'negotiable'].contains(data['priceType'])
-          ? data['priceType'] as String
+          const [
+            'hourly',
+            'fixed',
+            'daily',
+            'negotiable',
+          ].contains((data['priceType'] as String?)?.toLowerCase())
+          ? (data['priceType'] as String).toLowerCase()
           : 'negotiable',
       estimatedDuration: data['estimatedDuration'] as String? ?? '',
       availability: Map<String, dynamic>.from(

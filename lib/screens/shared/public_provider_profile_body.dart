@@ -406,7 +406,7 @@ class _ProviderActionsRail extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Discuss requirements, availability and price before sending a contract offer.',
+                'Message the provider or choose a service to send a booking request.',
                 style: GoogleFonts.inter(
                   fontSize: 13,
                   color: FigmaColors.gray600,

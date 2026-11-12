@@ -25,12 +25,7 @@ Future<bool> reviewAndRespondToOffer(
   if (current.isExpired) {
     throw StateError('This offer expired. Discuss and send a new offer.');
   }
-  if (accept) {
-    if (current.agreement == null) {
-      throw StateError(
-        'This historical pending request needs a new fixed or daily offer.',
-      );
-    }
+  if (accept && current.agreement != null) {
     final agreed = await confirmServiceAgreement(
       context,
       agreement: current.agreement!,

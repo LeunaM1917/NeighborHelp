@@ -88,6 +88,12 @@ class _ContractPanelState extends State<ContractPanel> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.booking.agreement == null) {
+      return WorkCompletionCard(
+        booking: widget.booking,
+        asCustomer: widget.viewerRole == 'customer',
+      );
+    }
     final contractId = widget.booking.contractId;
     if (contractId == null || contractId.isEmpty) {
       return Column(

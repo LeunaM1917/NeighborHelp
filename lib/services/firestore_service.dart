@@ -759,6 +759,8 @@ class FirestoreService {
         },
         'scheduledDate': booking.scheduledDate.millisecondsSinceEpoch,
         'scheduledEndDate': booking.scheduledEnd?.millisecondsSinceEpoch,
+        'pricingType': booking.pricingType,
+        'totalFee': booking.totalFee,
         'notes': booking.notes,
       });
 
